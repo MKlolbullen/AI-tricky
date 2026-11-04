@@ -26,11 +26,17 @@ from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
 from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
+from .credentials import CredentialVault
 from . import verification
 
 
 class TargetInput(BaseModel):
     value: str = Field(min_length=1, max_length=2048)
+
+
+class CredentialUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    updates: dict[str, str | None] = Field(default_factory=dict, max_length=30)
 
 
 class RunInput(BaseModel):
@@ -114,6 +120,11 @@ class RunControl:
 def create_app(data_dir=None, assessor=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
     evidence = EvidenceIndex(store)
+    vault = CredentialVault(store.root)
+    credential_consumers = {}
+    for _tid, _tool in TOOLS.items():
+        for _key in _tool.get('secrets', []):
+            credential_consumers.setdefault(_key, []).append(_tid)
     proposal_planner = ProposalPlanner(store, evidence)
     proposal_executions = ProposalExecutions(store, proposal_planner)
     controls = {}
@@ -198,7 +209,21 @@ def create_app(data_dir=None, assessor=None):
                 'workflow_adapters': REGISTRY,
                 'workflow_execution': 'Native DAG, CAI evidence review and 151 migrated catalog contracts; CLI execution requires explicit run enablement and preflight',
                 'catalog_tools':len(TOOLS),'catalog_workflows':len(MINI_CATALOG['workflows']),
-                'cli_credential_variables':[{'name':key,'configured':bool(os.environ.get(key))} for key in sorted({key for t in TOOLS.values() for key in t.get('secrets',[])})]}
+                'cli_credential_variables':[{'name':key,'configured':bool(vault.effective(key))} for key in sorted({key for t in TOOLS.values() for key in t.get('secrets',[])})]}
+
+    @app.get('/api/credentials')
+    async def credentials_status():
+        return {'providers': vault.status(credential_consumers)}
+
+    @app.post('/api/credentials')
+    async def credentials_update(body: CredentialUpdate):
+        try:
+            vault.set_many(body.updates)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        return {'providers': vault.status(credential_consumers)}
+    # Clearing a key is a POST with an empty value, so the JSON-write guard and
+    # the shared client helper (GET/POST only) both apply uniformly.
 
     @app.get('/api/workflows')
     async def workflows():

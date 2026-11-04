@@ -112,3 +112,32 @@
 .verification-card code, .verification-pair code { overflow-wrap: anywhere; font-size: 11px; }
 .verification-card details { margin: 12px 0; }
 .verification-card pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow: auto; font-size: 11px; }
+
+/* Credentials settings */
+.credentials-saved{display:flex;align-items:center;gap:8px;color:#1bc9ba;font-size:12px;margin:0 0 14px}
+.credentials-saved svg{color:#1bc9ba;flex-shrink:0}
+.credentials-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:18px;margin-top:20px}
+.credential-card{border:1px solid #29435e;border-radius:8px;background:#0b1a2b;padding:16px 16px 18px;display:flex;flex-direction:column}
+.credential-card>header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.credential-head{display:flex;align-items:center;gap:9px}
+.credential-head svg{color:var(--cyan)}
+.credential-head strong{font-size:14px}
+.credential-card>header a{display:flex;align-items:center;gap:5px;font-size:11px;color:#4ad3e4;white-space:nowrap}
+.credential-card>header a:hover{color:var(--cyan)}
+.credential-desc{font-size:11px;color:#8da9ce;line-height:1.6;margin-bottom:15px}
+.credential-field{margin-bottom:16px}
+.credential-field>label{display:flex;align-items:center;gap:7px;font-size:12px;color:#aec2e0;margin-bottom:8px}
+.credential-field>label code{font-size:10px;color:#6f93bd}
+.credential-input{display:flex;gap:8px}
+.credential-input input{flex:1;font:12px var(--mono)}
+.credential-input .icon-btn{border:1px solid #294362;border-radius:5px;padding:0 9px}
+.credential-meta{display:flex;align-items:center;gap:12px;margin-top:9px}
+.credential-status{display:flex;align-items:center;gap:6px;font-size:11px;color:#86a3c7}
+.credential-status.stored{color:#1bc9ba}
+.credential-status.environment{color:#f7b53b}
+.credential-status.none{color:#7e99bb}
+.credential-clear{font-size:11px;color:#f093ab;margin-left:auto;gap:5px}
+.credential-clear:hover{color:#ff9fb6}
+.credential-usage{display:block;margin-top:9px;font-size:10px;line-height:1.6;color:#6e8aad}
+.credential-card>.primary{margin-top:auto;font-size:12px}
+@media(max-width:760px){.credentials-grid{grid-template-columns:1fr}}

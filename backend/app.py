@@ -117,12 +117,15 @@ def create_app(data_dir=None, assessor=None):
     proposal_executions = ProposalExecutions(store, proposal_planner)
     controls = {}
     dispatch_lock = asyncio.Lock()
+    dispatch_tasks = set()
     assess = assessor or cai_adapter.assess
     preview = (os.environ.get('AI_TRICKY_PREVIEW') or os.environ.get('OFFSECS_U_AI_PREVIEW') or os.environ.get('RECONFORGE_PREVIEW')) == '1'
 
     @asynccontextmanager
     async def lifespan(app):
         yield
+        # Finish already approved consume/start operations even if their client disconnected.
+        await asyncio.gather(*dispatch_tasks, return_exceptions=True)
         for ctl in controls.values():
             ctl.cancelled = True
             ctl.gate.set()
@@ -643,14 +646,23 @@ def create_app(data_dir=None, assessor=None):
     async def dispatch_proposal_execution(execution_id: str, body: DispatchAction):
         if body.approve is not True:
             raise HTTPException(422, 'Explicit operator approval is required to start this execution.')
-        async with dispatch_lock:
-            receipt = await asyncio.to_thread(proposal_executions.get, execution_id)
-            if receipt['status'] == 'pending':
-                check_run_capacity()
-            run, created = await asyncio.to_thread(proposal_executions.dispatch, execution_id, body.expected_hash)
-            if created:
-                start_run(run)
-            return {'run': run, 'created': created, 'execution_id': execution_id}
+        async def consume_and_start():
+            async with dispatch_lock:
+                receipt = await asyncio.to_thread(proposal_executions.get, execution_id)
+                if receipt['status'] == 'pending':
+                    check_run_capacity()
+                run, created = await asyncio.to_thread(proposal_executions.dispatch, execution_id, body.expected_hash)
+                if created:
+                    start_run(run)
+                return {'run': run, 'created': created, 'execution_id': execution_id}
+        task = asyncio.create_task(consume_and_start())
+        dispatch_tasks.add(task)
+        def finished(job):
+            dispatch_tasks.discard(job)
+            if not job.cancelled():
+                job.exception()  # Retrieve failures even if the requesting client disconnected.
+        task.add_done_callback(finished)
+        return await asyncio.shield(task)
 
     @app.post('/api/runs/{rid}/{action}')
     async def control(rid: str, action: str):

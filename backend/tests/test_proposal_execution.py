@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import sys
@@ -6,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import httpx
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
@@ -286,3 +288,42 @@ def test_manual_runs_cannot_forge_proposal_approval_provenance(tmp_path):
                                                'proposal_execution': {'id': 'forged', 'snapshot_hash': '0' * 64}})
         assert response.status_code == 201
         assert 'proposal_execution' not in response.json()['config']
+
+
+def test_client_disconnect_during_consumption_still_schedules_exactly_one_run(tmp_path, monkeypatch, target_server):
+    async def exercise():
+        base, handler = target_server
+        app = create_app(tmp_path)
+        store = app.state.store
+        store.add_target(base + '/disconnect')
+        rid = run(store, targets=[base + '/disconnect'])
+        capture(store, rid, url=base + '/disconnect')
+        planner = ProposalPlanner(store)
+        oid = planner.evidence.observations(run_id=rid)['items'][0]['id']
+        plan = planner.save('Capture evidence', planner.context(rid, [oid], 'Capture evidence'))
+        started, release = threading.Event(), threading.Event()
+        original = ProposalExecutions.dispatch
+        def delayed_consume(self, *args):
+            started.set(); release.wait(3)
+            return original(self, *args)
+        monkeypatch.setattr(ProposalExecutions, 'dispatch', delayed_consume)
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://testserver') as client:
+                review = (await client.post(f'/api/agent/proposals/{plan["id"]}/{plan["proposals"][0]["id"]}/executions', json={})).json()
+                url = f'/api/agent/executions/{review["id"]}/dispatch'
+                body = {'expected_hash': review['snapshot_hash'], 'approve': True}
+                request = asyncio.create_task(client.post(url, json=body))
+                assert await asyncio.to_thread(started.wait, 2)
+                request.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await request
+                release.set()
+                for _ in range(150):
+                    runs = store.runs()
+                    if len(runs) == 2 and runs[0]['status'] == 'completed':break
+                    await asyncio.sleep(.02)
+                else:raise AssertionError('Approved execution was not scheduled after disconnect')
+                retry = (await client.post(url, json=body)).json()
+                assert retry['created'] is False and retry['run']['id'] == runs[0]['id']
+                assert handler.calls == ['/disconnect']
+    asyncio.run(exercise())

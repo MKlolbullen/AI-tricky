@@ -22,7 +22,7 @@ Reviews expire 15 minutes after preparation. Settings are locked while reviewing
 | `expired` | Approval window elapsed before dispatch |
 | `invalidated` | Evidence, scope, inputs, binaries or runtime bindings changed |
 
-Approval audit entries and run creation commit in one SQLite transaction. Concurrent/repeated dispatch requests return the same run ID; they never launch another run from that review. A failed or interrupted run does not reset its consumed review. Repeating a test requires preparing and approving a new review. A capacity rejection leaves the review pending so it can be retried within its validity window.
+Approval audit entries and run creation commit in one SQLite transaction. The consume/start operation is shielded from client disconnection so a lost response cannot strand a consumed review before its run is scheduled. Concurrent/repeated dispatch requests return the same run ID; they never launch another run from that review. A failed or interrupted run does not reset its consumed review. Repeating a test requires preparing and approving a new review. A capacity rejection leaves the review pending so it can be retried within its validity window.
 
 The local API uses one process and its existing loopback, host and origin boundary. “Local operator” describes that boundary; it is not an authenticated multi-user identity or a signed approval credential. Pending reviews are invalidated at API startup. Prior receipts and audit history remain readable; interrupted runs are not automatically resumed.
 

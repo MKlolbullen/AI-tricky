@@ -102,6 +102,42 @@ Burp/burpaderp and Strix adapters and broad real-binary version validation remai
 
 ## Quick start
 
+### Automated setup
+
+The `installation.sh` script sets up the platform and, optionally, the external
+CLI tools used by the catalog:
+
+```bash
+git clone https://github.com/MKlolbullen/AI-tricky.git
+cd AI-tricky
+
+./installation.sh                 # platform + install all catalog tools
+./installation.sh --project-only  # just the UI + backend
+./installation.sh --with-cai      # also create the optional CAI SDK venv
+./start-local.sh                  # http://127.0.0.1:8787
+```
+
+The tool installer can also be run on its own and is idempotent, continues past
+individual failures, and prints a summary:
+
+```bash
+scripts/install-tools.sh --list              # show every tool and how it installs
+scripts/install-tools.sh --tools=recon,dns   # install by category
+scripts/install-tools.sh --tools=httpx,ffuf  # install specific tools
+scripts/install-tools.sh --skip-toolchains   # don't auto-install Go/Rust/pipx
+```
+
+It installs tools across their native ecosystems (Go, Rust, Python/pipx, Ruby,
+npm, system packages, Git builds and GitHub release binaries) into
+`~/.local/bin` by default. A small number of large or vendor-specific tools are
+reported as *manual* with a pointer rather than installed automatically. Review
+the script before running it on a shared host; it installs software only and
+never contacts an assessment target. After installing, add the locations to your
+`PATH` and use the Templates catalog or **Local workspace → Run setup → Check
+workflow readiness** to confirm which binaries are detected.
+
+The steps below show the equivalent manual setup.
+
 ### Requirements
 
 - **Python 3.12**

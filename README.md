@@ -16,7 +16,58 @@ The interface, API, SQLite history and execution jobs run on your machine. Asses
 
 > **Current stage: functional beta.** The migrated catalog contains 151 tool contracts and 57 workflows. 141 entries have CLI adapters; ten require additional context contracts. External binaries are not bundled, and a migrated adapter is not a claim of compatibility with every upstream release.
 
-[Quick start](#quick-start) · [What works](#what-works) · [AI integration](#ai-integration) · [Execution boundaries](#execution-boundaries) · [Development](#development) · [Roadmap](#roadmap)
+[Quick start](#quick-start) · [What works](#what-works) · [Interface tour](#interface-tour) · [AI integration](#ai-integration) · [Execution boundaries](#execution-boundaries) · [Development](#development) · [Roadmap](#roadmap)
+
+## Interface tour
+
+<p align="center">
+  <img src="docs/assets/screenshots/01-design-overview.png" alt="AI-tricky workflow studio: typed DAG canvas, node library, evidence inspector and run console" width="100%" />
+</p>
+<p align="center"><em>Workflow studio — typed DAG canvas, node library, evidence inspector and run console.</em></p>
+
+Every view and tab in the current build (v0.8.0) is shown below. Canvas output is explicit fixture simulation; the local workspace reflects real backend-backed state (shown here with sample scope and no recorded runs).
+
+<details>
+<summary><strong>Workflow studio — views, inspector and console</strong></summary>
+
+<br/>
+
+| | |
+| --- | --- |
+| <img src="docs/assets/screenshots/06-runs-view.png" alt="Runs view" width="100%" /><br/><sub>**Runs** view — read-only run mode</sub> | <img src="docs/assets/screenshots/02-inspector-configure.png" alt="Inspector Configure tab" width="100%" /><br/><sub>Inspector — **Configure** tab</sub> |
+| <img src="docs/assets/screenshots/03-inspector-evidence.png" alt="Inspector Evidence tab" width="100%" /><br/><sub>Inspector — **Evidence** tab (candidate finding)</sub> | <img src="docs/assets/screenshots/04-dock-artifacts.png" alt="Console dock Artifacts tab" width="100%" /><br/><sub>Console dock — **Artifacts** tab</sub> |
+| <img src="docs/assets/screenshots/05-dock-findings.png" alt="Console dock Findings tab" width="100%" /><br/><sub>Console dock — **Findings** tab</sub> | |
+
+</details>
+
+<details>
+<summary><strong>Dialogs &amp; actions</strong></summary>
+
+<br/>
+
+| | |
+| --- | --- |
+| <img src="docs/assets/screenshots/11-templates.png" alt="Template and tool catalog" width="100%" /><br/><sub>**Templates** — workflow &amp; tool catalog</sub> | <img src="docs/assets/screenshots/07-preview-run.png" alt="Preview run dialog" width="100%" /><br/><sub>**Preview run** — dry-run plan</sub> |
+| <img src="docs/assets/screenshots/12-review-request.png" alt="Review proposed request dialog" width="100%" /><br/><sub>**Review request** — proposed replay (not dispatched)</sub> | <img src="docs/assets/screenshots/13-artifact-viewer.png" alt="Artifact viewer dialog" width="100%" /><br/><sub>**Artifact** viewer</sub> |
+| <img src="docs/assets/screenshots/08-run-history.png" alt="Run history dialog" width="100%" /><br/><sub>**Run history**</sub> | <img src="docs/assets/screenshots/09-runtime-settings.png" alt="Runtime settings dialog" width="100%" /><br/><sub>**Runtime settings** — adapter readiness</sub> |
+| <img src="docs/assets/screenshots/10-workflow-actions.png" alt="Workflow actions dialog" width="100%" /><br/><sub>**Workflow actions**</sub> | |
+
+</details>
+
+<details>
+<summary><strong>Local workspace — all 10 tabs</strong></summary>
+
+<br/>
+
+| | |
+| --- | --- |
+| <img src="docs/assets/screenshots/14-local-targets.png" alt="Local workspace Targets tab" width="100%" /><br/><sub>**Targets** — entered scope</sub> | <img src="docs/assets/screenshots/15-local-assets.png" alt="Local workspace Assets tab" width="100%" /><br/><sub>**Assets** — observed inventory</sub> |
+| <img src="docs/assets/screenshots/16-local-observations.png" alt="Local workspace Observations tab" width="100%" /><br/><sub>**Observations**</sub> | <img src="docs/assets/screenshots/17-local-findings.png" alt="Local workspace Findings tab" width="100%" /><br/><sub>**Findings** workbench</sub> |
+| <img src="docs/assets/screenshots/18-local-compare-runs.png" alt="Local workspace Compare runs tab" width="100%" /><br/><sub>**Compare runs**</sub> | <img src="docs/assets/screenshots/19-local-inputs.png" alt="Local workspace Inputs tab" width="100%" /><br/><sub>**Inputs** manager</sub> |
+| <img src="docs/assets/screenshots/20-local-workflows.png" alt="Local workspace Workflows tab" width="100%" /><br/><sub>**Workflows** — saved graphs</sub> | <img src="docs/assets/screenshots/21-local-agent-desk.png" alt="Local workspace Agent desk tab" width="100%" /><br/><sub>**Agent desk** — planning &amp; proposals</sub> |
+| <img src="docs/assets/screenshots/22-local-run-setup.png" alt="Local workspace Run setup tab" width="100%" /><br/><sub>**Run setup** — engine, scope &amp; budgets</sub> | <img src="docs/assets/screenshots/23-local-runs.png" alt="Local workspace Runs tab" width="100%" /><br/><sub>**Runs** — local run detail</sub> |
+
+</details>
 
 ## Why AI-tricky?
 

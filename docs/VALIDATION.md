@@ -1,4 +1,13 @@
-# 0.5.1 verification — 2026-11-04
+# 0.6 verification — 2026-11-04
+
+- Python: **294 passed, 1 skipped** locally, including 24 proposal cases covering strict model contracts, evidence references, scope and risk limits, prerequisites, persistence and stale bindings. The real URO smoke test skipped because the binary is unavailable locally. The 24 proposal cases also passed after the final async API change.
+- Backend CI: **287 passed, 8 skipped**. CI includes the installed URO binary; its eight optional CAI SDK cases skip in the regular job and were exercised locally as described below.
+- JavaScript: **12 passed**; production build and catalog drift check (**151 tools / 57 workflows**) passed.
+- Real CAI SDK: **8 loopback fixture cases passed**, including evidence-guided proposals in-process and through the separate SDK interpreter. No external provider or target was contacted. Fixture output does not establish proposal quality on real engagements.
+- Chromium: **8 passed in GitHub CI** against the production build and a disposable local fixture server. Tests cover the existing workbench plus proposal persistence, restoring saved plans, stale-plan blocking, empty results and loading a workflow without dispatch.
+- Proposal loading is not execution authorization. There is no proposal dispatch endpoint; request-bound execution is a later increment.
+
+## Historical 0.5.1 verification — 2026-11-04
 
 - Python: full-suite validation includes parser-generation migration, unchanged-row reuse, superseded normalization exclusion, review preservation, scoped SDK RPC, protocol failure handling and process cleanup. The URO smoke test remains unavailable locally.
 - JavaScript: **12 passed**, production frontend build and existing Sites packaging checks passed.
@@ -37,7 +46,7 @@ Existing native scope tests cover URL paths, redirects, logical operation budget
 
 ## Limits
 
-Interactive browser QA remains open because the session browser could not reach the workspace server. Rendering smoke tests and API/process integration checks passed; no browser-driven success is claimed. Windows process behavior, deliberately daemonized children, broad real-binary version compatibility, external engagements and Burp/Strix integration were not validated. CLI-internal network requests do not use the native request counter or pinned HTTP transport.
+The interactive session browser could not reach the workspace server. Browser regression coverage comes from the committed Chromium CI suite; manual visual inspection remains open. Windows process behavior, deliberately daemonized children, broad real-binary version compatibility, external engagements and Burp/Strix integration were not validated. CLI-internal network requests do not use the native request counter or pinned HTTP transport.
 
 ## Reproduce
 
@@ -49,4 +58,4 @@ npm run build
 npm test
 ```
 
-Install `requirements-cai.lock` to include the three optional CAI SDK tests. The real URO test runs when URO is installed beside the selected Python interpreter; external security binaries are not bundled.
+Install `requirements-cai.lock` into a separate environment, then set `CAI_TEST_PYTHON` to its Python executable to include the eight optional CAI SDK fixture cases. The real URO test runs when URO is installed beside the main Python interpreter; external security binaries are not bundled. `npm run test:browser` runs the Chromium regression suite after installing Playwright's Chromium browser and building the frontend.

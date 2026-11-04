@@ -22,3 +22,6 @@ The user identified MKlolbullen/mini-tricky as their source project and wants a 
 
 ## Repository publication — 2026-11-04
 The user authorized creating the public MKlolbullen/AI-tricky repository and publishing this project with a proper README. Use AI-tricky for visible branding and package metadata. Preserve Offsecs-u-AI/ReconForge environment and workflow-schema compatibility. Source publication does not authorize deploying the running assessment service or publishing engagement data.
+
+## Release direction — 2026-11-04
+The user selected structured observations, a durable findings workbench and run comparisons for the next release. Preserve original evidence and existing databases. Keep severity, confidence and operator review state independent. Compare captured run snapshots; absence is “not observed”, never automatic resolution. Scanner/model output must not overwrite operator reviews or automatically verify a finding.

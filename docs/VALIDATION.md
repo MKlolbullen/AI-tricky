@@ -1,4 +1,14 @@
-# 0.4 verification — 2026-11-04
+# 0.5 verification — 2026-11-04
+
+- Python suite: **248 passed, 1 skipped**. The real URO smoke test skipped because URO is unavailable in this environment. Optional CAI SDK tests ran against local fixtures; no external model was called.
+- Added 28 evidence tests covering default text/JSONL parser contracts, malformed and non-finite output, canonical asset identity, concurrent/idempotent indexing, retained raw evidence, legacy SQLite migration, review persistence and conflicts, same-run candidate provenance, comparison snapshots and incomplete coverage notices.
+- JavaScript suite: **12 passed**; production frontend build and existing Sites packaging checks passed.
+- Catalog migration drift check: **151 tools / 57 workflows**, unchanged.
+- Rendering smoke: Observations, Findings and Compare runs render through React's server renderer. Live native HTTP integration tests verify that evidence indexing and comparisons send no extra target traffic.
+- Interactive browser QA remains unverified: the local server started successfully, but the available cloud browser returned `ERR_CONNECTION_REFUSED` for its loopback URL. Rendering and API checks are not a substitute for browser interaction testing.
+- Parser fixture coverage does not establish compatibility with every upstream binary version. No external engagement or live vulnerability verification is claimed.
+
+## Historical 0.4 verification — 2026-11-04
 
 - Python suite: 221 tests, including the installed CAI 0.5.10 Runner against loopback model fixtures.
 - JavaScript suite: 12 tests, including all 57 migrated workflows and the 151-tool socket contracts.

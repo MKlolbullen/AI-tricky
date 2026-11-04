@@ -31,10 +31,14 @@ The complete source catalog is now available: 151 contracts and 57 converted wor
 ## Remaining work
 
 - Expand real-binary compatibility tests and add account/callback/notification contracts for restricted entries. Keep arbitrary shell commands outside model tools.
-- Add durable finding IDs, deduplication, review state and run diffs. Candidates currently persist inside node artifacts.
+- Expand the 0.5 findings workbench with additional format-specific parsers and controlled verification/replay.
 - Introduce a typed proposal execution contract with exact request binding before allowing an agent's suggested test to dispatch.
 - Add authenticated identity profiles and controlled multi-identity evidence comparison for BOLA/IDOR reviews.
 - Connect Burp/burpaderp and Strix through their integration contracts; these are not connected by this increment.
 - Complete interactive browser QA on a machine that can reach the loopback application. The browser available during this session could not connect to the workspace server.
 
 No changes were pushed to mini-tricky as part of this increment.
+
+## Evidence workbench update — 0.5
+
+Structured native/CLI observations, durable candidate findings, revision-checked operator reviews and run comparisons are implemented. Existing artifacts are indexed without rewriting their content. Comparisons retain per-run detection snapshots and never infer resolution from absence. See [contracts and limits](EVIDENCE-WORKBENCH.md).

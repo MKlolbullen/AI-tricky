@@ -23,6 +23,7 @@ from .catalog import CATALOG as MINI_CATALOG, CATALOG_KINDS, TOOLS, convert_mini
 from .catalog_execution import preflight as catalog_preflight
 from .cli_runner import pause_processes, snapshot_folder
 from .catalog_planner import plan_catalog
+from .evidence import EvidenceIndex, ReviewConflict
 
 
 class TargetInput(BaseModel):
@@ -75,6 +76,15 @@ class CatalogPlanInput(BaseModel):
     max_risk: str = 'medium'
 
 
+class FindingReviewInput(BaseModel):
+    expected_revision: int = Field(ge=1)
+    status: Literal['candidate', 'triaged', 'verified', 'rejected', 'resolved']
+    severity: Literal['info', 'low', 'medium', 'high', 'critical']
+    confidence: Literal['unknown', 'low', 'medium', 'high']
+    note: str = Field(min_length=1, max_length=4000)
+    evidence_id: str | None = Field(default=None, max_length=100)
+
+
 class RunControl:
     def __init__(self):
         self.gate = asyncio.Event()
@@ -91,6 +101,7 @@ class RunControl:
 
 def create_app(data_dir=None, assessor=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
+    evidence = EvidenceIndex(store)
     controls = {}
     assess = assessor or cai_adapter.assess
     preview = (os.environ.get('AI_TRICKY_PREVIEW') or os.environ.get('OFFSECS_U_AI_PREVIEW') or os.environ.get('RECONFORGE_PREVIEW')) == '1'
@@ -276,6 +287,47 @@ def create_app(data_dir=None, assessor=None):
     @app.get('/api/runs')
     async def list_runs():
         return store.runs()
+
+    @app.get('/api/observations')
+    def observations(run_id: str | None = None, kind: str | None = None, q: str = '', limit: int = 100, offset: int = 0):
+        if run_id:
+            get_run(run_id)
+        return evidence.observations(run_id=run_id, kind=kind, q=q[:200], limit=max(1, min(limit, 200)), offset=max(0, offset))
+
+    @app.get('/api/findings')
+    def findings(run_id: str | None = None, status: str | None = None, severity: str | None = None,
+                 q: str = '', limit: int = 100, offset: int = 0):
+        if run_id:
+            get_run(run_id)
+        return evidence.findings(run_id=run_id, status=status, severity=severity, q=q[:200],
+                                 limit=max(1, min(limit, 200)), offset=max(0, offset))
+
+    @app.get('/api/findings/{fid}')
+    def finding(fid: str):
+        try:
+            return evidence.finding(fid)
+        except KeyError:
+            raise HTTPException(404, 'Finding not found.')
+
+    @app.post('/api/findings/{fid}/reviews')
+    def review_finding(fid: str, body: FindingReviewInput):
+        try:
+            return evidence.review(fid, **body.model_dump())
+        except KeyError:
+            raise HTTPException(404, 'Finding not found.')
+        except ReviewConflict as exc:
+            raise HTTPException(409, str(exc))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+
+    @app.get('/api/runs/{rid}/compare')
+    def compare_runs(rid: str, baseline: str):
+        get_run(rid)
+        get_run(baseline)
+        try:
+            return evidence.compare(baseline, rid)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
 
     @app.get('/api/runs/{rid}')
     async def run(rid: str):

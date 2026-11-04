@@ -30,6 +30,8 @@ class Store:
             ''')
             if 'node_id' not in {r['name'] for r in c.execute('PRAGMA table_info(artifacts)')}:
                 c.execute('ALTER TABLE artifacts ADD COLUMN node_id TEXT')
+            if 'captured_at' not in {r['name'] for r in c.execute('PRAGMA table_info(artifacts)')}:
+                c.execute('ALTER TABLE artifacts ADD COLUMN captured_at TEXT')
             # A process restart cannot revive prior in-memory tasks.
             c.execute("UPDATE runs SET status='interrupted',updated=? WHERE status IN ('queued','running','paused')", (now(),))
             c.execute("UPDATE run_nodes SET status='interrupted',updated=? WHERE status IN ('queued','running')", (now(),))
@@ -88,7 +90,7 @@ class Store:
     def artifact(self, rid, name, content, node_id=None):
         aid = str(uuid.uuid4())
         with self.connect() as c:
-            c.execute('INSERT INTO artifacts(id,run_id,name,content,node_id) VALUES(?,?,?,?,?)', (aid, rid, name, json.dumps(content), node_id))
+            c.execute('INSERT INTO artifacts(id,run_id,name,content,node_id,captured_at) VALUES(?,?,?,?,?,?)', (aid, rid, name, json.dumps(content), node_id, now()))
         return aid
 
     def artifacts(self, rid):
@@ -152,6 +154,6 @@ class Store:
 
     def artifact_metadata(self,aid):
         with self.connect() as c:
-            row=c.execute('SELECT id,run_id,name,node_id FROM artifacts WHERE id=?',(aid,)).fetchone()
+            row=c.execute('SELECT id,run_id,name,node_id,captured_at FROM artifacts WHERE id=?',(aid,)).fetchone()
         if row is None:raise KeyError(aid)
         return dict(row)

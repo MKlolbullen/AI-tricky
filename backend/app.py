@@ -8,12 +8,12 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from . import cai_adapter
 from .scope import ScopeError, parse_target, authorize, fetch_scoped, model_base_url, network_hosts, resolve_target
 from .store import Store
@@ -24,6 +24,7 @@ from .catalog_execution import preflight as catalog_preflight
 from .cli_runner import pause_processes, snapshot_folder
 from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
+from .proposals import ProposalPlanner, ProposalError, StalePlan
 
 
 class TargetInput(BaseModel):
@@ -85,6 +86,15 @@ class FindingReviewInput(BaseModel):
     evidence_id: str | None = Field(default=None, max_length=100)
 
 
+class EvidencePlanInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    run_id: str = Field(min_length=1, max_length=64)
+    observation_ids: list[Annotated[str, StringConstraints(min_length=1, max_length=64)]] = Field(min_length=1, max_length=24)
+    goal: str = Field(min_length=1, max_length=4000)
+    use_model: bool = False
+    max_risk: Literal['passive', 'low', 'medium'] = 'low'
+
+
 class RunControl:
     def __init__(self):
         self.gate = asyncio.Event()
@@ -102,6 +112,7 @@ class RunControl:
 def create_app(data_dir=None, assessor=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
     evidence = EvidenceIndex(store)
+    proposal_planner = ProposalPlanner(store, evidence)
     controls = {}
     assess = assessor or cai_adapter.assess
     preview = (os.environ.get('AI_TRICKY_PREVIEW') or os.environ.get('OFFSECS_U_AI_PREVIEW') or os.environ.get('RECONFORGE_PREVIEW')) == '1'
@@ -266,6 +277,59 @@ def create_app(data_dir=None, assessor=None):
             raise
         except Exception:
             raise HTTPException(502, 'Model planning failed. Check local provider readiness or use the local rules planner.') from None
+
+    @app.post('/api/agent/proposals', status_code=201)
+    async def propose_followups(body: EvidencePlanInput):
+        get_run(body.run_id)
+        if not body.goal.strip():
+            raise HTTPException(422, 'Enter a follow-up objective.')
+        context = await asyncio.to_thread(proposal_planner.context, body.run_id, body.observation_ids, body.goal, body.max_risk)
+        if not body.use_model:
+            try:
+                return await asyncio.to_thread(proposal_planner.save, body.goal, context)
+            except StalePlan as exc:
+                raise HTTPException(409, str(exc))
+        if assessor is None and await asyncio.to_thread(cai_adapter.installed_version) != cai_adapter.SUPPORTED_CAI:
+            raise HTTPException(409, 'Configure the supported CAI SDK to use model proposals, or select the rules planner.')
+        async def disabled(url):
+            return {'error': 'Evidence-guided planning has no target access.'}
+        try:
+            result = await assess([], proposal_planner.prompt(body.goal, context), disabled,
+                                  **({'evidence_only': True} if assessor is None else {}))
+            return await asyncio.to_thread(proposal_planner.save, body.goal, context, result['report'], result)
+        except StalePlan as exc:
+            raise HTTPException(409, str(exc))
+        except ProposalError as exc:
+            raise HTTPException(502, str(exc))
+        except ScopeError:
+            raise
+        except Exception:
+            raise HTTPException(502, 'Evidence-guided model planning failed. Check provider readiness; no proposals were saved.') from None
+
+    @app.get('/api/agent/proposals')
+    def proposal_history(run_id: str):
+        get_run(run_id)
+        return proposal_planner.plans(run_id)
+
+    @app.get('/api/agent/proposals/{plan_id}')
+    def proposal_plan(plan_id: str):
+        try:
+            return proposal_planner.plan(plan_id)
+        except KeyError:
+            raise HTTPException(404, 'Evidence-guided plan not found.')
+
+    @app.get('/api/agent/proposals/{plan_id}/{proposal_id}/workflow')
+    def proposal_workflow(plan_id: str, proposal_id: str):
+        result = proposal_plan(plan_id)
+        if not result['current']:
+            raise HTTPException(409, result['stale_reason'])
+        selected = next((p for p in result['proposals'] if p['id'] == proposal_id), None)
+        if selected is None:
+            raise HTTPException(404, 'Proposal not found in this plan.')
+        from .proposals import action_graph
+        return {'graph': action_graph(selected['action'], selected['id']), 'goal': result['goal'],
+                'scope': result['scope'], 'proposal_id': proposal_id, 'plan_id': plan_id,
+                'dispatch_allowed': False}
 
     @app.post('/api/targets', status_code=201)
     async def add_target(body: TargetInput):

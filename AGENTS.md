@@ -28,3 +28,6 @@ The user selected structured observations, a durable findings workbench and run 
 
 ## Improvement sequence — 2026-11-04
 Work through the agenda one release at a time. Complete v0.5.1 correctness, parser-upgrade and browser regression coverage before beginning adaptive agent planning. Preserve evidence and operator review history across parser generations.
+
+## Evidence-guided planning — 2026-11-04
+The next authorized increment is evidence-guided proposals. Model planning must use captured observation references and server-owned actions; scope, risk and adapter validation remain independent of model output. Persist provenance, expected and negative signals, and flag stale evidence/contract bindings. Loading a proposal is a canvas operation; request-bound dispatch is a separate next increment. Keep deterministic suggestions explicitly labelled and never use them as a hidden model fallback.

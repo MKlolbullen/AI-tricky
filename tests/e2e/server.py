@@ -9,6 +9,7 @@ import uvicorn
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from backend.app import create_app
 from backend.store import Store, now
+from backend.proposals import ProposalPlanner
 
 
 def seed(store):
@@ -28,6 +29,13 @@ def seed(store):
     store.artifact('qa-current', 'node-analysis.json', [{'analysis': {'candidates': [
         {'title': 'Potential API issue', 'severity': 'medium', 'rationale': 'Browser QA candidate',
          'next_test': 'Inspect captured response', 'evidence_ids': [aid]}]}}], node_id='analysis')
+    planner = ProposalPlanner(store)
+    oid = planner.evidence.observations(run_id='qa-current', kind='http')['items'][0]['id']
+    stale = planner.save('Stale fixture plan from an earlier catalog', planner.context('qa-current', [oid], 'Review captured HTTP'))
+    with store.connect() as c:
+        row = c.execute('SELECT context FROM agent_plans WHERE id=?', (stale['id'],)).fetchone()
+        context = json.loads(row['context']); context['catalog_hash'] = 'previous-catalog-fixture'
+        c.execute('UPDATE agent_plans SET context=? WHERE id=?', (json.dumps(context), stale['id']))
 
 
 if __name__ == '__main__':

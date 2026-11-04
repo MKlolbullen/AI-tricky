@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml/badge.svg" /></a>
-  <img alt="Version 0.5.1" src="https://img.shields.io/badge/version-0.5.1-02d0e5" />
+  <img alt="Version 0.6.0" src="https://img.shields.io/badge/version-0.6.0-02d0e5" />
   <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&amp;logoColor=white" />
   <img alt="React and React Flow" src="https://img.shields.io/badge/React-React_Flow-61DAFB?logo=react&amp;logoColor=111827" />
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-b66cf3" /></a>
@@ -38,7 +38,7 @@ A useful assessment platform needs more than a canvas that launches commands and
 | Migrated catalog | 151 tool contracts and 57 typed workflows; searchable by source, category, input type and readiness |
 | CLI adapters | 141 application-owned, shell-free adapters with executable preflight, typed files/stdin and scalar fan-out |
 | Registered inputs | Local files/folders, uploaded text inputs, wordlists, SBOMs, resolver lists and reviewed template/signature folders |
-| Agent desk | Native rules or CAI model planning; deterministic capability planning over the migrated catalog |
+| Agent desk | Native/catalog workflow planning plus persisted, evidence-guided follow-up proposals using rules or the optional CAI model |
 | Evidence review | Optional CAI analysis of captured HTTP evidence with structured candidates, references and coverage limits |
 | Evidence workbench | Structured observations, persistent candidate IDs, operator review history and run comparisons |
 | Run controls | Pause/resume, cancellation, node deadlines, separate native-operation and CLI-launch budgets |
@@ -98,6 +98,14 @@ Open **Local workspace → Observations**, **Findings** or **Compare runs** afte
 
 Existing runs are indexed locally when these views or APIs are read; original artifacts remain intact. Parser generation 2 reindexes old captures, retains review history, and excludes superseded normalizations from observations and comparisons. New captures record capture timestamps; legacy artifacts explicitly use their run-start timestamp. Comparisons use recorded occurrence snapshots, so a later severity review does not rewrite what an earlier run reported. See [contracts and limits](docs/EVIDENCE-WORKBENCH.md).
 
+## Evidence-guided follow-ups — 0.6
+
+Open **Local workspace → Agent desk → Evidence follow-ups**, select a run and supporting observations, then generate proposed tests. Each proposal explains its hypothesis, supporting captures, expected evidence, negative/inconclusive result, registered adapter, exact input and prerequisites.
+
+The optional CAI model selects from server-built actions with no target tools attached. Scope, risk and typed graph validation remain independent of the model. The rules mode is explicitly labelled. Plans persist across restarts, can be reopened/exported, and become stale when their evidence or adapter bindings change.
+
+The first increment covers 13 reviewed adapter profiles. It can load a proposed workflow onto the canvas; manual configuration and preflight remain necessary. Request-bound proposal approval and dispatch are the next increment. See [contracts, coverage and limits](docs/EVIDENCE-PLANNING.md).
+
 ## AI integration
 
 Install the optional, pinned CAI dependency snapshot in a separate local interpreter:
@@ -134,7 +142,7 @@ export CAI_MODEL=your-model-id
 
 When enabled, the configured provider receives the goal and selected evidence. Credentials remain server-side. Model names cannot silently route to another provider; the adapter uses the configured endpoint. SDK tracing is disabled.
 
-The **CAI evidence analyst** has no target tools. It reviews at most 12 supplied HTTP records, with selected metadata and up to 1,200 body characters per record. Full captured responses remain in local artifacts. Schema validation and artifact-reference checks establish provenance, not the factual correctness of a model's claim.
+The **CAI evidence analyst** and **evidence-guided proposal planner** have no target tools. The evidence analyst reviews at most 12 supplied HTTP records, with selected metadata and up to 1,200 body characters per record. Full captured responses remain in local artifacts. Schema validation and artifact-reference checks establish provenance, not the factual correctness of a model's claim.
 
 The separate CAI assessment preset uses application-owned scoped HTTP/TCP tools. No arbitrary CAI shell or browser tools are attached.
 
@@ -216,7 +224,7 @@ The historical 0.4 baseline and the current 0.5 checks are documented in [the va
 
 The adapter matrix uses executable fixtures across all 151 entries: 141 exercise execution contracts and ten assert their explicit restrictions. Those fixtures do not establish compatibility with every external tool version. CAI tests use local model fixtures; the three SDK tests skip when the optional SDK is absent. The URO test skips if that binary is unavailable beside the selected Python interpreter.
 
-Five Chromium workbench interaction regressions run in CI. Broader desktop/platform QA and real-binary version validation remain open. See [the validation record](docs/VALIDATION.md).
+Chromium workbench and evidence-guided planning interaction regressions run in CI. Broader desktop/platform QA and real-binary version validation remain open. See [the validation record](docs/VALIDATION.md).
 
 ## Configuration and compatibility
 
@@ -236,7 +244,7 @@ AI-tricky continues the Offsecs-u-AI prototype. Existing `OFFSECS_U_AI_*` and `R
 - Dedicated account, cluster, callback and notification contracts for restricted catalog entries.
 - Real-binary compatibility coverage across supported tool versions and platforms.
 - Controlled replay and recovery of selected failed workflow branches.
-- Request-bound follow-up proposal execution and controlled multi-identity testing.
+- Request-bound approval/execution of evidence-guided proposals and controlled multi-identity testing.
 - Burp/burpaderp and Strix integration through their own policy and evidence contracts.
 - Broader desktop/platform QA and refinement of the workflow studio.
 

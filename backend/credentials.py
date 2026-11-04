@@ -1,11 +1,13 @@
 """Passive-source API credentials: a curated provider registry and a local,
 server-owned vault.
 
-Credential values are entered through the settings UI, stored under the data
-directory with owner-only permissions, and synchronised into ``os.environ`` so
-the existing, already-gated injection path (a secret reaches a tool only when
-the tool declares it and the run selects it) picks them up unchanged. A stored
-value takes precedence over an ambient environment variable of the same name.
+Credential values are entered through the settings UI and stored under the data
+directory with owner-only permissions. The vault is the source of truth; it
+never mutates the process environment, so credentials cannot leak between
+different data directories sharing one process. A stored value takes precedence
+over an ambient environment variable of the same name, which is read only as a
+fallback. The run pipeline snapshots the selected credentials once per run (see
+app.start_run) so a mid-run change cannot mix identities.
 
 Values are never returned to the client; only presence, source and length are
 reported.
@@ -14,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 from pathlib import Path
 
 # Curated passive data sources. `variables` are the environment-variable names
@@ -84,16 +87,22 @@ VAR_SET: set[str] = set(VARS)
 MAX_VALUE_LEN = 4096
 
 
+def _valid_value(value: str) -> str:
+    # NUL cannot survive an environment assignment or a clean JSON round-trip,
+    # so reject it before it can be stored and break a later startup.
+    if '\x00' in value:
+        raise ValueError('Credential values cannot contain a NUL character.')
+    if len(value) > MAX_VALUE_LEN:
+        raise ValueError('Credential value exceeds the maximum length.')
+    return value
+
+
 class CredentialVault:
-    """Loads, persists and env-syncs passive-source credentials."""
+    """Loads, validates and persists passive-source credentials locally."""
 
     def __init__(self, root: Path):
         self.path = Path(root) / 'credentials.json'
-        # Original environment values, captured before any override, so that
-        # clearing a stored value restores (or removes) the ambient one.
-        self._env_baseline: dict[str, str | None] = {}
         self._store: dict[str, str] = self._load()
-        self.sync_env()
 
     # -- persistence ----------------------------------------------------------
     def _load(self) -> dict[str, str]:
@@ -103,64 +112,71 @@ class CredentialVault:
             return {}
         if not isinstance(data, dict):
             return {}
-        return {k: v for k, v in data.items()
-                if k in VAR_SET and isinstance(v, str) and v}
+        out: dict[str, str] = {}
+        for k, v in data.items():
+            if (k in VAR_SET and isinstance(v, str) and v
+                    and '\x00' not in v and len(v) <= MAX_VALUE_LEN):
+                out[k] = v
+        return out
 
-    def _save(self) -> None:
+    @staticmethod
+    def _enforce_owner_only(path: Path) -> None:
+        # POSIX mode bits don't apply on Windows; there the user profile ACL
+        # governs access and os.chmod can't tighten it, so skip the check.
+        if os.name == 'nt':
+            return
+        os.chmod(path, 0o600)
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+        if mode & 0o077:
+            raise OSError(f'Refusing to store credentials: {path} is group/world accessible (mode {oct(mode)}).')
+
+    def _write(self, store: dict[str, str]) -> None:
+        payload = json.dumps(store, indent=2, sort_keys=True)
         tmp = self.path.with_name(self.path.name + '.tmp')
-        tmp.write_text(json.dumps(self._store, indent=2, sort_keys=True))
         try:
-            os.chmod(tmp, 0o600)
-        except OSError:
-            pass
-        os.replace(tmp, self.path)
-        try:
-            os.chmod(self.path, 0o600)
-        except OSError:
-            pass
+            # Create owner-only from the outset so there is no readable window.
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'w') as handle:
+                handle.write(payload)
+            self._enforce_owner_only(tmp)
+            os.replace(tmp, self.path)
+            self._enforce_owner_only(self.path)
+        finally:
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except OSError:
+                pass
 
-    # -- environment ----------------------------------------------------------
-    def sync_env(self) -> None:
-        """Project the stored values onto os.environ. Stored values win over
-        the ambient environment; cleared values fall back to the original."""
-        for name in VAR_SET:
-            if name not in self._env_baseline:
-                self._env_baseline[name] = os.environ.get(name)
-            if name in self._store:
-                os.environ[name] = self._store[name]
-            elif self._env_baseline[name] is None:
-                os.environ.pop(name, None)
-            else:
-                os.environ[name] = self._env_baseline[name]
-
+    # -- lookup ---------------------------------------------------------------
     def effective(self, name: str) -> str | None:
         return self._store.get(name) or os.environ.get(name)
 
     # -- mutation -------------------------------------------------------------
     def set_many(self, updates: dict) -> bool:
         """Apply {name: value}. An empty/None value clears the stored key.
-        Unknown names and oversized values are rejected."""
+        The whole batch is validated and staged before anything is written, and
+        the in-memory store is updated only after a successful persist, so a
+        rejected or failed update leaves the vault unchanged."""
         if not isinstance(updates, dict):
             raise ValueError('Credential updates must be an object.')
         for name in updates:
             if name not in VAR_SET:
                 raise ValueError(f'Unknown credential variable: {name}')
+        staged = dict(self._store)
         changed = False
         for name, value in updates.items():
             if value is None or str(value).strip() == '':
-                if name in self._store:
-                    del self._store[name]
+                if staged.pop(name, None) is not None:
                     changed = True
             else:
-                value = str(value).strip()
-                if len(value) > MAX_VALUE_LEN:
-                    raise ValueError(f'{name} exceeds the maximum length.')
-                if self._store.get(name) != value:
-                    self._store[name] = value
+                value = _valid_value(str(value).strip())
+                if staged.get(name) != value:
+                    staged[name] = value
                     changed = True
         if changed:
-            self._save()
-            self.sync_env()
+            self._write(staged)
+            self._store = staged
         return changed
 
     # -- reporting ------------------------------------------------------------
@@ -174,7 +190,7 @@ class CredentialVault:
             for var in provider['variables']:
                 name = var['name']
                 stored = name in self._store
-                env_only = (not stored) and bool(self._env_baseline.get(name))
+                env_only = (not stored) and bool(os.environ.get(name))
                 value = self.effective(name)
                 variables.append({
                     'name': name,

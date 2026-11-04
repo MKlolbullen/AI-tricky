@@ -258,12 +258,17 @@ def test_stream_output_limit_terminates_process(tmp_path):
 
 
 def test_only_selected_provider_credentials_are_inherited_and_redacted(tmp_path,fixture_binary,monkeypatch):
-    monkeypatch.setenv('SHODAN_API_KEY','fixture-selected-secret')
+    # The selected provider credential is supplied through the per-run snapshot
+    # on the control object. An ambient environment variable of the same name is
+    # never read, and the model API key in the environment is never inherited.
     monkeypatch.setenv('CAI_MODEL_API_KEY','fixture-never-inherited')
+    monkeypatch.setenv('SHODAN_API_KEY','env-value-must-be-ignored')
     store=Store(tmp_path/'state');tool=TOOLS['shodan-cli'];config={**CONFIG,'cli_credential_keys':['SHODAN_API_KEY'],'cli_binaries':{tool['id']:{'path':str(fixture_binary),'sha256':digest(fixture_binary)}}};rid=store.new_run(config)['id']
-    result=asyncio.run(execute_cli(rid,'tool',data_for(tool),{'domain':['example.test']},config,RunControl(),store))
+    ctl=RunControl();ctl.credentials={'SHODAN_API_KEY':'fixture-selected-secret'}
+    result=asyncio.run(execute_cli(rid,'tool',data_for(tool),{'domain':['example.test']},config,ctl,store))
     record=store.content(result[0]['invocation_artifact_ids'][0]);raw=json.dumps(record)
     assert 'fixture-selected-secret' not in raw
+    assert 'env-value-must-be-ignored' not in raw
     assert 'fixture-never-inherited' not in raw
     assert '[REDACTED]' in record['stdout']
     assert 'CAI_MODEL_API_KEY' not in json.loads(record['stdout'])['env_keys']

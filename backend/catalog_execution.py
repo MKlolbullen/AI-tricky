@@ -2,7 +2,6 @@
 import base64
 import html
 import json
-import os
 from pathlib import Path
 import re
 from urllib.parse import quote
@@ -46,7 +45,7 @@ def source_values(data,config):
     return allowed
 
 
-def preflight(graph,config,store,*,check_binaries=True):
+def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset()):
     issues=[];binaries={};snapshots={}
     for n in graph['nodes']:
         data=n['data'];kind=data['kind'];reason=[]
@@ -61,7 +60,7 @@ def preflight(graph,config,store,*,check_binaries=True):
             tool=TOOLS[data['toolId']]
             if tool['adapter']['mode']=='blocked':reason.append(tool['adapter']['reason'])
             for key in tool.get('secrets',[]):
-                if key not in config.get('cli_credential_keys',[]) or not os.environ.get(key):reason.append(f'Configure and select the provider credential variable {key}.')
+                if key not in config.get('cli_credential_keys',[]) or key not in credentials:reason.append(f'Configure and select the provider credential variable {key}.')
             if not config.get('allow_cli'):reason.append('Enable catalog CLI execution for this run.')
             for typ,identifier in data.get('inputRefs',{}).items():
                 try:registered_path(store,identifier,'folder' if typ in ('folder','templates') else 'file');snapshots[identifier]=store.input(identifier)

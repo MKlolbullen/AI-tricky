@@ -114,6 +114,7 @@ class RunControl:
         self.active_nodes = set()
         self.processes = {}
         self.cli_invocations = 0
+        self.credentials = {}
         self.task = None
 
 
@@ -125,6 +126,11 @@ def create_app(data_dir=None, assessor=None):
     for _tid, _tool in TOOLS.items():
         for _key in _tool.get('secrets', []):
             credential_consumers.setdefault(_key, []).append(_tid)
+    catalog_secret_names = frozenset(credential_consumers)
+
+    def configured_secret_keys():
+        # Catalog credential variables that currently resolve to a value.
+        return frozenset(key for key in catalog_secret_names if vault.effective(key))
     proposal_planner = ProposalPlanner(store, evidence)
     proposal_executions = ProposalExecutions(store, proposal_planner)
     controls = {}
@@ -655,7 +661,7 @@ def create_app(data_dir=None, assessor=None):
     async def preflight_run(body: RunInput):
         config=prepare_config(body)
         if body.engine!='workflow':return {'ready':True,'issues':[]}
-        result=catalog_preflight(body.workflow,config,store,check_binaries=body.allow_http)
+        result=catalog_preflight(body.workflow,config,store,check_binaries=body.allow_http,credentials=configured_secret_keys())
         return {k:v for k,v in result.items() if k not in ('cli_binaries','input_snapshots')}
 
     @app.post('/api/runs', status_code=201)
@@ -664,7 +670,7 @@ def create_app(data_dir=None, assessor=None):
             check_run_capacity()
             config=await asyncio.to_thread(prepare_config,body)
             if body.engine=='workflow' and body.allow_http:
-                ready=await asyncio.to_thread(catalog_preflight,body.workflow,config,store)
+                ready=await asyncio.to_thread(catalog_preflight,body.workflow,config,store,credentials=configured_secret_keys())
                 if not ready['ready']:raise HTTPException(422,{'message':'Catalog preflight failed.','issues':ready['issues']})
                 config.update(cli_binaries=ready['cli_binaries'],input_snapshots=ready['input_snapshots'])
             run = store.new_run(config)
@@ -677,6 +683,12 @@ def create_app(data_dir=None, assessor=None):
 
     def start_run(run):
         ctl = RunControl()
+        # Snapshot the selected credentials once, server-side, for the whole run
+        # so a concurrent settings change cannot alter an in-flight run. The
+        # snapshot lives only on the control object, never in the persisted run.
+        ctl.credentials = {key: vault.effective(key)
+                           for key in run['config'].get('cli_credential_keys', [])
+                           if vault.effective(key)}
         controls[run['id']] = ctl
         ctl.task = asyncio.create_task(execute(run['id'], run['config'], ctl))
 

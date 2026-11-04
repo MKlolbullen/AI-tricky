@@ -18,7 +18,9 @@ export default function CredentialsManager({onSaved}){
   try{
    const d=await api('/credentials',{updates});
    setProviders(d.providers);
-   setDraft(p=>{const n={...p};Object.keys(updates).forEach(k=>delete n[k]);return n});
+   // Only clear a field whose current value still matches what we just sent, so
+   // a value the user typed while the request was in flight is preserved.
+   setDraft(p=>{const n={...p};for(const k of Object.keys(updates)){if((n[k]??'').trim()===(updates[k]??''))delete n[k]}return n});
    setMessage(`${label} updated · stored locally`);
    onSaved?.();
   }catch(e){setError(e.message)}finally{setBusy('')}

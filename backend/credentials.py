@@ -102,15 +102,27 @@ class CredentialVault:
 
     def __init__(self, root: Path):
         self.path = Path(root) / 'credentials.json'
+        # Set when an existing file could not be read/parsed, so we refuse to
+        # overwrite (and silently lose) credentials we failed to load.
+        self._load_error: str | None = None
         self._store: dict[str, str] = self._load()
 
     # -- persistence ----------------------------------------------------------
     def _load(self) -> dict[str, str]:
         try:
-            data = json.loads(self.path.read_text())
-        except (FileNotFoundError, ValueError, OSError):
+            text = self.path.read_text()
+        except FileNotFoundError:
+            return {}
+        except OSError as exc:
+            self._load_error = f'cannot read credentials file: {exc}'
+            return {}
+        try:
+            data = json.loads(text)
+        except ValueError:
+            self._load_error = 'credentials file is not valid JSON'
             return {}
         if not isinstance(data, dict):
+            self._load_error = 'credentials file is not a JSON object'
             return {}
         out: dict[str, str] = {}
         for k, v in data.items():
@@ -160,6 +172,8 @@ class CredentialVault:
         rejected or failed update leaves the vault unchanged."""
         if not isinstance(updates, dict):
             raise ValueError('Credential updates must be an object.')
+        if self._load_error is not None:
+            raise ValueError(f'Refusing to overwrite the stored credentials file ({self._load_error}); fix or remove it first.')
         for name in updates:
             if name not in VAR_SET:
                 raise ValueError(f'Unknown credential variable: {name}')

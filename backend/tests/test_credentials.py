@@ -81,6 +81,23 @@ def test_batch_is_atomic_on_rejection(clean_env, tmp_path):
     assert not (tmp_path / 'credentials.json').exists()
 
 
+def test_corrupt_file_is_not_overwritten(clean_env, tmp_path):
+    (tmp_path / 'credentials.json').write_text('{ not valid json')
+    with TestClient(create_app(tmp_path)) as c:
+        assert c.post('/api/credentials', json={'updates': {'SHODAN_API_KEY': 'x'}}).status_code == 422
+    # The unreadable file is preserved, not clobbered with a fresh store.
+    assert (tmp_path / 'credentials.json').read_text() == '{ not valid json'
+
+
+def test_validation_error_does_not_echo_value(clean_env, tmp_path):
+    with TestClient(create_app(tmp_path)) as c:
+        # A stray top-level key (extra='forbid') carrying a secret must not be
+        # reflected back in the 422 body.
+        r = c.post('/api/credentials', json={'SHODAN_API_KEY': 'supersecretvalue', 'updates': {}})
+        assert r.status_code == 422
+        assert 'supersecretvalue' not in r.text
+
+
 def test_values_never_returned(clean_env, tmp_path):
     with TestClient(create_app(tmp_path)) as c:
         post = c.post('/api/credentials', json={'updates': {'URLSCAN_API_KEY': 'topsecretvalue'}})

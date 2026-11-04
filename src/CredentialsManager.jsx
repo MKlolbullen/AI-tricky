@@ -54,11 +54,11 @@ export default function CredentialsManager({onSaved}){
       {v.configured
         ? <span className={`credential-status ${v.source}`}><CheckCircle size={14} weight="fill"/>Configured · {v.source==='stored'?'stored locally':'from environment'}</span>
         : <span className="credential-status none">Not set</span>}
-      {v.source==='stored'&&<button type="button" className="credential-clear" disabled={busy===p.name} onClick={()=>apply({[v.name]:''},p.name)}><Trash size={13}/>Clear</button>}
+      {v.source==='stored'&&<button type="button" className="credential-clear" disabled={!!busy} onClick={()=>apply({[v.name]:''},p.name)}><Trash size={13}/>Clear</button>}
      </div>
      <small className="credential-usage">{v.consumed_by.length?`Used by: ${v.consumed_by.join(', ')}`:'Stored for future use; no installed adapter declares this variable yet.'}</small>
     </div>)}
-    <button className="primary wide" disabled={busy===p.name} onClick={()=>saveProvider(p)}>{busy===p.name?'Saving…':`Save ${p.name} key${p.variables.length>1?'s':''}`}</button>
+    <button className="primary wide" disabled={!!busy} onClick={()=>saveProvider(p)}>{busy===p.name?'Saving…':`Save ${p.name} key${p.variables.length>1?'s':''}`}</button>
    </article>)}
   </div>
  </section>;

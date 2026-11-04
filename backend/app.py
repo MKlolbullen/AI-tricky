@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -183,6 +184,13 @@ def create_app(data_dir=None, assessor=None):
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Cache-Control'] = 'no-store'
         return response
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, exc):
+        # Never echo submitted values back in 422 bodies; a credential update
+        # body carries secrets, and the default handler returns `input`.
+        safe = [{k: v for k, v in err.items() if k not in ('input', 'ctx')} for err in exc.errors()]
+        return JSONResponse({'detail': safe}, status_code=422)
 
     @app.exception_handler(ScopeError)
     async def bad_scope(request, exc):

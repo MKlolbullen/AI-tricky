@@ -5,7 +5,7 @@ import json
 import re
 from urllib.parse import urlsplit, urlunsplit
 
-PARSER_VERSION = '1'
+PARSER_VERSION = '2'
 SEVERITIES = {'info', 'low', 'medium', 'high', 'critical'}
 CLI_PARSERS = {'httpx', 'dnsx', 'naabu', 'nmap', 'katana', 'nuclei', 'nuclei-takeover'}
 
@@ -119,9 +119,11 @@ def parse_cli(tool, stdout):
                 host = row.get('host') or row.get('input')
                 answers = {k: sorted(str(v) for v in row[k]) for k in ('a', 'aaaa', 'cname', 'mx', 'ns') if isinstance(row.get(k), list)}
             else:
-                match = re.fullmatch(r'(\S+)\s+\[([^\]]+)\]', line)
+                match = re.fullmatch(r'(\S+)\s+(?:\[([A-Z][A-Z0-9]*)\]\s+)?\[([^\]]+)\]', line)
                 host = match[1] if match else line
-                answers = {'answers': sorted(re.split(r'[,\s]+', match[2]))} if match else {}
+                answers = {'answers': sorted(re.split(r'[,\s]+', match[3]))} if match else {}
+                if match and match[2]:
+                    answers['record_type'] = match[2]
             result = observation('dns', host, tool, answers)
         elif tool == 'naabu':
             host, port = row.get('host') or row.get('ip'), row.get('port')

@@ -25,3 +25,6 @@ The user authorized creating the public MKlolbullen/AI-tricky repository and pub
 
 ## Release direction — 2026-11-04
 The user selected structured observations, a durable findings workbench and run comparisons for the next release. Preserve original evidence and existing databases. Keep severity, confidence and operator review state independent. Compare captured run snapshots; absence is “not observed”, never automatic resolution. Scanner/model output must not overwrite operator reviews or automatically verify a finding.
+
+## Improvement sequence — 2026-11-04
+Work through the agenda one release at a time. Complete v0.5.1 correctness, parser-upgrade and browser regression coverage before beginning adaptive agent planning. Preserve evidence and operator review history across parser generations.

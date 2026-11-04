@@ -62,8 +62,8 @@ test('execution review restores without approval and dispatches its exact snapsh
 });
 
 test('changing execution settings revokes the old review and creates a new snapshot', async ({page}) => {
-  const workspace = await openPlanner(page);
-  await makePlan(page, workspace, 'Browser changed-budget fixture');
+  let workspace = await openPlanner(page);
+  const plan = await makePlan(page, workspace, 'Browser changed-budget fixture');
   const first = await prepare(page, workspace);
   await expect(workspace.getByRole('spinbutton', {name: 'Native operation limit'})).toBeDisabled();
   await workspace.getByRole('button', {name: 'Change settings', exact: true}).click();
@@ -74,4 +74,10 @@ test('changing execution settings revokes the old review and creates a new snaps
   const revoked = await (await page.request.get(`/api/agent/executions/${first.id}`)).json();
   expect(revoked.status).toBe('revoked');
   await expect(workspace.getByRole('button', {name: 'Approve & start once', exact: true})).toBeDisabled();
+  workspace = await openPlanner(page);
+  await workspace.getByRole('combobox', {name: 'Recorded evidence-guided plans'}).selectOption(plan.id);
+  await workspace.getByRole('button', {name: 'Review execution', exact: true}).click();
+  await workspace.getByRole('combobox', {name: 'Saved execution reviews'}).selectOption(second.id);
+  await expect(workspace.getByRole('spinbutton', {name: 'Native operation limit'})).toHaveValue('2');
+  await expect(workspace.getByRole('spinbutton', {name: 'Native operation limit'})).toBeDisabled();
 });

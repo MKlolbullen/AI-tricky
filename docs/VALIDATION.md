@@ -1,4 +1,13 @@
-# 0.6 verification — 2026-11-04
+# 0.7 verification — 2026-11-04
+
+- Python: **321 passed, 1 skipped** locally, including **27 proposal-execution cases**. Coverage includes exact snapshots, explicit approval, strict options, scope/evidence/parser/catalog staleness, expiry, revocation, runtime restart, concurrent retries, transactional rollback, binary/template content changes, copied-input rechecks, capacity handling, pause/resume/cancel and a client disconnect during consume/start. The URO smoke test skipped locally.
+- Backend CI: **314 passed, 8 skipped**. URO is installed in CI; the eight optional CAI SDK fixture cases skip in the regular job and passed in the full local suite, including both selected SDK interpreters.
+- JavaScript: **12 passed**; production build, existing Sites packaging checks and catalog drift check (**151 tools / 57 workflows**) passed.
+- Chromium: **10 passed in GitHub CI** against the built UI and disposable fixture server. Execution cases cover persisted reviews, explicit approval, one loopback run, idempotent dispatch, revoking a prior budget snapshot and fresh review requirements. Each browser case resets its fixture data independently.
+- Real target I/O in these tests is limited to loopback HTTP fixtures; external CLI tests use local executable fixtures. No external target or remote provider was contacted. These results do not establish broad upstream binary compatibility, semantic proposal quality or authenticated multi-user approval.
+- Built-UI fixture server startup, initial run ordering and the test-only reset route passed a local API smoke. Manual visual inspection remains unavailable through the session browser's loopback connection.
+
+## Historical 0.6 verification — 2026-11-04
 
 - Python: **294 passed, 1 skipped** locally, including 24 proposal cases covering strict model contracts, evidence references, scope and risk limits, prerequisites, persistence and stale bindings. The real URO smoke test skipped because the binary is unavailable locally. The 24 proposal cases also passed after the final async API change.
 - Backend CI: **287 passed, 8 skipped**. CI includes the installed URO binary; its eight optional CAI SDK cases skip in the regular job and were exercised locally as described below.

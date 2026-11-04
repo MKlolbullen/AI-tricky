@@ -18,6 +18,13 @@ export default function ProposalExecution({plan, proposal, onRun}) {
   }, [open, plan.id, proposal.id]);
   useEffect(() => {setApproved(false);}, [review?.id, review?.status]);
   useEffect(() => {
+    if (!review) return;
+    const config = review.snapshot.config;
+    setOptions({allow_cli: config.allow_cli, max_requests: config.max_requests,
+      max_cli_invocations: config.max_cli_invocations, max_hosts: config.max_hosts, max_seconds: config.max_seconds,
+      input_refs: config.workflow.nodes.find(n => n.id === 'followup-test')?.data.inputRefs || {}});
+  }, [review?.id]);
+  useEffect(() => {
     if (review?.status !== 'pending') return;
     const timer = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(timer);

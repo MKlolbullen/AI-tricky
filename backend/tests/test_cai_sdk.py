@@ -87,3 +87,43 @@ def test_real_cai_evidence_only_attaches_no_tools(monkeypatch, isolated):
         assert len(Handler.calls)==1
     finally:
         server.shutdown();server.server_close()
+
+
+@pytest.mark.parametrize('isolated', [False, True])
+def test_real_sdk_generates_validated_evidence_proposals(monkeypatch, tmp_path, isolated):
+    from fastapi.testclient import TestClient
+    from backend.app import create_app
+    from backend.tests.test_proposals import setup, model_payload
+    select_runtime(monkeypatch, isolated)
+    _, _, rid, oid, _, _ = setup(tmp_path)
+    class Handler(BaseHTTPRequestHandler):
+        calls = []
+        def do_POST(self):
+            payload = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            self.calls.append(payload)
+            assert not payload.get('tools')
+            goal = json.loads(payload['messages'][-1]['content'])['goal']
+            context = model_payload(goal)
+            action = next(a for a in context['available_actions'] if a['adapter_id'] == 'native_http')
+            plan = {'summary': 'Fixture evidence-guided plan', 'coverage_limits': [], 'proposals': [
+                {'action_id': action['id'], 'observation_ids': [oid], 'hypothesis': 'The response may have changed.',
+                 'rationale': 'The captured URL supplies a concrete follow-up location.',
+                 'expected_signal': 'Status and headers', 'negative_signal': 'A failed check remains inconclusive.'}]}
+            result = {'id': 'fixture', 'object': 'chat.completion', 'created': 1, 'model': 'local-fixture',
+                      'choices': [{'index': 0, 'message': {'role': 'assistant', 'content': json.dumps(plan)}, 'finish_reason': 'stop'}]}
+            body = json.dumps(result).encode()
+            self.send_response(200); self.send_header('Content-Type', 'application/json'); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body)
+        def log_message(self, *_):
+            pass
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setenv('CAI_MODEL_BASE_URL', f'http://127.0.0.1:{server.server_port}/v1')
+    try:
+        with TestClient(create_app(tmp_path)) as client:
+            response = client.post('/api/agent/proposals', json={'run_id': rid, 'observation_ids': [oid], 'goal': 'Review captured evidence', 'use_model': True})
+            assert response.status_code == 201, response.text
+            assert response.json()['planner'] == 'cai-model' and response.json()['model_called']
+            assert response.json()['proposals'][0]['observation_ids'] == [oid]
+            assert len(Handler.calls) == 1
+    finally:
+        server.shutdown(); server.server_close()

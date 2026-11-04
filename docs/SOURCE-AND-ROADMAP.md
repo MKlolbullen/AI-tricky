@@ -42,3 +42,7 @@ No changes were pushed to mini-tricky as part of this increment.
 ## Evidence workbench update — 0.5
 
 Structured native/CLI observations, durable candidate findings, revision-checked operator reviews and run comparisons are implemented. Existing artifacts are indexed without rewriting their content. Comparisons retain per-run detection snapshots and never infer resolution from absence. See [contracts and limits](EVIDENCE-WORKBENCH.md).
+
+## Evidence-guided planning update — 0.6
+
+Recorded observations now support persisted follow-up proposals through rules or the configured evidence-only CAI model. The server checks action/citation bindings, scope, risk and typed graphs, and preserves the model's hypothesis, expected signal and coverage limits. Stale plans remain inspectable but cannot load workflows. The first 13 profiles and model-data limits are documented in [EVIDENCE-PLANNING.md](EVIDENCE-PLANNING.md). Request-bound proposal execution remains a separate next increment.

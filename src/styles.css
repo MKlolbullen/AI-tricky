@@ -74,3 +74,21 @@
 .change-new{color:#7de2bf!important}.change-changed{color:#f3cc88!important}.change-not_observed{color:#aaaec7!important}
 @media(max-width:900px){.evidence-columns{grid-template-columns:1fr}.comparison-values{grid-template-columns:1fr}.evidence-detail{padding:15px}}
 @media(max-width:600px){.comparison-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.evidence-filters .field-label,.evidence-filters .field-label:first-child,.comparison-controls .field-label{min-width:100%;flex:1}}
+
+/* Evidence-guided proposal review. */
+.planning-mode{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 22px}
+.proposal-observations{border:1px solid #2b405a;border-radius:8px;padding:12px;max-height:270px;overflow:auto;margin:18px 0 8px}
+.proposal-observations legend{color:#a9c3df;font-size:12px;padding:0 8px}
+.proposal-observation{display:flex;gap:12px;align-items:flex-start;padding:10px 6px;border-bottom:1px solid #20344b;cursor:pointer}
+.proposal-observation input{margin-top:4px}.proposal-observation span{min-width:0;overflow-wrap:anywhere}
+.proposal-observation strong{font-size:12px;color:#c7def5;display:block}.proposal-observation small{display:block;font-size:11px;margin-top:5px}
+.proposal-boundary{font-size:12px;color:#93acc8;line-height:1.7;margin:14px 0}
+.proposal-plan{margin:24px 0}.proposal-plan>.section-intro h3{margin:12px 0}
+.proposal-card{padding:20px;border:1px solid #2c425e;border-radius:9px;background:#101e31;margin:15px 0;overflow-wrap:anywhere}
+.proposal-card h4{font-size:16px}.proposal-card>code{display:block;color:#92dce5;margin:14px 0;font-size:12px}
+.proposal-card dl{display:grid;grid-template-columns:140px minmax(0,1fr);gap:12px;font-size:13px;line-height:1.65;margin:20px 0}
+.proposal-card dt{color:#8ea8c8}.proposal-card dd{margin:0;color:#c5d8ec;white-space:pre-wrap}
+.proposal-card>p{font-size:12px;color:#93acc8;margin:15px 0}.proposal-card>small{display:block;line-height:1.6;margin:10px 0}
+.proposal-card .scope-chips{margin:15px 0}.proposal-card .primary{margin-top:18px}
+.proposal-requirements{font-size:12px;line-height:1.7;color:#d3bc95;margin-top:18px;padding:12px;background:#29251e;border-left:3px solid #b68c4f}
+@media(max-width:700px){.proposal-card dl{grid-template-columns:1fr;gap:7px}.proposal-card dd{margin-bottom:12px}}

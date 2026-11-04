@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test';
+import {test, expect} from './fixtures.mjs';
 import {readFile} from 'node:fs/promises';
 
 async function openWorkspace(page, tab) {
@@ -86,6 +86,7 @@ test('verification offers captured HTTP evidence and excludes model analysis art
 
 test('failed capture requests show the error without a permanent loading message', async ({page}) => {
   const workspace = await openWorkspace(page, 'Observations');
+  await workspace.getByRole('combobox', {name: 'Run', exact: true}).selectOption('qa-current');
   await workspace.getByRole('combobox', {name: 'Kind', exact: true}).selectOption('http');
   await expect(workspace.locator('.evidence-result')).toHaveCount(1);
   await workspace.locator('.evidence-result').click();

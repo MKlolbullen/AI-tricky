@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml/badge.svg" /></a>
-  <img alt="Version 0.6.0" src="https://img.shields.io/badge/version-0.6.0-02d0e5" />
+  <img alt="Version 0.7.0" src="https://img.shields.io/badge/version-0.7.0-02d0e5" />
   <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&amp;logoColor=white" />
   <img alt="React and React Flow" src="https://img.shields.io/badge/React-React_Flow-61DAFB?logo=react&amp;logoColor=111827" />
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-b66cf3" /></a>
@@ -98,13 +98,15 @@ Open **Local workspace → Observations**, **Findings** or **Compare runs** afte
 
 Existing runs are indexed locally when these views or APIs are read; original artifacts remain intact. Parser generation 2 reindexes old captures, retains review history, and excludes superseded normalizations from observations and comparisons. New captures record capture timestamps; legacy artifacts explicitly use their run-start timestamp. Comparisons use recorded occurrence snapshots, so a later severity review does not rewrite what an earlier run reported. See [contracts and limits](docs/EVIDENCE-WORKBENCH.md).
 
-## Evidence-guided follow-ups — 0.6
+## Evidence-guided follow-ups and execution — 0.7
 
 Open **Local workspace → Agent desk → Evidence follow-ups**, select a run and supporting observations, then generate proposed tests. Each proposal explains its hypothesis, supporting captures, expected evidence, negative/inconclusive result, registered adapter, exact input and prerequisites.
 
 The optional CAI model selects from server-built actions with no target tools attached. Scope, risk and typed graph validation remain independent of the model. The rules mode is explicitly labelled. Plans persist across restarts, can be reopened/exported, and become stale when their evidence or adapter bindings change.
 
-The first increment covers 13 reviewed adapter profiles. It can load a proposed workflow onto the canvas; manual configuration and preflight remain necessary. Request-bound proposal approval and dispatch are the next increment. See [contracts, coverage and limits](docs/EVIDENCE-PLANNING.md).
+The initial profiles cover 13 reviewed adapters. You can load a proposal onto the canvas for manual configuration, or choose **Review execution** to bind its exact workflow, scope, budgets, binary hashes and registered input contents. Preparation runs preflight without target traffic. Inspect the saved snapshot, explicitly approve it and start it once. Retries return the same run; changed/stale bindings, expired reviews and restarted runtimes require a new review. Pause, resume and cancel use the existing run controls.
+
+Plans, execution receipts and approval audit events persist locally. Approval applies to a server-built proposal execution, not later canvas edits; ordinary manual runs remain a separate flow. CLI-internal requests remain uncounted by the native budget. See [planning contracts](docs/EVIDENCE-PLANNING.md) and [execution bindings and limits](docs/PROPOSAL-EXECUTION.md).
 
 ## AI integration
 

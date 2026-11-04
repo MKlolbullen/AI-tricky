@@ -1,10 +1,13 @@
-"""Disposable browser-test data. This server never dispatches target traffic."""
+"""Disposable browser data; execution tests contact only the loopback fixture."""
 import json
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import sys
 import tempfile
+import threading
 
 import uvicorn
+from fastapi.routing import APIRoute
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from backend.app import create_app
@@ -12,7 +15,15 @@ from backend.store import Store, now
 from backend.proposals import ProposalPlanner
 
 
-def seed(store):
+def seed(store, fixture_url):
+    store.add_target(fixture_url + '/')
+    fixture_config = {'targets': [fixture_url + '/'], 'engine': 'inventory', 'allow_http': True,
+                      'goal': 'Loopback proposal execution fixture', 'max_requests': 1,
+                      'max_cli_invocations': 1, 'ports': [80], 'max_hosts': 1}
+    with store.connect() as c:
+        c.execute('INSERT INTO runs VALUES(?,?,?,?,?,?)', ('qa-execution', 'completed', now(), now(), json.dumps(fixture_config), None))
+    store.artifact('qa-execution', 'http-1.json', {'url': fixture_url + '/approved', 'status': 200,
+                                               'body': 'Recorded loopback fixture', 'headers': {}})
     config = {'targets': ['https://example.invalid/'], 'engine': 'inventory', 'allow_http': True,
               'goal': 'Automated browser QA fixtures; no target requests', 'max_requests': 256,
               'max_cli_invocations': 64, 'ports': [443], 'max_hosts': 1}
@@ -39,7 +50,29 @@ def seed(store):
 
 
 if __name__ == '__main__':
+    class FixtureHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200); self.send_header('Content-Type', 'text/plain'); self.end_headers()
+            self.wfile.write(b'Approved loopback browser execution fixture')
+        def log_message(self, *args):
+            pass
+    fixture = ThreadingHTTPServer(('127.0.0.1', 0), FixtureHandler)
+    threading.Thread(target=fixture.serve_forever, daemon=True).start()
     with tempfile.TemporaryDirectory(prefix='ai-tricky-browser-') as directory:
         store = Store(Path(directory))
-        seed(store)
-        uvicorn.run(create_app(directory), host='127.0.0.1', port=8787, access_log=False)
+        fixture_url = f'http://127.0.0.1:{fixture.server_port}'
+        seed(store, fixture_url)
+        app = create_app(directory)
+        def reset_fixture():
+            # Test-only route: every browser case gets fresh evidence, approvals and run IDs.
+            with store.connect() as c:
+                tables = [r['name'] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+                for table in tables:
+                    c.execute('DELETE FROM "' + table + '"')
+            seed(store, fixture_url)
+            return {'reset': True}
+        app.router.routes.insert(0, APIRoute('/api/_qa/reset', reset_fixture, methods=['POST']))
+        try:
+            uvicorn.run(app, host='127.0.0.1', port=8787, access_log=False)
+        finally:
+            fixture.shutdown(); fixture.server_close()

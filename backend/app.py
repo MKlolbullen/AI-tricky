@@ -25,6 +25,7 @@ from .cli_runner import pause_processes, snapshot_folder
 from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
+from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
 
 
 class TargetInput(BaseModel):
@@ -113,13 +114,18 @@ def create_app(data_dir=None, assessor=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
     evidence = EvidenceIndex(store)
     proposal_planner = ProposalPlanner(store, evidence)
+    proposal_executions = ProposalExecutions(store, proposal_planner)
     controls = {}
+    dispatch_lock = asyncio.Lock()
+    dispatch_tasks = set()
     assess = assessor or cai_adapter.assess
     preview = (os.environ.get('AI_TRICKY_PREVIEW') or os.environ.get('OFFSECS_U_AI_PREVIEW') or os.environ.get('RECONFORGE_PREVIEW')) == '1'
 
     @asynccontextmanager
     async def lifespan(app):
         yield
+        # Finish already approved consume/start operations even if their client disconnected.
+        await asyncio.gather(*dispatch_tasks, return_exceptions=True)
         for ctl in controls.values():
             ctl.cancelled = True
             ctl.gate.set()
@@ -163,6 +169,10 @@ def create_app(data_dir=None, assessor=None):
     @app.exception_handler(ScopeError)
     async def bad_scope(request, exc):
         return JSONResponse({'detail': str(exc)}, 422)
+
+    @app.exception_handler(ExecutionError)
+    async def bad_execution(request, exc):
+        return JSONResponse({'detail': str(exc)}, exc.status)
 
     def get_run(rid):
         try:
@@ -594,18 +604,65 @@ def create_app(data_dir=None, assessor=None):
 
     @app.post('/api/runs', status_code=201)
     async def create_run(body: RunInput):
+        async with dispatch_lock:
+            check_run_capacity()
+            config=await asyncio.to_thread(prepare_config,body)
+            if body.engine=='workflow' and body.allow_http:
+                ready=await asyncio.to_thread(catalog_preflight,body.workflow,config,store)
+                if not ready['ready']:raise HTTPException(422,{'message':'Catalog preflight failed.','issues':ready['issues']})
+                config.update(cli_binaries=ready['cli_binaries'],input_snapshots=ready['input_snapshots'])
+            run = store.new_run(config)
+            start_run(run)
+        return run
+
+    def check_run_capacity():
         if sum(not c.task.done() for c in controls.values() if c.task) >= 2:
             raise HTTPException(409, 'Two local runs are already active.')
-        config=prepare_config(body)
-        if body.engine=='workflow' and body.allow_http:
-            ready=catalog_preflight(body.workflow,config,store)
-            if not ready['ready']:raise HTTPException(422,{'message':'Catalog preflight failed.','issues':ready['issues']})
-            config.update(cli_binaries=ready['cli_binaries'],input_snapshots=ready['input_snapshots'])
-        run = store.new_run(config)
+
+    def start_run(run):
         ctl = RunControl()
         controls[run['id']] = ctl
-        ctl.task = asyncio.create_task(execute(run['id'], config, ctl))
-        return run
+        ctl.task = asyncio.create_task(execute(run['id'], run['config'], ctl))
+
+    @app.post('/api/agent/proposals/{plan_id}/{proposal_id}/executions', status_code=201)
+    async def prepare_proposal_execution(plan_id: str, proposal_id: str, body: ExecutionOptions):
+        return await asyncio.to_thread(proposal_executions.prepare, plan_id, proposal_id, body.model_dump())
+
+    @app.get('/api/agent/proposals/{plan_id}/executions')
+    def proposal_execution_history(plan_id: str):
+        # Historic execution receipts remain readable even when a plan becomes stale.
+        proposal_plan(plan_id)
+        return proposal_executions.history(plan_id)
+
+    @app.get('/api/agent/executions/{execution_id}')
+    def proposal_execution_review(execution_id: str):
+        return proposal_executions.get(execution_id)
+
+    @app.post('/api/agent/executions/{execution_id}/revoke')
+    async def revoke_proposal_execution(execution_id: str, body: SnapshotAction):
+        return await asyncio.to_thread(proposal_executions.revoke, execution_id, body.expected_hash)
+
+    @app.post('/api/agent/executions/{execution_id}/dispatch')
+    async def dispatch_proposal_execution(execution_id: str, body: DispatchAction):
+        if body.approve is not True:
+            raise HTTPException(422, 'Explicit operator approval is required to start this execution.')
+        async def consume_and_start():
+            async with dispatch_lock:
+                receipt = await asyncio.to_thread(proposal_executions.get, execution_id)
+                if receipt['status'] == 'pending':
+                    check_run_capacity()
+                run, created = await asyncio.to_thread(proposal_executions.dispatch, execution_id, body.expected_hash)
+                if created:
+                    start_run(run)
+                return {'run': run, 'created': created, 'execution_id': execution_id}
+        task = asyncio.create_task(consume_and_start())
+        dispatch_tasks.add(task)
+        def finished(job):
+            dispatch_tasks.discard(job)
+            if not job.cancelled():
+                job.exception()  # Retrieve failures even if the requesting client disconnected.
+        task.add_done_callback(finished)
+        return await asyncio.shield(task)
 
     @app.post('/api/runs/{rid}/{action}')
     async def control(rid: str, action: str):

@@ -32,7 +32,7 @@ The complete source catalog is now available: 151 contracts and 57 converted wor
 
 - Expand real-binary compatibility tests and add account/callback/notification contracts for restricted entries. Keep arbitrary shell commands outside model tools.
 - Expand the 0.5 findings workbench with additional format-specific parsers and controlled verification/replay.
-- Introduce a typed proposal execution contract with exact request binding before allowing an agent's suggested test to dispatch.
+- Evaluate proposal quality in controlled labs and add reviewed verification/replay profiles with explicit request and identity bindings.
 - Add authenticated identity profiles and controlled multi-identity evidence comparison for BOLA/IDOR reviews.
 - Connect Burp/burpaderp and Strix through their integration contracts; these are not connected by this increment.
 - Complete interactive browser QA on a machine that can reach the loopback application. The browser available during this session could not connect to the workspace server.
@@ -45,4 +45,8 @@ Structured native/CLI observations, durable candidate findings, revision-checked
 
 ## Evidence-guided planning update — 0.6
 
-Recorded observations now support persisted follow-up proposals through rules or the configured evidence-only CAI model. The server checks action/citation bindings, scope, risk and typed graphs, and preserves the model's hypothesis, expected signal and coverage limits. Stale plans remain inspectable but cannot load workflows. The first 13 profiles and model-data limits are documented in [EVIDENCE-PLANNING.md](EVIDENCE-PLANNING.md). Request-bound proposal execution remains a separate next increment.
+Recorded observations now support persisted follow-up proposals through rules or the configured evidence-only CAI model. The server checks action/citation bindings, scope, risk and typed graphs, and preserves the model's hypothesis, expected signal and coverage limits. Stale plans remain inspectable but cannot load workflows. The first 13 profiles and model-data limits are documented in [EVIDENCE-PLANNING.md](EVIDENCE-PLANNING.md).
+
+## Proposal execution update — 0.7
+
+Explicit operator approval now binds an exact saved proposal workflow, original entered scope, budgets, binaries and registered input contents. Reviews expire, invalidate on runtime restart or changed bindings, and are consumed atomically with run creation. Retries return the same run. Existing pause/resume/cancel and artifact/accounting paths are reused, with durable approval and source-run provenance. See [execution contracts and limits](PROPOSAL-EXECUTION.md). Proposal quality evaluation and additional verification/replay profiles remain future work.

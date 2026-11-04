@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test';
+import {test, expect} from './fixtures.mjs';
 
 async function openPlanner(page) {
   await page.goto('/');

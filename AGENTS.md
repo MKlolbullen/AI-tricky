@@ -31,3 +31,6 @@ Work through the agenda one release at a time. Complete v0.5.1 correctness, pars
 
 ## Evidence-guided planning — 2026-11-04
 The next authorized increment is evidence-guided proposals. Model planning must use captured observation references and server-owned actions; scope, risk and adapter validation remain independent of model output. Persist provenance, expected and negative signals, and flag stale evidence/contract bindings. Loading a proposal is a canvas operation; request-bound dispatch is a separate next increment. Keep deterministic suggestions explicitly labelled and never use them as a hidden model fallback.
+
+## Proposal execution — 2026-11-04
+The user authorized the next increment: explicit execution approval bound to a canonical proposal, original entered scope, budgets, executable hashes and input contents. Prepare reviews without target traffic. Persist approvals and run provenance, consume each review once, reject changed/stale/expired bindings and invalidate pending reviews at runtime restart. Reuse the existing run controls and accounting. Manual canvas runs remain independent and must not claim recorded proposal approval.

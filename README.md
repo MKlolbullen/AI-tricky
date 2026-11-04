@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml/badge.svg" /></a>
-  <img alt="Version 0.5.0" src="https://img.shields.io/badge/version-0.5.0-02d0e5" />
+  <img alt="Version 0.5.1" src="https://img.shields.io/badge/version-0.5.1-02d0e5" />
   <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&amp;logoColor=white" />
   <img alt="React and React Flow" src="https://img.shields.io/badge/React-React_Flow-61DAFB?logo=react&amp;logoColor=111827" />
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-b66cf3" /></a>
@@ -87,7 +87,7 @@ Native inventory works without installing the optional CAI SDK or any CLI scanne
 
 Nuclei and Jaeles require a registered, reviewed template/signature folder. DNS adapters that require resolver files use registered resolver inputs. Missing binaries and missing context are reported before a live run starts.
 
-## Evidence workbench — 0.5
+## Evidence workbench — 0.5.1
 
 Open **Local workspace → Observations**, **Findings** or **Compare runs** after recording assessments.
 
@@ -96,15 +96,19 @@ Open **Local workspace → Observations**, **Findings** or **Compare runs** afte
 - **Review:** record candidate, triaged, verified, rejected or resolved decisions with an explanatory note. Verification requires an attached HTTP/CLI capture. Reviews are revision checked and retained in history; new scanner/model output preserves operator decisions and flags evidence captured after the latest review.
 - **Compare runs:** inspect new, changed, unchanged/recurring and not-observed records, with baseline/current values, evidence links and JSON export. Scope, configuration, partial captures and failed checks remain visible. Not observed does **not** mean resolved.
 
-Existing runs are indexed locally when these views or APIs are read; original artifacts remain intact. New captures record capture timestamps; legacy artifacts explicitly use their run-start timestamp. Comparisons use recorded occurrence snapshots, so a later severity review does not rewrite what an earlier run reported. See [contracts and limits](docs/EVIDENCE-WORKBENCH.md).
+Existing runs are indexed locally when these views or APIs are read; original artifacts remain intact. Parser generation 2 reindexes old captures, retains review history, and excludes superseded normalizations from observations and comparisons. New captures record capture timestamps; legacy artifacts explicitly use their run-start timestamp. Comparisons use recorded occurrence snapshots, so a later severity review does not rewrite what an earlier run reported. See [contracts and limits](docs/EVIDENCE-WORKBENCH.md).
 
 ## AI integration
 
-Install the optional, pinned CAI dependency snapshot:
+Install the optional, pinned CAI dependency snapshot in a separate local interpreter:
 
 ```bash
-.venv/bin/python -m pip install -r requirements-cai.lock
+python3 -m venv .venv-cai
+.venv-cai/bin/python -m pip install -r requirements-cai.lock
+export CAI_PYTHON="$PWD/.venv-cai/bin/python"
 ```
+
+CAI 0.5.10 pins an older OpenAI/LiteLLM/web dependency stack. Keeping it separate lets the API use its supported FastAPI/Starlette versions without dependency conflicts. The SDK worker opens no HTTP listener or proxy service. Model inference uses the configured endpoint; target HTTP/TCP calls are delegated back to the parent application's scope and budget checks. Worker messages and lifetime are bounded. This isolates dependencies, not operating-system network access.
 
 ### Local model endpoint
 
@@ -194,6 +198,8 @@ npm run dev                       # Python API + Vite, local development
 .venv/bin/python scripts/migrate-catalog.py --check
 npm run build
 npm test
+npx playwright install chromium  # one-time browser test setup
+npm run test:browser             # disposable local fixture server
 ```
 
 To regenerate the committed catalog after editing the pinned source descriptors:
@@ -217,6 +223,7 @@ Interactive browser QA and broader real-binary version validation remain open. S
 | Variable | Purpose |
 | --- | --- |
 | `AI_TRICKY_DATA_DIR` | Override the local database, input and evidence directory |
+| `CAI_PYTHON` | Python executable in the separate optional CAI environment |
 | `CAI_MODEL_BASE_URL` | Explicit local or permitted remote model endpoint |
 | `CAI_MODEL` | Model identifier at that endpoint |
 | `CAI_MODEL_API_KEY` | Optional server-side provider credential |

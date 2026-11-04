@@ -43,7 +43,7 @@ def test_common_tool_output_contracts(tool, output, kind, asset):
     rows, report = parse_cli(tool, output)
     assert len(rows) == 1
     assert rows[0]['kind'] == kind and rows[0]['asset'] == asset
-    assert report['supported'] and report['parser_version'] == '1'
+    assert report['supported'] and report['parser_version'] == '2'
 
 
 @pytest.mark.parametrize('tool', ['httpx', 'dnsx', 'naabu', 'nmap', 'katana', 'nuclei', 'unimplemented'])
@@ -124,6 +124,7 @@ def test_model_candidates_require_same_run_captured_http_provenance(tmp_path):
     finding = index.findings()['items'][0]
     detail = index.finding(finding['id'])
     assert set(detail['occurrences'][0]['evidence_ids']) == {aid, model_aid}
+    assert detail['verification_evidence'] == [{'id': aid, 'name': 'http-1.json'}]
     with pytest.raises(ValueError, match='rather than model analysis'):
         index.review(finding['id'], expected_revision=1, status='verified', severity='medium', confidence='high',
                      note='Model said so', evidence_id=model_aid)
@@ -243,3 +244,107 @@ def test_non_finite_json_and_generated_files_remain_raw_evidence(tmp_path):
     store = Store(tmp_path); rid = run(store)
     store.artifact(rid, 'scanner/report.json', {'encoding': 'base64', 'bytes': 'arbitrary file content'})
     assert EvidenceIndex(store).observations()['total'] == 0
+
+
+@pytest.mark.parametrize('record_type,answer', [('A', '192.0.2.1'), ('AAAA', '2001:db8::1'), ('CNAME', 'alias.example.com')])
+def test_dnsx_record_type_group_is_indexed(record_type, answer):
+    rows, report = parse_cli('dnsx', f'example.com [{record_type}] [{answer}]')
+    assert report['parsed_records'] == 1 and report['unparsed_lines'] == 0
+    assert rows[0]['data'] == {'answers': [answer], 'record_type': record_type}
+
+
+def parser_generation(monkeypatch, version):
+    import backend.evidence as evidence_module
+    import backend.observations as observations_module
+    monkeypatch.setattr(evidence_module, 'PARSER_VERSION', version)
+    monkeypatch.setattr(observations_module, 'PARSER_VERSION', version)
+
+
+def test_parser_upgrade_reuses_unchanged_rows_and_preserves_review_bindings(tmp_path, monkeypatch):
+    parser_generation(monkeypatch, '1')
+    store = Store(tmp_path); first, second = run(store), run(store)
+    aid = nuclei(store, first); nuclei(store, second)
+    old_index = EvidenceIndex(store)
+    old_ids = {r['id'] for r in old_index.observations()['items']}
+    fid = old_index.findings()['items'][0]['id']
+    old_index.review(fid, expected_revision=1, status='verified', severity='medium', confidence='high',
+                     note='Reviewed original evidence', evidence_id=aid)
+    # v0.5 databases predate the generation membership table.
+    with store.connect() as c:
+        c.execute('DROP TABLE observation_versions')
+    parser_generation(monkeypatch, '2')
+    upgraded = EvidenceIndex(store)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        list(pool.map(lambda _: upgraded.index_pending(), range(3)))
+    rows = upgraded.observations()['items']
+    assert {r['id'] for r in rows} == old_ids
+    assert {r['parser_version'] for r in rows} == {'2'}
+    assert {r['origin_parser_version'] for r in rows} == {'1'}
+    detail = upgraded.finding(fid)
+    assert detail['status'] == 'verified' and detail['revision'] == 2 and len(detail['reviews']) == 1
+    assert len(detail['occurrences']) == 2
+    assert all(o['parser_versions'] == ['1', '2'] and o['active'] for o in detail['occurrences'])
+    assert upgraded.compare(first, second)['findings'][0]['state'] == 'recurring'
+
+
+def test_parser_upgrade_excludes_changed_previous_values_from_observations_and_diffs(tmp_path, monkeypatch):
+    import backend.evidence as evidence_module
+    from backend.observations import digest
+    parser_generation(monkeypatch, '1')
+    store = Store(tmp_path); first, second = run(store), run(store)
+    capture(store, first, status=200); capture(store, second, status=403)
+    EvidenceIndex(store).index_pending()
+    parser_generation(monkeypatch, '2')
+    original = evidence_module.parse_artifact
+    def changed_parser(name, content):
+        records, report = original(name, content)
+        for record in records:
+            record['data']['normalization'] = 'updated'
+            record['value_hash'] = digest(record['data'])
+        return records, report
+    monkeypatch.setattr(evidence_module, 'parse_artifact', changed_parser)
+    upgraded = EvidenceIndex(store)
+    rows = upgraded.observations()['items']
+    assert len(rows) == 2 and all(r['data']['normalization'] == 'updated' for r in rows)
+    with store.connect() as c:
+        assert c.execute('SELECT COUNT(*) FROM observations').fetchone()[0] == 4
+    change = upgraded.compare(first, second)['observations'][0]
+    assert change['state'] == 'changed' and len(change['before']) == len(change['after']) == 1
+    assert change['before'][0]['data']['normalization'] == 'updated'
+
+
+def test_parser_upgrade_retains_superseded_findings_without_comparing_them(tmp_path, monkeypatch):
+    import backend.evidence as evidence_module
+    parser_generation(monkeypatch, '1')
+    store = Store(tmp_path); first, second = run(store), run(store)
+    aid = nuclei(store, first); nuclei(store, second)
+    index = EvidenceIndex(store); fid = index.findings()['items'][0]['id']
+    index.review(fid, expected_revision=1, status='rejected', severity='info', confidence='high', note='False positive', evidence_id=aid)
+    parser_generation(monkeypatch, '2')
+    monkeypatch.setattr(evidence_module, 'parse_artifact', lambda *_: ([], {'supported': True, 'parser_version': '2'}))
+    upgraded = EvidenceIndex(store)
+    assert upgraded.observations()['total'] == 0
+    detail = upgraded.finding(fid)
+    assert detail['status'] == 'rejected' and len(detail['reviews']) == 1
+    assert all(not o['active'] and o['parser_versions'] == ['1'] for o in detail['occurrences'])
+    assert upgraded.compare(first, second)['findings'] == []
+
+
+def test_failed_reindex_keeps_previous_generation_and_can_retry(tmp_path, monkeypatch):
+    import backend.evidence as evidence_module
+    parser_generation(monkeypatch, '1')
+    store = Store(tmp_path); rid = run(store); capture(store, rid)
+    EvidenceIndex(store).index_pending()
+    parser_generation(monkeypatch, '2')
+    original = evidence_module.parse_artifact
+    def fail(*_):
+        raise RuntimeError('Parser failed')
+    monkeypatch.setattr(evidence_module, 'parse_artifact', fail)
+    index = EvidenceIndex(store)
+    with pytest.raises(RuntimeError, match='Parser failed'):
+        index.index_pending()
+    with store.connect() as c:
+        assert c.execute('SELECT parser_version FROM evidence_index').fetchall()[0][0] == '1'
+        assert c.execute('SELECT COUNT(*) FROM observations').fetchone()[0] == 1
+    monkeypatch.setattr(evidence_module, 'parse_artifact', original)
+    assert index.observations()['total'] == 1

@@ -3,12 +3,28 @@ import asyncio
 import importlib.metadata
 import json
 import os
+from pathlib import Path
+import subprocess
 from .scope import model_base_url
 
 SUPPORTED_CAI = '0.5.10'
 
 
 def installed_version():
+    interpreter = os.environ.get('CAI_PYTHON')
+    if interpreter:
+        try:
+            result = subprocess.run([str(Path(interpreter).expanduser().absolute()), '-c',
+                                     "import importlib.metadata; print(importlib.metadata.version('cai-framework'))"],
+                                    capture_output=True, text=True, timeout=5, check=False)
+            value = result.stdout.strip()
+            return value if result.returncode == 0 and len(value) < 50 else None
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+    return local_installed_version()
+
+
+def local_installed_version():
     try:
         return importlib.metadata.version('cai-framework')
     except importlib.metadata.PackageNotFoundError:
@@ -16,7 +32,16 @@ def installed_version():
 
 
 async def assess(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False):
-    if installed_version() != SUPPORTED_CAI:
+    if os.environ.get('CAI_PYTHON'):
+        from .cai_worker_client import assess_worker
+        return await assess_worker(targets, goal, request_tool, network_tool=network_tool,
+                                   timeout=timeout, evidence_only=evidence_only)
+    return await assess_local(targets, goal, request_tool, network_tool=network_tool,
+                              timeout=timeout, evidence_only=evidence_only)
+
+
+async def assess_local(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False):
+    if local_installed_version() != SUPPORTED_CAI:
         raise RuntimeError('Install the supported optional cai-framework==0.5.10 dependency in this Python environment.')
     base = model_base_url(os.environ.get('CAI_MODEL_BASE_URL', 'http://127.0.0.1:11434/v1'), os.environ.get('CAI_ALLOW_REMOTE_MODEL') == '1')
     model_name = os.environ.get('CAI_MODEL', 'local-model')

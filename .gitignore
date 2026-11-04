@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .venv/
+.venv-cai/
 local-data/
 __pycache__/
 .pytest_cache/
@@ -22,3 +23,5 @@ artifacts/
 results/
 .coverage
 htmlcov/
+test-results/
+playwright-report/

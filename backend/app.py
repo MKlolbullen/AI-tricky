@@ -168,6 +168,7 @@ def create_app(data_dir=None, assessor=None):
         except ValueError as exc:
             base, config_error = None, str(exc)
         return {'locally_hosted': True, 'cai_version': version, 'supported_version': cai_adapter.SUPPORTED_CAI,
+                'sdk_execution': 'isolated-interpreter' if os.environ.get('CAI_PYTHON') else 'in-process',
                 'sdk_ready': version == cai_adapter.SUPPORTED_CAI and config_error is None,
                 'model_base_url': base, 'model': os.environ.get('CAI_MODEL', 'local-model'),
                 'model_connection': 'not tested', 'remote_model_enabled': os.environ.get('CAI_ALLOW_REMOTE_MODEL') == '1', 'config_error': config_error,

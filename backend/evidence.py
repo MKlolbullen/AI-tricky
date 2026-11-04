@@ -27,6 +27,10 @@ class EvidenceIndex:
                 UNIQUE(artifact_id,fingerprint,value_hash));
             CREATE INDEX IF NOT EXISTS observations_by_run ON observations(run_id,fingerprint);
             CREATE INDEX IF NOT EXISTS observations_by_asset ON observations(asset,kind);
+            CREATE TABLE IF NOT EXISTS observation_versions(
+                artifact_id TEXT NOT NULL, parser_version TEXT NOT NULL, observation_id TEXT NOT NULL,
+                PRIMARY KEY(artifact_id,parser_version,observation_id));
+            CREATE INDEX IF NOT EXISTS observation_versions_active ON observation_versions(parser_version,observation_id);
             CREATE TABLE IF NOT EXISTS findings(
                 id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE NOT NULL, asset TEXT NOT NULL,
                 source TEXT NOT NULL, title TEXT NOT NULL, severity TEXT NOT NULL,
@@ -42,6 +46,11 @@ class EvidenceIndex:
                 revision INTEGER NOT NULL, previous TEXT NOT NULL, decision TEXT NOT NULL,
                 note TEXT NOT NULL, evidence_id TEXT, UNIQUE(finding_id,revision));
             ''')
+            # Preserve v0.5 observations and their review bindings. An unchanged
+            # normalization can participate in multiple parser generations.
+            c.execute('''INSERT OR IGNORE INTO observation_versions
+                         SELECT o.artifact_id,o.parser_version,o.id FROM observations o
+                         JOIN evidence_index i ON i.artifact_id=o.artifact_id AND i.parser_version=o.parser_version''')
 
     def _model_records(self, c, artifact, content):
         records = []
@@ -119,8 +128,9 @@ class EvidenceIndex:
                               (oid, artifact['run_id'], artifact['node_id'], artifact['id'], record['fingerprint'],
                                record['value_hash'], record['kind'], record['asset'], record['source'],
                                PARSER_VERSION, encoded(record['data']), artifact['observed_at']))
-                    if not c.execute('SELECT 1 FROM observations WHERE id=?', (oid,)).fetchone():
-                        continue
+                    oid = c.execute('''SELECT id FROM observations WHERE artifact_id=? AND fingerprint=? AND value_hash=?''',
+                                    (artifact['id'], record['fingerprint'], record['value_hash'])).fetchone()['id']
+                    c.execute('INSERT OR IGNORE INTO observation_versions VALUES(?,?,?)', (artifact['id'], PARSER_VERSION, oid))
                     finding = record.get('finding')
                     if finding:
                         fid = str(uuid.uuid4())
@@ -133,27 +143,29 @@ class EvidenceIndex:
                         c.execute('UPDATE findings SET first_seen=MIN(first_seen,?),last_seen=MAX(last_seen,?) WHERE id=?',
                                   (artifact['observed_at'], artifact['observed_at'], fid))
                         evidence_ids = list(dict.fromkeys([artifact['id'], *record.get('evidence_ids', [])]))
-                        c.execute('INSERT INTO finding_occurrences VALUES(?,?,?,?,?)',
+                        c.execute('INSERT OR IGNORE INTO finding_occurrences VALUES(?,?,?,?,?)',
                                   (fid, oid, artifact['run_id'], encoded(evidence_ids), encoded(record['data'])))
                 c.execute('INSERT INTO evidence_index VALUES(?,?,?)', (artifact['id'], PARSER_VERSION, encoded(report)))
 
     def observations(self, *, run_id=None, kind=None, q='', limit=100, offset=0):
         self.index_pending(run_id)
-        where, args = ['1=1'], []
+        where, args = ['v.parser_version=?'], [PARSER_VERSION]
         for column, value in [('run_id', run_id), ('kind', kind)]:
             if value:
-                where.append(column + '=?')
+                where.append('o.' + column + '=?')
                 args.append(value)
         if q:
-            where.append('(instr(lower(asset),lower(?))>0 OR instr(lower(source),lower(?))>0)')
+            where.append('(instr(lower(o.asset),lower(?))>0 OR instr(lower(o.source),lower(?))>0)')
             args.extend([q, q])
         with self.store.connect() as c:
-            total = c.execute('SELECT COUNT(*) FROM observations WHERE ' + ' AND '.join(where), args).fetchone()[0]
-            rows = c.execute('''SELECT observations.*,
-                             CASE WHEN (SELECT captured_at FROM artifacts WHERE id=observations.artifact_id) IS NULL
-                             THEN 'run-start (legacy)' ELSE 'capture' END AS time_basis FROM observations WHERE ''' + ' AND '.join(where) +
-                             ' ORDER BY observed_at DESC,id LIMIT ? OFFSET ?', [*args, limit, offset]).fetchall()
-        return {'items': [{**dict(r), 'data': json.loads(r['data'])} for r in rows],
+            clause = ' FROM observations o JOIN observation_versions v ON v.observation_id=o.id WHERE ' + ' AND '.join(where)
+            total = c.execute('SELECT COUNT(*)' + clause, args).fetchone()[0]
+            rows = c.execute('''SELECT o.*,
+                             CASE WHEN (SELECT captured_at FROM artifacts WHERE id=o.artifact_id) IS NULL
+                             THEN 'run-start (legacy)' ELSE 'capture' END AS time_basis''' + clause +
+                             ' ORDER BY o.observed_at DESC,o.id LIMIT ? OFFSET ?', [*args, limit, offset]).fetchall()
+        return {'items': [{**dict(r), 'origin_parser_version': r['parser_version'], 'parser_version': PARSER_VERSION,
+                           'data': json.loads(r['data'])} for r in rows],
                 'total': total, 'limit': limit, 'offset': offset}
 
     def findings(self, *, run_id=None, status=None, severity=None, q='', limit=100, offset=0):
@@ -186,8 +198,22 @@ class EvidenceIndex:
                                        JOIN observations o ON o.id=x.observation_id WHERE finding_id=?
                                        ORDER BY o.observed_at DESC,o.id''', (fid,)).fetchall()
             reviews = c.execute('SELECT * FROM finding_reviews WHERE finding_id=? ORDER BY revision', (fid,)).fetchall()
+            versions = {r['observation_id']: [] for r in occurrences}
+            for version in c.execute('''SELECT v.observation_id,v.parser_version FROM observation_versions v
+                                        JOIN finding_occurrences x ON x.observation_id=v.observation_id
+                                        WHERE x.finding_id=? ORDER BY v.parser_version''', (fid,)):
+                versions[version['observation_id']].append(version['parser_version'])
+            ids = {aid for r in occurrences for aid in json.loads(r['evidence_ids'])}
+            verification_evidence = []
+            for aid in sorted(ids):
+                artifact = c.execute('SELECT id,name FROM artifacts WHERE id=?', (aid,)).fetchone()
+                if artifact and artifact['name'].startswith(('http-', 'cli-')):
+                    verification_evidence.append(dict(artifact))
         return {**dict(row), 'observed_after_review': bool(reviews and row['last_seen'] > reviews[-1]['created']),
+                'verification_evidence': verification_evidence,
                 'occurrences': [{**dict(r), 'evidence_ids': json.loads(r['evidence_ids']),
+                                            'parser_versions': versions[r['observation_id']],
+                                            'active': PARSER_VERSION in versions[r['observation_id']],
                                             'snapshot': json.loads(r['snapshot'])} for r in occurrences],
                 'reviews': [{**dict(r), 'previous': json.loads(r['previous']), 'decision': json.loads(r['decision'])} for r in reviews]}
 
@@ -203,8 +229,7 @@ class EvidenceIndex:
         if status == 'verified':
             if not evidence_id:
                 raise ValueError('Verification requires captured evidence and an explanatory review note.')
-            name = self.store.artifact_metadata(evidence_id)['name']
-            if not name.startswith(('http-', 'cli-')):
+            if evidence_id not in {a['id'] for a in finding['verification_evidence']}:
                 raise ValueError('Select captured HTTP or CLI evidence, rather than model analysis.')
         decision = {'status': status, 'severity': severity, 'confidence': confidence}
         with self.store.connect() as c:
@@ -226,7 +251,8 @@ class EvidenceIndex:
         self.index_pending(baseline_id)
         self.index_pending(current_id)
         def grouped(c, rid):
-            rows = c.execute('SELECT * FROM observations WHERE run_id=? ORDER BY fingerprint,value_hash', (rid,)).fetchall()
+            rows = c.execute('''SELECT o.* FROM observations o JOIN observation_versions v ON v.observation_id=o.id
+                                WHERE o.run_id=? AND v.parser_version=? ORDER BY o.fingerprint,o.value_hash''', (rid, PARSER_VERSION)).fetchall()
             if len(rows) > 10000:
                 raise ValueError('Comparison is limited to 10,000 normalized observations per run.')
             result = {}
@@ -239,7 +265,9 @@ class EvidenceIndex:
             run_findings = {}
             for rid in (baseline_id, current_id):
                 rows = c.execute('''SELECT f.id,f.title,f.asset,f.source,x.snapshot,x.evidence_ids
-                                    FROM finding_occurrences x JOIN findings f ON f.id=x.finding_id WHERE x.run_id=?''', (rid,)).fetchall()
+                                    FROM finding_occurrences x JOIN findings f ON f.id=x.finding_id
+                                    JOIN observation_versions v ON v.observation_id=x.observation_id
+                                    WHERE x.run_id=? AND v.parser_version=?''', (rid, PARSER_VERSION)).fetchall()
                 values = {}
                 for row in rows:
                     entry = values.setdefault(row['id'], {'id': row['id'], 'title': row['title'], 'asset': row['asset'], 'source': row['source'], 'snapshots': {}})

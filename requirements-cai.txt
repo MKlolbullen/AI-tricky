@@ -1,4 +1,4 @@
--r requirements.txt
+# Install into a separate SDK environment; do not combine with requirements.txt.
 # Optional upstream dependency; not redistributed. Its mixed license applies.
 cai-framework==0.5.10
 # Supports environments with inherited SOCKS proxy variables during SDK import.

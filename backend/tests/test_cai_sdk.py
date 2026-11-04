@@ -2,14 +2,26 @@
 import asyncio
 import json
 import threading
+import os
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 from backend.cai_adapter import assess, installed_version
 
 
-@pytest.mark.skipif(installed_version()!='0.5.10',reason='Optional CAI SDK not installed')
+def select_runtime(monkeypatch, isolated):
+    if isolated:
+        monkeypatch.setenv('CAI_PYTHON', os.environ.get('CAI_TEST_PYTHON', sys.executable))
+    else:
+        monkeypatch.delenv('CAI_PYTHON', raising=False)
+    if installed_version() != '0.5.10':
+        pytest.skip('Optional CAI SDK not installed in the selected runtime')
+
+
+@pytest.mark.parametrize('isolated', [False, True])
 @pytest.mark.parametrize('tool_name',['fetch_target','probe_ports'])
-def test_real_cai_sdk_uses_loopback_model_and_tool(monkeypatch,tool_name):
+def test_real_cai_sdk_uses_loopback_model_and_tool(monkeypatch,tool_name,isolated):
+    select_runtime(monkeypatch, isolated)
     class ModelHandler(BaseHTTPRequestHandler):
         calls=[]
         def do_POST(self):
@@ -45,12 +57,15 @@ def test_real_cai_sdk_uses_loopback_model_and_tool(monkeypatch,tool_name):
         assert calls==(['http://127.0.0.1:7777/'] if tool_name=='fetch_target' else [('127.0.0.1/32',[8080])])
         assert len(ModelHandler.calls)==2
         assert ModelHandler.calls[0]['model']=='openai/provider-looking-local-model'
+        if isolated:
+            assert result['sdk_execution'] == 'isolated-interpreter'
     finally:
         server.shutdown();server.server_close()
 
 
-@pytest.mark.skipif(installed_version()!='0.5.10',reason='Optional CAI SDK not installed')
-def test_real_cai_evidence_only_attaches_no_tools(monkeypatch):
+@pytest.mark.parametrize('isolated', [False, True])
+def test_real_cai_evidence_only_attaches_no_tools(monkeypatch, isolated):
+    select_runtime(monkeypatch, isolated)
     class Handler(BaseHTTPRequestHandler):
         calls=[]
         def do_POST(self):

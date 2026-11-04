@@ -8,15 +8,15 @@ const runLabel = run => `${run.id.slice(0, 8)} · ${run.status} · ${timestamp(r
 
 function Pager({page, offset, setOffset}) {
   return <nav className="evidence-pager" aria-label="Results pages">
-    <span>{page.total ? `${offset + 1}–${Math.min(offset + page.items.length, page.total)} of ${page.total}` : '0 results'}</span>
+    <span>{page.items.length ? `${offset + 1}–${Math.min(offset + page.items.length, page.total)} of ${page.total}` : '0 results'}</span>
     <button className="secondary" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - 50))}>Previous</button>
     <button className="secondary" disabled={offset + 50 >= page.total} onClick={() => setOffset(offset + 50)}>Next</button>
   </nav>;
 }
 
-function RunFilter({runs, value, onChange, label = 'Run'}) {
-  return <label className="field-label">{label}<select value={value} onChange={e => onChange(e.target.value)}>
-    <option value="">All runs</option>{runs.map(r => <option key={r.id} value={r.id}>{runLabel(r)}</option>)}
+function RunFilter({runs, value, onChange, label = 'Run', disabled = false, emptyLabel = 'All runs'}) {
+  return <label className="field-label">{label}<select value={value} disabled={disabled} onChange={e => onChange(e.target.value)}>
+    <option value="">{emptyLabel}</option>{runs.map(r => <option key={r.id} value={r.id}>{runLabel(r)}</option>)}
   </select></label>;
 }
 
@@ -33,7 +33,7 @@ export function EvidenceViewer({artifact, close}) {
       <div className="evidence-actions"><button className="secondary" disabled={data === null} onClick={() => downloadJSON(`evidence-${artifact.id}.json`, data)}>Download JSON</button>
         <button className="secondary" onClick={close}>Close capture</button></div></div>
     {error && <p className="local-error" role="alert">{error}</p>}
-    <pre>{data === null ? 'Loading capture…' : JSON.stringify(data, null, 2)}</pre>
+    {!error && <pre>{data === null ? 'Loading capture…' : JSON.stringify(data, null, 2)}</pre>}
   </section>;
 }
 
@@ -45,7 +45,11 @@ export function ObservationBrowser({runs}) {
   useEffect(() => {
     let alive = true; setLoading(true); setError('');
     const query = new URLSearchParams({run_id: runId, kind, q, offset, limit: 50});
-    api('/observations?' + query).then(p => {if (alive) setPage(p);}).catch(e => {if (alive) setError(e.message);}).finally(() => {if (alive) setLoading(false);});
+    api('/observations?' + query).then(p => {
+      if (!alive) return;
+      if (offset && offset >= p.total) {setOffset(p.total ? Math.floor((p.total - 1) / 50) * 50 : 0); return;}
+      setPage(p);
+    }).catch(e => {if (alive) setError(e.message);}).finally(() => {if (alive) setLoading(false);});
     return () => {alive = false;};
   }, [runId, kind, q, offset, refresh]);
   const filter = setter => value => {setter(value); setOffset(0); setSelected(null); setCapture(null);};
@@ -72,7 +76,7 @@ function FindingReview({finding, onSaved}) {
   const [status, setStatus] = useState(finding.status), [severity, setSeverity] = useState(finding.severity);
   const [confidence, setConfidence] = useState(finding.confidence), [note, setNote] = useState(''), [evidenceId, setEvidenceId] = useState('');
   const [error, setError] = useState(''), [busy, setBusy] = useState(false);
-  const evidenceIds = [...new Set(finding.occurrences.flatMap(o => o.evidence_ids))];
+  const verificationEvidence = finding.verification_evidence || [];
   const save = async event => {
     event.preventDefault(); setBusy(true); setError('');
     try {
@@ -84,7 +88,7 @@ function FindingReview({finding, onSaved}) {
     <div className="evidence-filters"><label className="field-label">Review status<select value={status} onChange={e => setStatus(e.target.value)}>{statuses.map(s => <option key={s}>{s}</option>)}</select></label>
       <label className="field-label">Severity<select value={severity} onChange={e => setSeverity(e.target.value)}>{severities.map(s => <option key={s}>{s}</option>)}</select></label>
       <label className="field-label">Confidence<select value={confidence} onChange={e => setConfidence(e.target.value)}>{['unknown', 'low', 'medium', 'high'].map(s => <option key={s}>{s}</option>)}</select></label></div>
-    <label className="field-label">Supporting capture{status === 'verified' ? ' (required)' : ''}<select required={status === 'verified'} value={evidenceId} onChange={e => setEvidenceId(e.target.value)}><option value="">Select captured evidence</option>{evidenceIds.map(id => <option key={id} value={id}>{id}</option>)}</select></label>
+    <label className="field-label">Supporting capture{status === 'verified' ? ' (required)' : ''}<select required={status === 'verified'} value={evidenceId} onChange={e => setEvidenceId(e.target.value)}><option value="">Select captured evidence</option>{verificationEvidence.map(a => <option key={a.id} value={a.id}>{a.name} · {a.id.slice(0, 8)}</option>)}</select></label>
     <label className="field-label">Review note<textarea required maxLength={4000} rows={3} value={note} onChange={e => setNote(e.target.value)} placeholder="What supports this decision? Record reproduction details or the reason for rejection/resolution."/></label>
     <small>Verification records your evidence assessment. Saving a review sends no target requests.</small>
     {error && <p className="local-error" role="alert">{error}</p>}
@@ -100,7 +104,11 @@ export function FindingsWorkbench({runs}) {
   useEffect(() => {
     let alive = true; setLoading(true); setError('');
     const query = new URLSearchParams({run_id: runId, status, severity, q, limit: 50, offset});
-    api('/findings?' + query).then(p => {if (alive) setPage(p);}).catch(e => {if (alive) setError(e.message);}).finally(() => {if (alive) setLoading(false);});
+    api('/findings?' + query).then(p => {
+      if (!alive) return;
+      if (offset && offset >= p.total) {setOffset(p.total ? Math.floor((p.total - 1) / 50) * 50 : 0); return;}
+      setPage(p);
+    }).catch(e => {if (alive) setError(e.message);}).finally(() => {if (alive) setLoading(false);});
     return () => {alive = false;};
   }, [runId, status, severity, q, offset, refresh]);
   useEffect(() => {
@@ -123,9 +131,10 @@ export function FindingsWorkbench({runs}) {
       <Pager page={page} offset={offset} setOffset={setOffset}/></div>
       <aside className="evidence-detail">{finding ? <><span className="tag">{finding.status.toUpperCase()}</span><h3>{finding.title}</h3><code>{finding.asset}</code><p>{finding.rationale}</p>
         {finding.observed_after_review && <div className="comparison-notice"><p>Additional evidence was captured after the latest review. The recorded decision is preserved; review the new occurrence before relying on it.</p></div>}
+        {!finding.occurrences.some(o => o.active) && <div className="comparison-notice"><p>This finding is retained from historical parser output. Its superseded occurrences are excluded from current run comparisons.</p></div>}
         <dl><dt>Finding ID</dt><dd>{finding.id}</dd><dt>Source</dt><dd>{finding.source}</dd><dt>First seen</dt><dd>{timestamp(finding.first_seen)}</dd><dt>Last seen</dt><dd>{timestamp(finding.last_seen)}</dd></dl>
         <FindingReview key={finding.id + ':' + finding.revision} finding={finding} onSaved={() => setRefresh(v => v + 1)}/>
-        <h4>Evidence occurrences</h4>{finding.occurrences.map(o => <article className="evidence-occurrence" key={o.observation_id}><strong>Run {o.run_id.slice(0, 8)}</strong><small>{timestamp(o.observed_at)} · {o.node_id || 'Assessment'}</small><p>Observed severity: {o.snapshot.severity}</p>
+        <h4>Evidence occurrences</h4>{finding.occurrences.map(o => <article className="evidence-occurrence" key={o.observation_id}><strong>Run {o.run_id.slice(0, 8)}</strong><small>{timestamp(o.observed_at)} · {o.node_id || 'Assessment'} · Parser {(o.parser_versions || []).join(', ')}{o.active ? '' : ' · superseded'}</small><p>Observed severity: {o.snapshot.severity}</p>
           {o.snapshot.next_test && <p>Suggested test: {o.snapshot.next_test}</p>}
           <div className="evidence-actions">{o.evidence_ids.map(id => <button key={id} className="secondary" onClick={() => setCapture({id})}>Capture {id.slice(0, 8)}</button>)}</div></article>)}
         <h4>Review history</h4>{!finding.reviews.length && <p>No operator reviews yet.</p>}{finding.reviews.map(r => <article className="evidence-occurrence" key={r.id}><strong>{r.previous.status} → {r.decision.status}</strong><small>{timestamp(r.created)} · Revision {r.revision}</small><p>Severity {r.previous.severity} → {r.decision.severity} · Confidence {r.previous.confidence} → {r.decision.confidence}</p><p>{r.note}</p>{r.evidence_id && <button className="secondary" onClick={() => setCapture({id: r.evidence_id})}>Review evidence</button>}</article>)}</> : <p>{selectedId ? 'Loading finding…' : 'Select a finding to review its evidence and history.'}</p>}</aside>
@@ -137,6 +146,10 @@ export function RunComparison({runs}) {
   const [baseline, setBaseline] = useState(runs[1]?.id || ''), [current, setCurrent] = useState(runs[0]?.id || '');
   const [comparison, setComparison] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const [state, setState] = useState('all'), [view, setView] = useState('observations'), [capture, setCapture] = useState(null);
+  useEffect(() => {
+    setCurrent(value => value || runs[0]?.id || '');
+    setBaseline(value => value || runs.find(r => r.id !== (current || runs[0]?.id))?.id || '');
+  }, [runs, current]);
   const compare = async event => {
     event.preventDefault(); setBusy(true); setError(''); setComparison(null); setCapture(null);
     try {setComparison(await api(`/runs/${current}/compare?baseline=${encodeURIComponent(baseline)}`));} catch (e) {setError(e.message);} finally {setBusy(false);}
@@ -144,16 +157,16 @@ export function RunComparison({runs}) {
   const select = setter => value => {setter(value); setComparison(null); setCapture(null);};
   const rows = comparison ? comparison[view].filter(r => state === 'all' || r.state === state) : [];
   return <section className="evidence-workbench"><div className="section-intro"><div><h3>Compare recorded runs</h3><p>Compare normalized observations and finding occurrences. Missing evidence never automatically resolves a finding.</p></div></div>
-    <form className="comparison-controls" onSubmit={compare}><RunFilter runs={runs} label="Baseline run" value={baseline} onChange={select(setBaseline)}/><RunFilter runs={runs} label="Current run" value={current} onChange={select(setCurrent)}/>
+    <form className="comparison-controls" onSubmit={compare}><RunFilter runs={runs} label="Baseline run" value={baseline} disabled={busy} emptyLabel="Select a run" onChange={select(setBaseline)}/><RunFilter runs={runs} label="Current run" value={current} disabled={busy} emptyLabel="Select a run" onChange={select(setCurrent)}/>
       <button className="primary" disabled={busy || !baseline || !current || baseline === current}>{busy ? 'Comparing…' : 'Compare runs'}</button></form>
     {runs.length < 2 && <p>Record at least two runs to compare results.</p>}{error && <p className="local-error" role="alert">{error}</p>}
     {comparison && <><div className="comparison-summary">{Object.entries(comparison.summary).map(([key, count]) => <div key={key}><strong>{count}</strong><span>{key.replaceAll('_', ' ')}</span></div>)}</div>
       <div className="comparison-notice"><p>{comparison.absence_means}</p>{comparison.warnings.map(w => <p key={w}>{w}</p>)}</div>
       <div className="evidence-filters"><label className="field-label">Compare<select value={view} onChange={e => {setView(e.target.value); setState('all');}}><option value="observations">Observations</option><option value="findings">Finding occurrences</option></select></label>
         <label className="field-label">Change<select value={state} onChange={e => setState(e.target.value)}>{['all', 'new', 'changed', view === 'findings' ? 'recurring' : 'unchanged', 'not_observed'].map(s => <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>)}</select></label>
-        <button className="secondary" onClick={() => downloadJSON(`comparison-${baseline.slice(0, 8)}-${current.slice(0, 8)}.json`, comparison)}>Export comparison</button></div>
+        <button className="secondary" onClick={() => downloadJSON(`comparison-${comparison.baseline_id.slice(0, 8)}-${comparison.current_id.slice(0, 8)}.json`, comparison)}>Export comparison</button></div>
       {!rows.length && <p>No results match this change filter.</p>}{rows.map(row => <details className="comparison-row" key={row.fingerprint || row.id}><summary><span className={'tag change-' + row.state}>{row.state.replaceAll('_', ' ')}</span><strong>{row.title || row.asset}</strong><span>{row.source}{row.kind ? ' · ' + row.kind : ''}</span></summary>
         <div className="comparison-values">{['before', 'after'].map(side => <section key={side}><h4>{side === 'before' ? 'Baseline evidence' : 'Current evidence'}</h4>{!row[side].length && <p>Not observed</p>}{row[side].map((value, i) => <div key={i}><pre>{JSON.stringify(value.data || value, null, 2)}</pre>{value.evidence_ids?.map(id => <button className="secondary" key={id} onClick={() => setCapture({id})}>Capture {id.slice(0, 8)}</button>)}</div>)}</section>)}</div></details>)}
-      <details className="comparison-row"><summary>Parser coverage and capture limits</summary>{comparison.coverage.filter(c => c.report.supported || c.name.startsWith('cli-')).map(c => <p key={c.id}><code>{c.name}</code> · {c.report.supported ? 'supported parser' : 'raw evidence only'}{c.report.partial ? ' · partial capture' : ''}{c.report.unparsed_lines ? ` · ${c.report.unparsed_lines} unparsed lines` : ''}</p>)}</details>
+      <details className="comparison-row"><summary>Parser coverage and capture limits</summary>{comparison.coverage.map(c => <p key={c.id}><code>{c.name}</code> · {c.report.supported ? 'supported parser' : 'raw evidence only'}{c.report.partial ? ' · partial capture' : ''}{c.report.unparsed_lines ? ` · ${c.report.unparsed_lines} unparsed lines` : ''}</p>)}</details>
     </>}{capture && <EvidenceViewer artifact={capture} close={() => setCapture(null)}/>}</section>;
 }

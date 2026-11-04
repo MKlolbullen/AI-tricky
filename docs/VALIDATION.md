@@ -1,4 +1,14 @@
-# 0.5 verification — 2026-11-04
+# 0.5.1 verification — 2026-11-04
+
+- Python: full-suite validation includes parser-generation migration, unchanged-row reuse, superseded normalization exclusion, review preservation, scoped SDK RPC, protocol failure handling and process cleanup. The URO smoke test remains unavailable locally.
+- JavaScript: **12 passed**, production frontend build and existing Sites packaging checks passed.
+- Chromium browser regression tests: **5 passed in GitHub CI** against the built UI and a disposable local fixture server. Tests cover late run loading, selection locking and exported IDs, complete parser coverage, pagination after review, verification capture eligibility and capture failure states.
+- Real CAI SDK: **6 local fixture cases passed**, including HTTP/TCP delegation and evidence-only review both in-process and through a separately selected SDK interpreter. The main interpreter used FastAPI 0.162.0 / Starlette 1.3.1; the SDK interpreter retained its pinned 0.115.14 / 0.46.2 stack. No SDK HTTP listener or proxy service was started.
+- Dependency checks: main `pip check` passed; the standalone original CAI snapshot resolved successfully. It must be installed into the separate SDK environment, not combined with the main API requirements.
+- Catalog drift check: **151 tools / 57 workflows**, unchanged. No external engagement, remote model or broad real-binary compatibility validation is claimed.
+- The interactive cloud browser still could not reach the workspace's loopback URL. The Chromium interaction results above were obtained by the committed CI test suite, not that browser session.
+
+## Historical 0.5 verification — 2026-11-04
 
 - Python suite: **248 passed, 1 skipped**. The real URO smoke test skipped because URO is unavailable in this environment. Optional CAI SDK tests ran against local fixtures; no external model was called.
 - Added 28 evidence tests covering default text/JSONL parser contracts, malformed and non-finite output, canonical asset identity, concurrent/idempotent indexing, retained raw evidence, legacy SQLite migration, review persistence and conflicts, same-run candidate provenance, comparison snapshots and incomplete coverage notices.

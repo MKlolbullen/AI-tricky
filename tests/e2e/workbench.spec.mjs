@@ -58,6 +58,7 @@ test('reviewing the last filtered finding returns pagination to a valid page', a
   await expect(pager).toContainText('1–50 of 51');
   await pager.getByRole('button', {name: 'Next'}).click();
   await expect(pager).toContainText('51–51 of 51');
+  await expect(workspace.locator('.evidence-result')).toHaveCount(1);
   await workspace.locator('.evidence-result').click();
   await workspace.getByRole('combobox', {name: /^Review status/}).selectOption('triaged');
   await workspace.getByRole('textbox', {name: 'Review note'}).fill('Browser regression: remove this candidate from the active filter.');
@@ -69,6 +70,7 @@ test('reviewing the last filtered finding returns pagination to a valid page', a
 test('verification offers captured HTTP evidence and excludes model analysis artifacts', async ({page}) => {
   const workspace = await openWorkspace(page, 'Findings');
   await workspace.getByRole('textbox', {name: 'Search', exact: true}).fill('Potential API issue');
+  await expect(workspace.locator('.evidence-result')).toHaveCount(1);
   await workspace.locator('.evidence-result').click();
   const captures = workspace.getByRole('combobox', {name: /^Supporting capture/});
   await expect(captures.locator('option')).toHaveCount(2);
@@ -85,6 +87,7 @@ test('verification offers captured HTTP evidence and excludes model analysis art
 test('failed capture requests show the error without a permanent loading message', async ({page}) => {
   const workspace = await openWorkspace(page, 'Observations');
   await workspace.getByRole('combobox', {name: 'Kind', exact: true}).selectOption('http');
+  await expect(workspace.locator('.evidence-result')).toHaveCount(1);
   await workspace.locator('.evidence-result').click();
   await page.route('**/api/artifacts/*', route => route.fulfill({status: 500, json: {detail: 'Capture unavailable for QA'}}));
   await workspace.getByRole('button', {name: 'Inspect original capture'}).click();

@@ -216,7 +216,7 @@ The historical 0.4 baseline and the current 0.5 checks are documented in [the va
 
 The adapter matrix uses executable fixtures across all 151 entries: 141 exercise execution contracts and ten assert their explicit restrictions. Those fixtures do not establish compatibility with every external tool version. CAI tests use local model fixtures; the three SDK tests skip when the optional SDK is absent. The URO test skips if that binary is unavailable beside the selected Python interpreter.
 
-Interactive browser QA and broader real-binary version validation remain open. See [the validation record](docs/VALIDATION.md).
+Five Chromium workbench interaction regressions run in CI. Broader desktop/platform QA and real-binary version validation remain open. See [the validation record](docs/VALIDATION.md).
 
 ## Configuration and compatibility
 
@@ -238,7 +238,7 @@ AI-tricky continues the Offsecs-u-AI prototype. Existing `OFFSECS_U_AI_*` and `R
 - Controlled replay and recovery of selected failed workflow branches.
 - Request-bound follow-up proposal execution and controlled multi-identity testing.
 - Burp/burpaderp and Strix integration through their own policy and evidence contracts.
-- Interactive browser QA and refinement of the desktop-first workflow studio.
+- Broader desktop/platform QA and refinement of the workflow studio.
 
 ## Attribution and license
 

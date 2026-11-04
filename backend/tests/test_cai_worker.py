@@ -45,6 +45,15 @@ def test_worker_protocol_failure_is_sanitized_and_does_not_persist_provider_outp
     assert 'provider-secret' not in str(error.value)
 
 
+def test_sdk_error_frame_reports_runtime_failure_without_provider_details(monkeypatch, tmp_path):
+    worker(monkeypatch, tmp_path, 'print(json.dumps({"type":"error","detail":"provider-secret"}),flush=True)\n')
+    async def forbidden(*_):
+        raise AssertionError()
+    with pytest.raises(RuntimeError, match='SDK worker failed') as error:
+        asyncio.run(cai_worker_client.assess_worker([], 'Review', forbidden, timeout=5))
+    assert 'provider-secret' not in str(error.value)
+
+
 def test_worker_does_not_inherit_unrelated_credentials(monkeypatch, tmp_path):
     monkeypatch.setenv('UNRELATED_TEST_SECRET', 'must-not-be-inherited')
     worker(monkeypatch, tmp_path, '''print(json.dumps({'type':'result','result':{'report':str('UNRELATED_TEST_SECRET' in os.environ),'evidence_status':'CANDIDATE'}}),flush=True)

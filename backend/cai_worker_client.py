@@ -46,6 +46,8 @@ async def assess_worker(targets, goal, request_tool, *, network_tool=None, timeo
                 frame = json.loads(raw)
                 if not isinstance(frame, dict):
                     raise RuntimeError('CAI worker returned an invalid message.')
+                if frame.get('type') == 'error':
+                    raise RuntimeError('CAI SDK worker failed; check the selected runtime and model endpoint.')
                 if frame.get('type') == 'result':
                     result = frame.get('result')
                     if not isinstance(result, dict) or not isinstance(result.get('report'), str) or result.get('evidence_status') != 'CANDIDATE':

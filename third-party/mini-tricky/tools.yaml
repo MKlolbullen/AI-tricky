@@ -1,0 +1,4213 @@
+tools:
+  # ── Recon ──────────────────────────────────────────────────
+  - id: subfinder
+    name: Subfinder
+    category: Recon
+    description: Fast passive subdomain enumeration tool
+    inputs: [domain]
+    outputs: [targets]
+    command: [subfinder, -silent, -d, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -recursive
+        label: Recursive
+        description: Use recursion to find more subdomains
+        type: flag
+      - flag: -all
+        label: All Sources
+        description: Use all sources for enumeration
+        type: flag
+      - flag: -nW
+        label: No Wildcard
+        description: Remove wildcard and dead DNS results
+        type: flag
+      - flag: -t
+        label: Threads
+        description: Number of concurrent goroutines
+        type: int
+        default: '10'
+      - flag: -timeout
+        label: Timeout
+        description: Seconds to wait before timing out
+        type: int
+        default: '30'
+      - flag: -rL
+        label: Resolver List
+        description: File containing list of resolvers
+        type: string
+
+  - id: httpx
+    name: HTTPX
+    category: Recon
+    description: Fast HTTP toolkit for probing live hosts
+    inputs: [targets, url]
+    outputs: [targets, url]
+    command: [httpx, -silent, -l, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -ip
+        label: Show IP
+        description: Display host IP in output
+        type: flag
+      - flag: -td
+        label: Tech Detect
+        description: Display technology in use
+        type: flag
+      - flag: -sc
+        label: Status Code
+        description: Display response status code
+        type: flag
+      - flag: -cl
+        label: Content Length
+        description: Display response content length
+        type: flag
+      - flag: -title
+        label: Page Title
+        description: Display page title
+        type: flag
+      - flag: -location
+        label: Follow Redirects
+        description: Display redirect location
+        type: flag
+      - flag: -favicon
+        label: Favicon Hash
+        description: Display mmh3 hash of favicon
+        type: flag
+      - flag: -jarm
+        label: JARM Hash
+        description: Display JARM fingerprint hash
+        type: flag
+      - flag: -rt
+        label: Response Time
+        description: Display response time
+        type: flag
+      - flag: -nc
+        label: No Color
+        description: Disable colors in CLI output
+        type: flag
+      - flag: -fr
+        label: Follow Redirects
+        description: Follow HTTP redirects
+        type: flag
+      - flag: -mc
+        label: Match Codes
+        description: Match response with specified status codes
+        type: string
+        default: '200'
+      - flag: -t
+        label: Threads
+        description: Number of threads to use
+        type: int
+        default: '50'
+      - flag: -rl
+        label: Rate Limit
+        description: Maximum requests per second
+        type: int
+        default: '150'
+      - flag: -timeout
+        label: Timeout
+        description: Timeout in seconds
+        type: int
+        default: '5'
+
+  - id: amass
+    name: Amass
+    category: Recon
+    description: In-depth attack surface mapping and asset discovery
+    inputs: [domain]
+    outputs: [targets]
+    command: [amass, enum, -passive, -d, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -active
+        label: Active
+        description: Enable active recon methods
+        type: flag
+      - flag: -brute
+        label: Brute Force
+        description: Execute brute forcing
+        type: flag
+      - flag: -ip
+        label: Show IPs
+        description: Show IP addresses for discovered names
+        type: flag
+      - flag: -src
+        label: Show Sources
+        description: Print data sources for discovered names
+        type: flag
+      - flag: -timeout
+        label: Timeout
+        description: Minutes until enumeration ends
+        type: int
+        default: '30'
+
+  - id: assetfinder
+    name: Assetfinder
+    category: Recon
+    description: Find domains and subdomains related to a given domain
+    inputs: [domain]
+    outputs: [targets]
+    command: [assetfinder, --subs-only, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: --subs-only
+        label: Subs Only
+        description: Only include subdomains of the given domain
+        type: flag
+
+  - id: findomain
+    name: Findomain
+    category: Recon
+    description: Cross-platform subdomain enumerator
+    inputs: [domain]
+    outputs: [targets]
+    command: [findomain, -t, '{domain}', -q]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -r
+        label: Resolved Only
+        description: Return only subdomains that resolve to an IP
+        type: flag
+      - flag: -i
+        label: Show IPs
+        description: Resolve discovered subdomains to their IP addresses
+        type: flag
+      - flag: --http-status
+        label: HTTP Status
+        description: Check HTTP status code for each resolved subdomain
+        type: flag
+      - flag: --external-subdomains
+        label: External Sources
+        description: Include external subdomain sources (Sublist3r, Amass, Assetfinder)
+        type: flag
+      - flag: -v
+        label: Verbose
+        description: Enable verbose logging output
+        type: flag
+      - flag: --threads
+        label: Threads
+        description: Number of concurrent threads
+        type: int
+        default: '50'
+      - flag: --rate-limit
+        label: Rate Limit
+        description: Maximum HTTP requests per second when resolving
+        type: int
+      - flag: --user-agent
+        label: User Agent
+        description: Custom User-Agent header for HTTP requests
+        type: string
+      - flag: --excluded-sources
+        label: Excluded Sources
+        description: Comma-separated list of data sources to exclude
+        type: string
+
+  - id: dnsx
+    name: DNSx
+    category: Recon
+    description: Fast and multi-purpose DNS toolkit for running DNS queries
+    inputs: [targets]
+    outputs: [targets]
+    command: [dnsx, -silent, -l, '{targets_file}', -resp]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -a
+        label: A Record
+        description: Query A record
+        type: flag
+      - flag: -aaaa
+        label: AAAA Record
+        description: Query AAAA record
+        type: flag
+      - flag: -cname
+        label: CNAME
+        description: Query CNAME record
+        type: flag
+      - flag: -mx
+        label: MX Record
+        description: Query MX record
+        type: flag
+      - flag: -ns
+        label: NS Record
+        description: Query NS record
+        type: flag
+      - flag: -resp
+        label: Show Response
+        description: Display DNS response
+        type: flag
+      - flag: -rc
+        label: Response Code
+        description: Display DNS response status code
+        type: flag
+      - flag: -t
+        label: Threads
+        description: Number of concurrent threads
+        type: int
+        default: '100'
+      - flag: -retry
+        label: Retries
+        description: Number of DNS retries
+        type: int
+        default: '2'
+
+  - id: shuffledns
+    name: ShuffleDNS
+    category: Recon
+    description: Wrapper around massdns for active subdomain bruteforcing
+    inputs: [domain, wordlist]
+    outputs: [targets]
+    command: [shuffledns, -d, '{domain}', -w, '{wordlist_file}', -r, /usr/share/resolvers.txt, -silent]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -mode
+        label: Mode
+        description: 'Operating mode: bruteforce, resolve, filter'
+        type: string
+        default: 'bruteforce'
+      - flag: -strict-wildcard
+        label: Strict Wildcard
+        description: Perform strict wildcard check (compare all answers)
+        type: flag
+      - flag: -nW
+        label: No Wildcard
+        description: Skip wildcard filtering entirely
+        type: flag
+      - flag: -json
+        label: JSON Output
+        description: Write output in JSONL format
+        type: flag
+      - flag: -nC
+        label: No Color
+        description: Disable colors in CLI output
+        type: flag
+      - flag: -t
+        label: Threads
+        description: Number of concurrent massdns resolvers
+        type: int
+        default: '100'
+      - flag: -mt
+        label: Massdns Threads
+        description: Number of threads for massdns to use
+        type: int
+        default: '500'
+      - flag: -wt
+        label: Wildcard Threads
+        description: Number of threads for wildcard filtering
+        type: int
+        default: '250'
+      - flag: -retries
+        label: Retries
+        description: Number of retries for DNS resolution
+        type: int
+        default: '5'
+
+  - id: chaos
+    name: Chaos
+    category: Recon
+    description: Fetch subdomains from Chaos dataset by ProjectDiscovery
+    inputs: [domain]
+    outputs: [targets]
+    command: [chaos, -silent, -d, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -count
+        label: Count Only
+        description: Show only subdomain count
+        type: flag
+      - flag: -json
+        label: JSON Output
+        description: Output in JSON format
+        type: flag
+      - flag: -jsonl
+        label: JSONL Output
+        description: Output in JSON lines format
+        type: flag
+
+  # ── Enumeration ────────────────────────────────────────────
+  - id: gobuster
+    name: Gobuster
+    category: Enumeration
+    description: Directory/file and DNS busting tool written in Go
+    inputs: [targets, wordlist]
+    outputs: [findings]
+    command: [gobuster, dir, -u, '{targets}', -w, '{wordlist_file}', -q]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -r
+        label: Follow Redirects
+        description: Follow redirects
+        type: flag
+      - flag: -k
+        label: Skip TLS
+        description: Skip TLS certificate verification
+        type: flag
+      - flag: -n
+        label: No Status
+        description: Don't print status codes
+        type: flag
+      - flag: --wildcard
+        label: Wildcard
+        description: Force continued operation on wildcard
+        type: flag
+      - flag: -t
+        label: Threads
+        description: Number of concurrent threads
+        type: int
+        default: '10'
+      - flag: -s
+        label: Status Codes
+        description: Positive status codes
+        type: string
+        default: '200,204,301,302,307,401,403'
+      - flag: -x
+        label: Extensions
+        description: File extension(s) to search for
+        type: string
+
+  - id: dirsearch
+    name: Dirsearch
+    category: Enumeration
+    description: Web path discovery tool with recursive scanning
+    inputs: [targets, wordlist]
+    outputs: [findings]
+    command: [dirsearch, -u, '{targets}', -w, '{wordlist_file}', --format=plain, -q]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -r
+        label: Recursive
+        description: Brute-force recursively
+        type: flag
+      - flag: --deep-recursive
+        label: Deep Recursive
+        description: Perform recursive scan on every directory
+        type: flag
+      - flag: --force-recursive
+        label: Force Recursive
+        description: Do recursive brute force for every found path
+        type: flag
+      - flag: -t
+        label: Threads
+        description: Number of threads
+        type: int
+        default: '25'
+      - flag: -R
+        label: Recursion Depth
+        description: Maximum recursion depth
+        type: int
+        default: '0'
+      - flag: -e
+        label: Extensions
+        description: Extension list separated by commas
+        type: string
+
+  - id: feroxbuster
+    name: Feroxbuster
+    category: Enumeration
+    description: Fast content discovery tool written in Rust
+    inputs: [targets, wordlist]
+    outputs: [findings]
+    command: [feroxbuster, -u, '{targets}', -w, '{wordlist_file}', -q, --no-state]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -r
+        label: Follow Redirects
+        description: Follow redirects
+        type: flag
+      - flag: -k
+        label: Insecure
+        description: Disable TLS certificate validation
+        type: flag
+      - flag: -n
+        label: No Recursion
+        description: Do not recurse
+        type: flag
+      - flag: -e
+        label: Extract Links
+        description: Extract links from response body
+        type: flag
+      - flag: -f
+        label: Add Slash
+        description: Also request each word with a trailing slash
+        type: flag
+      - flag: -g
+        label: Collect Words
+        description: Harvest words from responses to feed further scanning
+        type: flag
+      - flag: -B
+        label: Collect Backups
+        description: Request likely backup files for discovered pages
+        type: flag
+      - flag: -t
+        label: Threads
+        description: Number of concurrent threads
+        type: int
+        default: '50'
+      - flag: -d
+        label: Depth
+        description: Maximum recursion depth
+        type: int
+        default: '4'
+      - flag: --rate-limit
+        label: Rate Limit
+        description: Maximum requests per second (per directory)
+        type: int
+      - flag: -L
+        label: Scan Limit
+        description: Maximum number of directories scanned concurrently
+        type: int
+      - flag: -x
+        label: Extensions
+        description: File extensions to search for (e.g. php,bak,txt)
+        type: string
+      - flag: -m
+        label: HTTP Methods
+        description: HTTP methods to try (e.g. GET,POST)
+        type: string
+      - flag: -H
+        label: Headers
+        description: Add a custom request header
+        type: string
+      - flag: -b
+        label: Cookies
+        description: Cookie header value to send
+        type: string
+      - flag: -a
+        label: User-Agent
+        description: Override the User-Agent string
+        type: string
+      - flag: --proxy
+        label: Proxy
+        description: Send traffic through an HTTP proxy (http://host:port)
+        type: string
+      - flag: -C
+        label: Filter Codes
+        description: Filter out these status codes (e.g. 404,403)
+        type: string
+      - flag: -s
+        label: Status Codes
+        description: Only report these status codes (e.g. 200,301)
+        type: string
+      - flag: -S
+        label: Filter Size
+        description: Filter out responses of this byte size
+        type: string
+      - flag: -W
+        label: Filter Words
+        description: Filter out responses with this word count
+        type: string
+      - flag: -N
+        label: Filter Lines
+        description: Filter out responses with this line count
+        type: string
+      - flag: -X
+        label: Filter Regex
+        description: Filter out responses matching this regex
+        type: string
+
+  - id: wfuzz
+    name: Wfuzz
+    category: Enumeration
+    description: Web application fuzzer for brute-forcing parameters and paths
+    inputs: [targets, wordlist]
+    outputs: [findings]
+    command: [wfuzz, -w, '{wordlist_file}', --hc, '404', '{targets}/FUZZ']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -L
+        label: Follow Redirects
+        description: Follow HTTP redirects
+        type: flag
+      - flag: -t
+        label: Threads
+        description: Number of concurrent connections
+        type: int
+        default: '10'
+      - flag: --hc
+        label: Hide Codes
+        description: Hide responses with specified codes
+        type: string
+        default: '404'
+      - flag: --hl
+        label: Hide Lines
+        description: Hide responses with specified line count
+        type: string
+      - flag: --hw
+        label: Hide Words
+        description: Hide responses with specified word count
+        type: string
+
+  # ── Vulnerability ──────────────────────────────────────────
+  - id: nuclei
+    name: Nuclei
+    category: Vulnerability
+    description: Fast vulnerability scanner using community-powered templates
+    inputs: [targets, url]
+    outputs: [findings]
+    command: [nuclei, -silent, -l, '{targets_file}', -jsonl]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -as
+        label: Auto Scan
+        description: Automatic web scan using wappalyzer
+        type: flag
+      - flag: -new-templates
+        label: New Templates
+        description: Run only new templates
+        type: flag
+      - flag: -headless
+        label: Headless
+        description: Enable headless browser-based templates
+        type: flag
+      - flag: -system-resolvers
+        label: System Resolvers
+        description: Use system DNS resolving as error fallback
+        type: flag
+      - flag: -sa
+        label: Scan All IPs
+        description: Scan all IPs associated with a DNS record
+        type: flag
+      - flag: -severity
+        label: Severity
+        description: Filter by severity (info,low,medium,high,critical)
+        type: string
+        default: 'low,medium,high,critical'
+      - flag: -tags
+        label: Tags
+        description: Execute templates with specified tags
+        type: string
+      - flag: -etags
+        label: Exclude Tags
+        description: Exclude templates with specified tags
+        type: string
+      - flag: -c
+        label: Concurrency
+        description: Maximum templates to run in parallel
+        type: int
+        default: '25'
+      - flag: -rl
+        label: Rate Limit
+        description: Maximum requests per second
+        type: int
+        default: '150'
+      - flag: -bs
+        label: Bulk Size
+        description: Max hosts to process per template
+        type: int
+        default: '25'
+
+  - id: nikto
+    name: Nikto
+    category: Vulnerability
+    description: Web server scanner for dangerous files and outdated software
+    inputs: [targets]
+    outputs: [findings]
+    command: [nikto, -h, '{targets}', -Format, txt]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -ssl
+        label: Force SSL
+        description: Force SSL mode on port 443
+        type: flag
+      - flag: -nossl
+        label: No SSL
+        description: Disable SSL
+        type: flag
+      - flag: -no404
+        label: No 404 Guessing
+        description: Disable 404 guessing
+        type: flag
+      - flag: -Tuning
+        label: Tuning
+        description: Scan tuning options
+        type: string
+      - flag: -maxtime
+        label: Max Time
+        description: Maximum testing time per host in seconds
+        type: int
+        default: '3600'
+
+  - id: wpscan
+    name: WPScan
+    category: Vulnerability
+    description: WordPress security scanner for plugins, themes, and users
+    inputs: [targets]
+    outputs: [findings]
+    command: [wpscan, --url, '{targets}', --no-banner, -f, cli-no-color]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --stealthy
+        label: Stealthy
+        description: Use stealthy scan options
+        type: flag
+      - flag: --enumerate
+        label: Enumerate
+        description: 'Enumeration process: vp,ap,at,cb,dbe,u,m'
+        type: string
+        default: 'vp,vt,u'
+      - flag: --plugins-detection
+        label: Plugin Detection
+        description: Plugin detection mode
+        type: string
+        default: 'mixed'
+      - flag: -t
+        label: Threads
+        description: Max number of threads
+        type: int
+        default: '5'
+
+  - id: sqlmap
+    name: SQLMap
+    category: Vulnerability
+    description: Automatic SQL injection and database takeover tool
+    inputs: [targets]
+    outputs: [findings]
+    command: [sqlmap, -u, '{targets}', --batch, --level, '1']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --dbs
+        label: List Databases
+        description: Enumerate DBMS databases
+        type: flag
+      - flag: --tables
+        label: List Tables
+        description: Enumerate DBMS tables
+        type: flag
+      - flag: --dump
+        label: Dump
+        description: Dump DBMS database table entries
+        type: flag
+      - flag: --forms
+        label: Parse Forms
+        description: Parse and test forms on target URL
+        type: flag
+      - flag: --crawl
+        label: Crawl Depth
+        description: Crawl the website starting from the target URL
+        type: int
+        default: '2'
+      - flag: --level
+        label: Level
+        description: Level of tests to perform (1-5)
+        type: int
+        default: '1'
+      - flag: --risk
+        label: Risk
+        description: Risk of tests to perform (1-3)
+        type: int
+        default: '1'
+      - flag: --threads
+        label: Threads
+        description: Max number of concurrent threads
+        type: int
+        default: '1'
+      - flag: -p
+        label: Test Parameter
+        description: Testable parameter(s)
+        type: string
+
+  - id: xsstrike
+    name: XSStrike
+    category: Vulnerability
+    description: Advanced XSS detection suite with fuzzing engine
+    inputs: [targets]
+    outputs: [findings]
+    command: [xsstrike, -u, '{targets}', --crawl, -l, '2']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --crawl
+        label: Crawl
+        description: Crawl target for URLs
+        type: flag
+      - flag: --blind
+        label: Blind XSS
+        description: Inject blind XSS payloads while crawling
+        type: flag
+      - flag: --fuzzer
+        label: Fuzzer
+        description: Enable the fuzzer
+        type: flag
+      - flag: -l
+        label: Crawl Level
+        description: Depth of crawling
+        type: int
+        default: '2'
+      - flag: -t
+        label: Threads
+        description: Number of threads
+        type: int
+        default: '2'
+
+  - id: dalfox
+    name: Dalfox
+    category: Vulnerability
+    description: Parameter analysis and XSS scanning tool
+    inputs: [targets]
+    outputs: [findings]
+    command: [dalfox, url, '{targets}', --silence]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --deep-domxss
+        label: Deep DOM XSS
+        description: Enable more DOM XSS analysis (slower, higher coverage)
+        type: flag
+      - flag: --mining-dict
+        label: Dict Param Mining
+        description: Discover new parameters with a dictionary attack
+        type: flag
+      - flag: --mining-dom
+        label: DOM Param Mining
+        description: Discover new parameters by parsing the DOM
+        type: flag
+      - flag: --skip-bav
+        label: Skip BAV
+        description: Skip basic-another-vulnerability checks (SSTI, SQLi, etc.)
+        type: flag
+      - flag: --skip-mining-all
+        label: Skip Mining
+        description: Disable all parameter mining
+        type: flag
+      - flag: --follow-redirects
+        label: Follow Redirects
+        description: Follow HTTP redirects
+        type: flag
+      - flag: --waf-evasion
+        label: WAF Evasion
+        description: Slow down and adapt when a WAF is detected
+        type: flag
+      - flag: --only-poc
+        label: Only PoC
+        description: Print only proof-of-concept results
+        type: string
+      - flag: -b
+        label: Blind XSS URL
+        description: Blind XSS callback URL (e.g. your interactsh/collaborator)
+        type: string
+      - flag: --custom-payload
+        label: Custom Payloads
+        description: Path to a file of additional XSS payloads
+        type: string
+      - flag: -p
+        label: Param
+        description: Test only this specific parameter
+        type: string
+      - flag: --method
+        label: HTTP Method
+        description: HTTP method to use
+        type: string
+        default: GET
+      - flag: -H
+        label: Header
+        description: Add a custom request header (repeatable)
+        type: string
+      - flag: -C
+        label: Cookie
+        description: Cookie header value to send
+        type: string
+      - flag: --user-agent
+        label: User-Agent
+        description: Override the User-Agent string
+        type: string
+      - flag: --proxy
+        label: Proxy
+        description: Send traffic through an HTTP proxy (http://host:port)
+        type: string
+      - flag: --grep
+        label: Grep Pattern
+        description: Path to a custom grepping (secret-detection) pattern file
+        type: string
+      - flag: -w
+        label: Workers
+        description: Number of concurrent workers
+        type: int
+        default: '100'
+      - flag: -d
+        label: Delay
+        description: Milliseconds of delay between requests
+        type: int
+        default: '0'
+      - flag: --timeout
+        label: Timeout
+        description: Per-request timeout in seconds
+        type: int
+        default: '10'
+
+  # ── Fuzzing ────────────────────────────────────────────────
+  - id: ffuf
+    name: FFUF
+    category: Fuzzing
+    description: Fast web fuzzer for directories, parameters, and virtual hosts
+    inputs: [targets, wordlist]
+    outputs: [findings]
+    command: [ffuf, -w, '{wordlist_file}', -u, '{targets}', -of, json]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -r
+        label: Follow Redirects
+        description: Follow redirects
+        type: flag
+      - flag: -recursion
+        label: Recursion
+        description: Enable recursive scan
+        type: flag
+      - flag: -sf
+        label: Stop on Flood
+        description: Stop when 95% of responses have 403
+        type: flag
+      - flag: -se
+        label: Stop on Errors
+        description: Stop on spurious errors
+        type: flag
+      - flag: -ac
+        label: Auto Calibrate
+        description: Automatically calibrate filtering options
+        type: flag
+      - flag: -t
+        label: Threads
+        description: Number of concurrent threads
+        type: int
+        default: '40'
+      - flag: -rate
+        label: Rate
+        description: Rate of requests per second
+        type: int
+        default: '0'
+      - flag: -recursion-depth
+        label: Recursion Depth
+        description: Maximum recursion depth
+        type: int
+        default: '0'
+      - flag: -mc
+        label: Match Codes
+        description: Match HTTP status codes
+        type: string
+        default: '200,204,301,302,307,401,403,405'
+      - flag: -fc
+        label: Filter Codes
+        description: Filter HTTP status codes
+        type: string
+      - flag: -fs
+        label: Filter Size
+        description: Filter response size
+        type: string
+      - flag: -H
+        label: Header
+        description: "Custom header 'Name: Value'"
+        type: string
+
+  # ── Crawling ───────────────────────────────────────────────
+  - id: katana
+    name: Katana
+    category: Crawling
+    description: Next-generation crawling and spidering framework
+    inputs: [targets, url]
+    outputs: [targets, url]
+    command: [katana, -silent, -list, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -jc
+        label: JS Crawl
+        description: Enable JavaScript file crawling
+        type: flag
+      - flag: -aff
+        label: Auto Form Fill
+        description: Enable automatic form filling
+        type: flag
+      - flag: -headless
+        label: Headless
+        description: Enable headless browser
+        type: flag
+      - flag: -kf
+        label: Known Files
+        description: Enable crawling for known files
+        type: flag
+      - flag: -ef
+        label: Extension Filter
+        description: Skip crawling for listed extensions
+        type: flag
+      - flag: -d
+        label: Depth
+        description: Maximum depth to crawl
+        type: int
+        default: '3'
+      - flag: -c
+        label: Concurrency
+        description: Number of concurrent crawlers
+        type: int
+        default: '10'
+      - flag: -rl
+        label: Rate Limit
+        description: Maximum requests per second
+        type: int
+        default: '150'
+      - flag: -timeout
+        label: Timeout
+        description: Time limit in seconds
+        type: int
+        default: '15'
+
+  - id: gospider
+    name: GoSpider
+    category: Crawling
+    description: Fast web spidering tool for endpoint discovery
+    inputs: [targets]
+    outputs: [targets]
+    command: [gospider, -S, '{targets_file}', --no-redirect, -q]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --js
+        label: Parse JS
+        description: Find URLs in JavaScript files
+        type: flag
+      - flag: --sitemap
+        label: Sitemap
+        description: Try to crawl sitemap.xml
+        type: flag
+      - flag: --robots
+        label: Robots
+        description: Try to crawl robots.txt
+        type: flag
+      - flag: --no-redirect
+        label: No Redirect
+        description: Disable redirect
+        type: flag
+      - flag: -d
+        label: Depth
+        description: Maximum depth to crawl
+        type: int
+        default: '1'
+      - flag: -c
+        label: Concurrency
+        description: Number of concurrent workers
+        type: int
+        default: '5'
+      - flag: -t
+        label: Threads
+        description: Number of threads (Run sites in parallel)
+        type: int
+        default: '1'
+
+  - id: hakrawler
+    name: Hakrawler
+    category: Crawling
+    description: Simple Go web crawler for gathering URLs and JS files
+    inputs: [targets]
+    outputs: [targets]
+    command: [hakrawler, -url, '{targets}', -plain]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -js
+        label: JavaScript
+        description: Include URLs from JavaScript files
+        type: flag
+      - flag: -subs
+        label: Subdomains
+        description: Include subdomains of target
+        type: flag
+      - flag: -insecure
+        label: Insecure
+        description: Skip TLS verification
+        type: flag
+      - flag: -d
+        label: Depth
+        description: Maximum crawl depth
+        type: int
+        default: '2'
+      - flag: -t
+        label: Threads
+        description: Number of threads to utilise
+        type: int
+        default: '8'
+
+  - id: waybackurls
+    name: Waybackurls
+    category: Crawling
+    description: Fetch known URLs from the Wayback Machine
+    inputs: [domain]
+    outputs: [targets]
+    command: [waybackurls, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -no-subs
+        label: No Subs
+        description: Don't include subdomains of target
+        type: flag
+      - flag: -dates
+        label: Show Dates
+        description: Show date of fetch in the first column
+        type: flag
+
+  # ── Network ────────────────────────────────────────────────
+  - id: nmap
+    name: Nmap
+    category: Network
+    description: Network exploration tool and security/port scanner
+    inputs: [targets]
+    outputs: [findings]
+    command: [nmap, -iL, '{targets_file}', -oN, '-']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -sV
+        label: Service Version
+        description: Probe open ports to determine service/version
+        type: flag
+      - flag: -sC
+        label: Default Scripts
+        description: Equivalent to --script=default
+        type: flag
+      - flag: -A
+        label: Aggressive
+        description: Enable OS detection, version detection, script scanning
+        type: flag
+      - flag: -O
+        label: OS Detection
+        description: Enable OS detection
+        type: flag
+      - flag: -sS
+        label: SYN Scan
+        description: TCP SYN scan (stealth)
+        type: flag
+      - flag: -sU
+        label: UDP Scan
+        description: UDP scan
+        type: flag
+      - flag: -Pn
+        label: No Ping
+        description: Treat all hosts as online
+        type: flag
+      - flag: -v
+        label: Verbose
+        description: Increase verbosity level
+        type: flag
+      - flag: -T
+        label: Timing
+        description: Set timing template (0-5)
+        type: int
+        default: '3'
+      - flag: -p
+        label: Ports
+        description: Only scan specified ports
+        type: string
+      - flag: --script
+        label: Script
+        description: NSE scripts to run
+        type: string
+      - flag: --top-ports
+        label: Top Ports
+        description: Scan N most common ports
+        type: int
+
+  - id: masscan
+    name: Masscan
+    category: Network
+    description: Internet-scale port scanner at 10M packets per second
+    inputs: [targets]
+    outputs: [findings]
+    command: [masscan, -iL, '{targets_file}', -p1-65535, --rate, '1000']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --banners
+        label: Banners
+        description: Grab service banners from open ports
+        type: flag
+      - flag: --ping
+        label: ICMP Ping
+        description: Include ICMP ping in the scan
+        type: flag
+      - flag: --open-only
+        label: Open Only
+        description: Only output results for open ports
+        type: flag
+      - flag: --rate
+        label: Rate
+        description: Packets per second
+        type: int
+        default: '1000'
+      - flag: -p
+        label: Ports
+        description: Port range to scan (e.g. 80,443 or 1-65535)
+        type: string
+        default: '1-65535'
+      - flag: --exclude
+        label: Exclude
+        description: Exclude IP ranges (CIDR or file)
+        type: string
+      - flag: --wait
+        label: Wait
+        description: Seconds to wait for responses after transmit
+        type: int
+        default: '10'
+      - flag: --source-port
+        label: Source Port
+        description: Use a specific source port
+        type: int
+      - flag: -oJ
+        label: JSON Output
+        description: Output results to a JSON file
+        type: string
+
+  - id: naabu
+    name: Naabu
+    category: Network
+    description: Fast port scanner written in Go with SYN/CONNECT probe
+    inputs: [targets]
+    outputs: [targets]
+    command: [naabu, -silent, -list, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -Pn
+        label: No Ping
+        description: Skip host discovery
+        type: flag
+      - flag: -sn
+        label: Ping Scan
+        description: Ping scan only
+        type: flag
+      - flag: -sv
+        label: Service Version
+        description: Service version detection
+        type: flag
+      - flag: -c
+        label: Concurrency
+        description: Number of concurrent threads
+        type: int
+        default: '25'
+      - flag: -rate
+        label: Rate
+        description: Packets per second
+        type: int
+        default: '1000'
+      - flag: -p
+        label: Ports
+        description: Ports to scan
+        type: string
+      - flag: -top-ports
+        label: Top Ports
+        description: Top ports to scan
+        type: string
+        default: '100'
+
+  - id: rustscan
+    name: RustScan
+    category: Network
+    description: Extremely fast port scanner built in Rust
+    inputs: [targets]
+    outputs: [findings]
+    command: [rustscan, -a, '{targets}', --ulimit, '5000']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --greppable
+        label: Greppable
+        description: Greppable output
+        type: flag
+      - flag: --accessible
+        label: Accessible
+        description: Accessible mode
+        type: flag
+      - flag: --ulimit
+        label: Ulimit
+        description: File descriptor limit
+        type: int
+        default: '5000'
+      - flag: -b
+        label: Batch Size
+        description: Batch size for port scanning
+        type: int
+        default: '4500'
+      - flag: -t
+        label: Timeout
+        description: Connection timeout in ms
+        type: int
+        default: '1500'
+      - flag: -p
+        label: Ports
+        description: Ports to scan
+        type: string
+
+  # ── OSINT ──────────────────────────────────────────────────
+  - id: theharvester
+    name: theHarvester
+    category: OSINT
+    description: Gather emails, subdomains, hosts, and names from public sources
+    inputs: [domain]
+    outputs: [targets]
+    command: [theHarvester, -d, '{domain}', -b, all]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -g
+        label: Use Google Dorks
+        description: Use Google dorks during search
+        type: flag
+      - flag: -n
+        label: DNS Lookup
+        description: Enable DNS server lookup
+        type: flag
+      - flag: -v
+        label: Virtual Host
+        description: Verify hostnames via DNS resolution
+        type: flag
+      - flag: -l
+        label: Limit
+        description: Limit number of results
+        type: int
+        default: '500'
+      - flag: -b
+        label: Sources
+        description: Data sources (all,google,bing,...)
+        type: string
+        default: 'all'
+
+  - id: shodan-cli
+    name: Shodan CLI
+    category: OSINT
+    description: Query Shodan for hosts, services, and vulnerabilities
+    inputs: [domain]
+    outputs: [findings]
+    command: [shodan, search, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: --fields
+        label: Fields
+        description: Comma-separated list of properties to show in output
+        type: string
+        default: 'ip_str,port,org,hostnames'
+      - flag: --limit
+        label: Limit
+        description: Maximum number of results to return (1 credit per 100)
+        type: int
+        default: '100'
+      - flag: --separator
+        label: Separator
+        description: Separator character between fields
+        type: string
+        default: '\t'
+      - flag: --facets
+        label: Facets
+        description: Comma-separated facets to return (e.g. country,port)
+        type: string
+      - flag: --color
+        label: Color Output
+        description: Enable colored terminal output
+        type: flag
+
+  - id: censys
+    name: Censys
+    category: OSINT
+    description: Search engine for internet-connected devices and certificates
+    inputs: [domain]
+    outputs: [findings]
+    command: [censys, search, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: --index-type
+        label: Index
+        description: 'Censys index to query: hosts or certificates'
+        type: string
+        default: 'hosts'
+      - flag: --pages
+        label: Pages
+        description: Number of pages of results to return
+        type: int
+        default: '1'
+      - flag: --max-records
+        label: Max Records
+        description: Maximum total records to return
+        type: int
+        default: '100'
+      - flag: -f
+        label: Fields
+        description: Comma-separated fields to include in output
+        type: string
+      - flag: --format
+        label: Format
+        description: 'Output format: screen, csv, json'
+        type: string
+        default: 'json'
+
+  - id: spiderfoot
+    name: SpiderFoot
+    category: OSINT
+    description: Automated OSINT collection and threat intelligence tool
+    inputs: [domain]
+    outputs: [findings]
+    command: [spiderfoot, -s, '{domain}', -q]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -m
+        label: Modules
+        description: Comma-separated list of modules to enable (e.g. sfp_dnsresolve,sfp_crt)
+        type: string
+      - flag: -t
+        label: Event Types
+        description: Comma-separated list of event types to collect
+        type: string
+      - flag: -F
+        label: Filter Events
+        description: Only return events of this type (filter)
+        type: string
+      - flag: -o
+        label: Output Format
+        description: 'Output format: tab, csv, or json'
+        type: string
+        default: 'json'
+      - flag: -q
+        label: Quiet
+        description: Disable logging output on stderr
+        type: flag
+      - flag: -n
+        label: Strip Newlines
+        description: Strip newlines from data
+        type: flag
+      - flag: -H
+        label: No Header
+        description: Don't print the field header row
+        type: flag
+
+  # ── Archive ────────────────────────────────────────────────
+  - id: gau
+    name: GAU
+    category: Archive
+    description: Fetch known URLs from AlienVault OTX, Wayback, and Common Crawl
+    inputs: [domain]
+    outputs: [targets, url]
+    command: [gau, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: --subs
+        label: Include Subs
+        description: Include subdomains of target domain
+        type: flag
+      - flag: --threads
+        label: Threads
+        description: Number of threads
+        type: int
+        default: '1'
+      - flag: --mc
+        label: Match Codes
+        description: Match HTTP status codes
+        type: string
+      - flag: --fc
+        label: Filter Codes
+        description: Filter HTTP status codes
+        type: string
+
+  - id: waymore
+    name: Waymore
+    category: Archive
+    description: Extended Wayback Machine URL extraction tool
+    inputs: [domain]
+    outputs: [targets]
+    command: [waymore, -i, '{domain}', -mode, U]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -mode
+        label: Mode
+        description: 'Mode of operation: U=URLs, R=Responses, B=Both'
+        type: string
+        default: 'U'
+      - flag: -t
+        label: Threads
+        description: Number of threads
+        type: int
+        default: '5'
+      - flag: -limit
+        label: Limit
+        description: Limit number of URLs per source
+        type: int
+
+  # ── Utility ────────────────────────────────────────────────
+  - id: anew
+    name: Anew
+    category: Utility
+    description: Append lines from stdin to a file if they don't already exist
+    inputs: [targets]
+    outputs: [targets]
+    command: [anew, '{artifact_file}']
+    output_mode: stdout
+    timeout_seconds: 120
+    args:
+      - flag: -q
+        label: Quiet
+        description: Don't print new lines to stdout
+        type: flag
+      - flag: -d
+        label: Dry Run
+        description: Print new lines to stdout without appending to the file
+        type: flag
+      - flag: -t
+        label: Trim
+        description: Trim leading and trailing whitespace before comparing
+        type: flag
+
+  - id: qsreplace
+    name: QSReplace
+    category: Utility
+    description: Replace query string parameter values in URLs
+    inputs: [targets, url]
+    outputs: [targets, url]
+    command: [qsreplace, FUZZ]
+    output_mode: stdout
+    timeout_seconds: 120
+    args:
+      - flag: -a
+        label: Append
+        description: Append value instead of replacing
+        type: flag
+
+  - id: uro
+    name: URO
+    category: Utility
+    description: Declutter URL lists by removing duplicate-looking URLs
+    inputs: [targets]
+    outputs: [targets]
+    command: [uro]
+    output_mode: stdout
+    timeout_seconds: 120
+    args:
+      - flag: -f
+        label: Filters
+        description: 'Prebuilt filters: hasparams, nocontent, noparams, keepcontent, keepslash, keepquery, vuln, allexts'
+        type: string
+      - flag: -w
+        label: Whitelist
+        description: Comma-separated extensions to keep (e.g. php,asp,jsp)
+        type: string
+      - flag: -b
+        label: Blacklist
+        description: Comma-separated extensions to remove (e.g. css,jpg,png)
+        type: string
+
+  - id: unfurl
+    name: Unfurl
+    category: Utility
+    description: Pull out bits of URLs like domains, paths, and keys
+    inputs: [targets]
+    outputs: [targets]
+    command: [unfurl, domains]
+    output_mode: stdout
+    timeout_seconds: 120
+    args:
+      - flag: -u
+        label: Unique
+        description: Only output unique values (deduplicate)
+        type: flag
+      - flag: -v
+        label: Verbose
+        description: Show the URL alongside the extracted value
+        type: flag
+
+  - id: jq-filter
+    name: JQ Filter
+    category: Utility
+    description: Process and filter JSON output with jq expressions
+    inputs: [targets]
+    outputs: [findings]
+    command: [jq, '.', '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 120
+    args:
+      - flag: -r
+        label: Raw Output
+        description: Output raw strings instead of JSON-encoded strings
+        type: flag
+      - flag: -c
+        label: Compact
+        description: Produce compact output (one line per result)
+        type: flag
+      - flag: -s
+        label: Slurp
+        description: Read all inputs into an array and apply filter once
+        type: flag
+      - flag: -S
+        label: Sort Keys
+        description: Sort object keys in the output
+        type: flag
+      - flag: -e
+        label: Exit Status
+        description: Set exit status based on filter results (1 if null/false)
+        type: flag
+      - flag: -n
+        label: Null Input
+        description: Use null as single input (useful with --arg)
+        type: flag
+
+  - id: gf
+    name: GF Patterns
+    category: Utility
+    description: Grep for useful patterns in URLs and parameters (by tomnomnom)
+    inputs: [targets, url]
+    outputs: [targets, url]
+    command: [gf, '{pattern}']
+    output_mode: stdout
+    timeout_seconds: 120
+    args: []
+
+  - id: interlace
+    name: Interlace
+    category: Utility
+    description: Parallelize and automate command execution across targets
+    inputs: [targets]
+    outputs: [findings]
+    command: [interlace, -tL, '{targets_file}', -threads, '5', -c, '{cmd}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -threads
+        label: Threads
+        description: Number of concurrent threads
+        type: int
+        default: '5'
+      - flag: -p
+        label: Port
+        description: Port to use in command substitutions
+        type: string
+      - flag: -silent
+        label: Silent
+        description: Don't display banner
+        type: flag
+      - flag: -v
+        label: Verbose
+        description: Enable verbose output
+        type: flag
+
+  - id: rush
+    name: Rush
+    category: Utility
+    description: Cross-platform command-line tool for parallel execution
+    inputs: [targets]
+    outputs: [findings]
+    command: [rush, '{cmd}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -j
+        label: Jobs
+        description: Number of parallel jobs to run
+        type: int
+        default: '4'
+      - flag: -k
+        label: Keep Order
+        description: Keep output in same order as input
+        type: flag
+      - flag: -n
+        label: Dry Run
+        description: Print commands without executing
+        type: flag
+      - flag: -c
+        label: Continue
+        description: Continue running even after a job errors
+        type: flag
+      - flag: -q
+        label: Quiet
+        description: Suppress progress output
+        type: flag
+      - flag: -t
+        label: Timeout
+        description: Per-job timeout in seconds (0 disables)
+        type: int
+        default: '0'
+      - flag: -v
+        label: Verbose
+        description: Enable verbose logging
+        type: flag
+
+  - id: notify
+    name: Notify
+    category: Utility
+    description: Stream-based notification tool by ProjectDiscovery
+    inputs: [targets]
+    outputs: [targets]
+    command: [notify, -silent]
+    output_mode: stdout
+    timeout_seconds: 120
+    args:
+      - flag: -bulk
+        label: Bulk
+        description: Enable bulk processing for high-volume notifications
+        type: flag
+      - flag: -id
+        label: Provider ID
+        description: Provider ID (from config) to send notifications through
+        type: string
+      - flag: -provider-config
+        label: Provider Config
+        description: Path to provider config YAML file
+        type: string
+      - flag: -char-limit
+        label: Char Limit
+        description: Character limit per notification message
+        type: int
+        default: '4000'
+      - flag: -msg
+        label: Message
+        description: Message format string with {{data}} placeholder
+        type: string
+
+  - id: meg
+    name: Meg
+    category: Utility
+    description: Fetch many paths for many hosts concurrently
+    inputs: [targets]
+    outputs: [findings]
+    command: [meg, '{paths_file}', '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -c
+        label: Concurrency
+        description: Concurrency level
+        type: int
+        default: '20'
+      - flag: -d
+        label: Delay
+        description: Milliseconds between requests per host
+        type: int
+        default: '5000'
+      - flag: -s
+        label: Status Codes
+        description: Save only these status codes
+        type: string
+        default: '200'
+
+  # ── Parameter Discovery ────────────────────────────────────
+  - id: arjun
+    name: Arjun
+    category: Params
+    description: HTTP parameter discovery suite for finding hidden parameters
+    inputs: [targets]
+    outputs: [findings]
+    command: [arjun, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --stable
+        label: Stable
+        description: Only report parameters that produce consistent results
+        type: flag
+      - flag: --include
+        label: Include
+        description: Include these methods (GET, POST, etc.)
+        type: string
+        default: 'GET,POST'
+      - flag: -t
+        label: Threads
+        description: Number of concurrent connections
+        type: int
+        default: '5'
+      - flag: -d
+        label: Delay
+        description: Delay between requests in seconds
+        type: int
+        default: '0'
+      - flag: -w
+        label: Wordlist
+        description: Path to wordlist file
+        type: string
+
+  - id: paramspider
+    name: ParamSpider
+    category: Params
+    description: Mining parameters from dark corners of web archives
+    inputs: [domain]
+    outputs: [targets]
+    command: [paramspider, -d, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -s
+        label: Subs
+        description: Include subdomains
+        type: flag
+      - flag: --exclude
+        label: Exclude Extensions
+        description: Exclude extensions (e.g. css,jpg,png)
+        type: string
+        default: 'css,jpg,jpeg,png,svg,gif,woff,woff2,ttf,eot,ico'
+      - flag: -l
+        label: Level
+        description: URL path level to crawl
+        type: int
+
+  - id: x8
+    name: x8
+    category: Params
+    description: Hidden parameter discovery tool written in Rust
+    inputs: [targets]
+    outputs: [findings]
+    command: [x8, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --verify
+        label: Verify
+        description: Verify found parameters
+        type: flag
+      - flag: -X
+        label: Method
+        description: HTTP method
+        type: string
+        default: 'GET'
+      - flag: -w
+        label: Wordlist
+        description: Wordlist of parameters to check
+        type: string
+      - flag: -t
+        label: Threads
+        description: Number of threads
+        type: int
+        default: '1'
+      - flag: -c
+        label: Concurrency
+        description: Number of concurrent requests per URL
+        type: int
+        default: '1'
+      - flag: --headers
+        label: Headers
+        description: Custom headers
+        type: string
+      - flag: -b
+        label: Body
+        description: Request body for POST/PUT
+        type: string
+      - flag: --remove-empty
+        label: Remove Empty
+        description: Remove parameters with empty values
+        type: flag
+
+  - id: paraminer
+    name: Paraminer
+    category: Params
+    description: Burp extension style parameter miner for web applications
+    inputs: [targets]
+    outputs: [findings]
+    command: [paraminer, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -X
+        label: Method
+        description: HTTP method
+        type: string
+        default: 'GET'
+      - flag: -w
+        label: Wordlist
+        description: Wordlist for parameter names
+        type: string
+      - flag: -t
+        label: Threads
+        description: Number of threads
+        type: int
+        default: '10'
+      - flag: --force
+        label: Force
+        description: Force scan even with WAF detected
+        type: flag
+
+  # ── API Testing ────────────────────────────────────────────
+  - id: kiterunner
+    name: Kiterunner
+    category: API
+    description: Context-aware API endpoint and content discovery tool
+    inputs: [targets]
+    outputs: [findings]
+    command: [kr, scan, '{targets}', -w, '{wordlist_file}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --fail-status-codes
+        label: Fail Codes
+        description: Status codes to ignore
+        type: string
+        default: '400,404,413,502'
+      - flag: -x
+        label: Max Redirects
+        description: Maximum number of redirects
+        type: int
+        default: '5'
+      - flag: -j
+        label: Threads
+        description: Number of concurrent threads
+        type: int
+        default: '100'
+      - flag: --delay
+        label: Delay
+        description: Delay between requests (ms)
+        type: int
+        default: '0'
+      - flag: -A
+        label: Assetnote Wordlist
+        description: Use assetnote wordlists
+        type: string
+
+  - id: apifuzzer
+    name: APIFuzzer
+    category: API
+    description: Fuzz REST APIs based on OpenAPI/Swagger spec
+    inputs: [targets]
+    outputs: [findings]
+    command: [APIFuzzer, -s, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --basic_output
+        label: Basic Output
+        description: Simple test results
+        type: flag
+      - flag: -r
+        label: Report Dir
+        description: Report directory path
+        type: string
+      - flag: -t
+        label: Test Level
+        description: Test level (1-5)
+        type: int
+        default: '1'
+
+  - id: openapi-diff
+    name: OpenAPI Diff
+    category: API
+    description: Compare two OpenAPI specs to find new/changed endpoints
+    inputs: [targets]
+    outputs: [findings]
+    command: [oasdiff, diff, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 120
+    args:
+      - flag: --format
+        label: Format
+        description: Output format (yaml, json, text)
+        type: string
+        default: 'text'
+      - flag: --breaking-only
+        label: Breaking Only
+        description: Show only breaking changes
+        type: flag
+
+  - id: restler
+    name: RESTler
+    category: API
+    description: Stateful REST API fuzzer from Microsoft Research
+    inputs: [targets]
+    outputs: [findings]
+    command: [restler, fuzz-lean, --grammar_file, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --time_budget
+        label: Time Budget
+        description: Maximum fuzzing time in hours
+        type: float
+        default: '1'
+      - flag: --max_sequence_length
+        label: Max Sequence
+        description: Maximum request sequence length
+        type: int
+        default: '10'
+
+  # ── SSRF ───────────────────────────────────────────────────
+  - id: ssrfmap
+    name: SSRFmap
+    category: SSRF
+    description: Automatic SSRF fuzzer and exploitation tool
+    inputs: [targets]
+    outputs: [findings]
+    command: [ssrfmap, -r, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -p
+        label: Parameter
+        description: SSRF parameter to test
+        type: string
+      - flag: -m
+        label: Modules
+        description: 'Modules to enable: readfiles,portscan,networkscan'
+        type: string
+        default: 'readfiles'
+      - flag: --ssl
+        label: SSL
+        description: Use HTTPS
+        type: flag
+      - flag: --level
+        label: Level
+        description: Level of tests (1-5)
+        type: int
+        default: '1'
+
+  - id: gopherus
+    name: Gopherus
+    category: SSRF
+    description: Generate gopher payloads for SSRF exploitation
+    inputs: [targets]
+    outputs: [findings]
+    command: [gopherus, --exploit, '{exploit_type}']
+    output_mode: stdout
+    timeout_seconds: 120
+    args:
+      - flag: --exploit
+        label: Exploit Type
+        description: 'Target: mysql, postgresql, fastcgi, redis, smtp, zabbix, pymemcache, rbmemcache, phpmemcache, dmpmemcache'
+        type: string
+        default: 'mysql'
+
+  - id: interactsh
+    name: Interactsh
+    category: SSRF
+    description: Out-of-Band interaction detection by ProjectDiscovery
+    inputs: []
+    outputs: [findings]
+    command: [interactsh-client, -v]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -n
+        label: Count
+        description: Number of interactsh URLs to generate
+        type: int
+        default: '1'
+      - flag: -t
+        label: Poll Interval
+        description: Poll interval in seconds
+        type: int
+        default: '5'
+      - flag: -json
+        label: JSON Output
+        description: Write output in JSON format
+        type: flag
+      - flag: -token
+        label: Token
+        description: Authentication token for self-hosted server
+        type: string
+      - flag: -server
+        label: Server
+        description: Custom interactsh server URL
+        type: string
+
+  - id: ssrf-sheriff
+    name: SSRF Sheriff
+    category: SSRF
+    description: Detect SSRF vulnerabilities via DNS rebinding and header injection
+    inputs: [targets]
+    outputs: [findings]
+    command: [ssrf-sheriff, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: --callback
+        label: Callback URL
+        description: Out-of-band callback URL for SSRF detection
+        type: string
+      - flag: -t
+        label: Threads
+        description: Number of concurrent threads
+        type: int
+        default: '10'
+      - flag: --timeout
+        label: Timeout
+        description: HTTP request timeout in seconds
+        type: int
+        default: '10'
+      - flag: --verbose
+        label: Verbose
+        description: Enable verbose logging
+        type: flag
+
+  # ── SSTI ───────────────────────────────────────────────────
+  - id: sstimap
+    name: SSTImap
+    category: SSTI
+    description: Automatic server-side template injection detection and exploitation
+    inputs: [targets]
+    outputs: [findings]
+    command: [sstimap, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --os-shell
+        label: OS Shell
+        description: Execute an OS shell command
+        type: flag
+      - flag: --os-cmd
+        label: OS Command
+        description: Execute a single OS command
+        type: string
+      - flag: -e
+        label: Engine
+        description: 'Force template engine: mako,jinja2,twig,smarty,freemarker,velocity,pebble,jade,slim,erb,ejs,tornado,dot,dust,nunjucks,marko'
+        type: string
+      - flag: -l
+        label: Level
+        description: Detection level (1-5)
+        type: int
+        default: '1'
+      - flag: --technique
+        label: Technique
+        description: 'Techniques: R=render, T=time-based'
+        type: string
+        default: 'RT'
+      - flag: --marker
+        label: Marker
+        description: Marker to inject in parameter
+        type: string
+        default: '*'
+
+  - id: tplmap
+    name: Tplmap
+    category: SSTI
+    description: Server-side template injection exploitation tool
+    inputs: [targets]
+    outputs: [findings]
+    command: [tplmap, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --os-shell
+        label: OS Shell
+        description: Launch an OS shell
+        type: flag
+      - flag: --os-cmd
+        label: OS Command
+        description: Execute a single OS command
+        type: string
+      - flag: -e
+        label: Engine
+        description: Force specific template engine
+        type: string
+      - flag: -l
+        label: Level
+        description: Level of detection (1-5)
+        type: int
+        default: '1'
+
+  # ── CSRF ───────────────────────────────────────────────────
+  - id: xsrfprobe
+    name: XSRFProbe
+    category: CSRF
+    description: Audit and exploit CSRF vulnerabilities with a toolkit approach
+    inputs: [targets]
+    outputs: [findings]
+    command: [xsrfprobe, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --crawl
+        label: Crawl
+        description: Crawl the target site for forms
+        type: flag
+      - flag: --no-verify
+        label: No Verify
+        description: Skip SSL certificate verification
+        type: flag
+      - flag: -o
+        label: Output
+        description: Output file path
+        type: string
+      - flag: --malicious
+        label: Malicious
+        description: Use malicious payloads for testing
+        type: flag
+      - flag: --display
+        label: Display
+        description: Display real-time request/response headers
+        type: flag
+
+  # ── CORS ───────────────────────────────────────────────────
+  - id: corscanner
+    name: CORScanner
+    category: CORS
+    description: Fast CORS misconfiguration vulnerability scanner
+    inputs: [targets]
+    outputs: [findings]
+    command: [cors_scan, -i, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -t
+        label: Threads
+        description: Number of threads
+        type: int
+        default: '10'
+      - flag: -v
+        label: Verbose
+        description: Verbose output
+        type: flag
+      - flag: --headers
+        label: Headers
+        description: Custom headers
+        type: string
+
+  - id: crlfuzz
+    name: CRLFuzz
+    category: CORS
+    description: Fast CRLF vulnerability scanner written in Go
+    inputs: [targets]
+    outputs: [findings]
+    command: [crlfuzz, -l, '{targets_file}', -s]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -c
+        label: Concurrency
+        description: Number of concurrent requests
+        type: int
+        default: '25'
+      - flag: -X
+        label: Method
+        description: HTTP method to use
+        type: string
+        default: 'GET'
+      - flag: -H
+        label: Header
+        description: Custom header to add
+        type: string
+      - flag: -x
+        label: Proxy
+        description: Proxy URL
+        type: string
+      - flag: -V
+        label: Verbose
+        description: Verbose output
+        type: flag
+
+  # ── Subdomain Takeover ─────────────────────────────────────
+  - id: subjack
+    name: Subjack
+    category: Takeover
+    description: Subdomain takeover vulnerability checker
+    inputs: [targets]
+    outputs: [findings]
+    command: [subjack, -w, '{targets_file}', -ssl]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -ssl
+        label: SSL
+        description: Force HTTPS
+        type: flag
+      - flag: -a
+        label: All
+        description: Report all results, not just vulnerable
+        type: flag
+      - flag: -t
+        label: Threads
+        description: Number of threads
+        type: int
+        default: '100'
+      - flag: -c
+        label: Fingerprints
+        description: Path to fingerprints file
+        type: string
+      - flag: -timeout
+        label: Timeout
+        description: Timeout in seconds
+        type: int
+        default: '10'
+
+  - id: subzy
+    name: Subzy
+    category: Takeover
+    description: Subdomain takeover vulnerability checker in Go
+    inputs: [targets]
+    outputs: [findings]
+    command: [subzy, run, --targets, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --hide_fails
+        label: Hide Fails
+        description: Hide non-vulnerable results
+        type: flag
+      - flag: --vuln
+        label: Vuln Only
+        description: Only show vulnerable domains
+        type: flag
+      - flag: --concurrency
+        label: Concurrency
+        description: Number of concurrent checks
+        type: int
+        default: '10'
+      - flag: --timeout
+        label: Timeout
+        description: HTTP request timeout in seconds
+        type: int
+        default: '10'
+      - flag: --verify_ssl
+        label: Verify SSL
+        description: Verify SSL certificates
+        type: flag
+
+  - id: nuclei-takeover
+    name: Nuclei Takeover
+    category: Takeover
+    description: Run Nuclei with subdomain takeover templates only
+    inputs: [targets]
+    outputs: [findings]
+    command: [nuclei, -silent, -l, '{targets_file}', -tags, 'takeover', -jsonl]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -c
+        label: Concurrency
+        description: Templates to run in parallel
+        type: int
+        default: '25'
+      - flag: -rl
+        label: Rate Limit
+        description: Max requests per second
+        type: int
+        default: '150'
+      - flag: -timeout
+        label: Timeout
+        description: Timeout in seconds
+        type: int
+        default: '5'
+
+  # ── Header / Security ─────────────────────────────────────
+  - id: shcheck
+    name: Shcheck
+    category: Headers
+    description: Check security headers on target URLs
+    inputs: [targets]
+    outputs: [findings]
+    command: [shcheck, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 120
+    args:
+      - flag: -d
+        label: Disable TLS Check
+        description: Disable TLS/SSL certificate verification
+        type: flag
+      - flag: -g
+        label: Use GET
+        description: Use GET method instead of HEAD
+        type: flag
+      - flag: -j
+        label: JSON Output
+        description: Output in JSON format
+        type: flag
+
+  - id: hakcheckurl
+    name: Hakcheckurl
+    category: Headers
+    description: Check URLs and return their HTTP status codes
+    inputs: [targets]
+    outputs: [findings]
+    command: [hakcheckurl]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -t
+        label: Threads
+        description: Number of concurrent workers
+        type: int
+        default: '32'
+      - flag: -timeout
+        label: Timeout
+        description: HTTP request timeout in seconds
+        type: int
+        default: '10'
+      - flag: -X
+        label: Method
+        description: HTTP method to use
+        type: string
+        default: 'HEAD'
+
+  # ── JavaScript Analysis ────────────────────────────────────
+  - id: linkfinder
+    name: LinkFinder
+    category: JSAnalysis
+    description: Find endpoints in JavaScript files
+    inputs: [targets, url, file]
+    outputs: [targets, url]
+    command: [linkfinder, -i, '{targets}', -o, cli]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -d
+        label: Domain
+        description: Toggle to analyze a full domain (crawl JS files)
+        type: flag
+      - flag: -r
+        label: Regex
+        description: Custom regex to look for
+        type: string
+      - flag: -c
+        label: Cookies
+        description: Cookies for authenticated scans
+        type: string
+
+  - id: secretfinder
+    name: SecretFinder
+    category: JSAnalysis
+    description: Find sensitive data (API keys, tokens) in JavaScript files
+    inputs: [targets]
+    outputs: [findings]
+    command: [SecretFinder, -i, '{targets}', -o, cli]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -r
+        label: Regex
+        description: Custom regex pattern to look for
+        type: string
+      - flag: -e
+        label: Entropy
+        description: Calculate Shannon entropy for entropy-based detection
+        type: flag
+      - flag: -o
+        label: Output Mode
+        description: 'Output mode: cli or html'
+        type: string
+        default: 'cli'
+      - flag: -c
+        label: Cookies
+        description: Cookies to use when fetching JavaScript files
+        type: string
+      - flag: -g
+        label: Extract JS
+        description: Extract JavaScript files from the page and scan them for secrets
+        type: flag
+      - flag: -b
+        label: Burp File
+        description: Path to Burp XML file to parse
+        type: string
+
+  - id: getjs
+    name: GetJS
+    category: JSAnalysis
+    description: Extract JavaScript file URLs from a list of targets
+    inputs: [targets, url]
+    outputs: [targets, url, file]
+    command: [getJS, --input, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: --complete
+        label: Complete URLs
+        description: Complete relative URLs with base URL
+        type: flag
+      - flag: --resolve
+        label: Resolve
+        description: Resolve found URLs and output content
+        type: flag
+      - flag: --threads
+        label: Threads
+        description: Number of threads
+        type: int
+        default: '5'
+
+  - id: subjs
+    name: SubJS
+    category: JSAnalysis
+    description: Fetch JavaScript files from a list of URLs
+    inputs: [targets]
+    outputs: [targets]
+    command: [subjs]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -c
+        label: Concurrency
+        description: Concurrency level
+        type: int
+        default: '10'
+      - flag: -t
+        label: Timeout
+        description: Connection timeout in seconds
+        type: int
+        default: '15'
+
+  # ── Wordlist ───────────────────────────────────────────────
+  - id: cewl
+    name: CeWL
+    category: Wordlist
+    description: Custom Word List Generator - spider site and extract keywords
+    inputs: [targets]
+    outputs: [findings]
+    command: [cewl, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -d
+        label: Depth
+        description: Depth to spider
+        type: int
+        default: '2'
+      - flag: -m
+        label: Min Length
+        description: Minimum word length
+        type: int
+        default: '3'
+      - flag: --with-numbers
+        label: With Numbers
+        description: Accept words with numbers
+        type: flag
+      - flag: -a
+        label: Meta Data
+        description: Include meta data
+        type: flag
+      - flag: -e
+        label: Email
+        description: Include email addresses
+        type: flag
+
+  - id: wordlister
+    name: Wordlister
+    category: Wordlist
+    description: Generate custom wordlists based on a target's web content
+    inputs: [targets]
+    outputs: [findings]
+    command: [wordlister, --url, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --depth
+        label: Depth
+        description: Crawl depth
+        type: int
+        default: '2'
+      - flag: --min
+        label: Min Length
+        description: Minimum word length
+        type: int
+        default: '3'
+      - flag: --max
+        label: Max Length
+        description: Maximum word length
+        type: int
+        default: '20'
+
+  # ── Cloud / Buckets ────────────────────────────────────────
+  - id: s3scanner
+    name: S3Scanner
+    category: Cloud
+    description: Scan for open S3 buckets and dump their contents
+    inputs: [targets]
+    outputs: [findings]
+    command: [s3scanner, scan, --bucket-file, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --dump
+        label: Dump
+        description: Dump the contents of open buckets to disk
+        type: flag
+      - flag: --enumerate
+        label: Enumerate
+        description: List all objects in discovered open buckets
+        type: flag
+      - flag: --provider
+        label: Provider
+        description: 'Cloud provider: aws, digitalocean, dreamhost, gcp, linode, scaleway'
+        type: string
+        default: 'aws'
+      - flag: --threads
+        label: Threads
+        description: Number of concurrent worker threads
+        type: int
+        default: '4'
+      - flag: --timeout
+        label: Timeout
+        description: HTTP request timeout in seconds
+        type: int
+        default: '30'
+      - flag: --json
+        label: JSON Output
+        description: Output results in JSON format
+        type: flag
+
+  - id: cloudenum
+    name: Cloud Enum
+    category: Cloud
+    description: Multi-cloud OSINT tool for enumerating public resources
+    inputs: [domain]
+    outputs: [findings]
+    command: [cloud_enum, -k, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -t
+        label: Threads
+        description: Number of threads
+        type: int
+        default: '5'
+      - flag: --disable-aws
+        label: Disable AWS
+        description: Skip AWS checks
+        type: flag
+      - flag: --disable-azure
+        label: Disable Azure
+        description: Skip Azure checks
+        type: flag
+      - flag: --disable-gcp
+        label: Disable GCP
+        description: Skip GCP checks
+        type: flag
+
+  # ── Token / Secrets ────────────────────────────────────────
+  - id: trufflehog
+    name: TruffleHog
+    category: Secrets
+    description: Find leaked credentials in Git repos, S3 buckets, and more
+    inputs: [targets, folder]
+    outputs: [findings]
+    command: [trufflehog, git, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --json
+        label: JSON Output
+        description: Output in JSON format
+        type: flag
+      - flag: --only-verified
+        label: Only Verified
+        description: Only show verified secrets
+        type: flag
+      - flag: --concurrency
+        label: Concurrency
+        description: Number of concurrent workers
+        type: int
+        default: '8'
+      - flag: --max-depth
+        label: Max Depth
+        description: Maximum depth of commits to scan
+        type: int
+
+  - id: gitleaks
+    name: Gitleaks
+    category: Secrets
+    description: Detect and prevent hardcoded secrets in git repos
+    inputs: [targets, folder]
+    outputs: [findings]
+    command: [gitleaks, detect, --source, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --no-git
+        label: No Git
+        description: Scan files without git (file system scan)
+        type: flag
+      - flag: -v
+        label: Verbose
+        description: Show verbose output
+        type: flag
+      - flag: --report-format
+        label: Report Format
+        description: Report format (json, csv, sarif)
+        type: string
+        default: 'json'
+      - flag: --max-target-megabytes
+        label: Max Target MB
+        description: Max target megabytes to scan
+        type: int
+        default: '0'
+
+  # ── Web App Testing ────────────────────────────────────────
+  - id: whatweb
+    name: WhatWeb
+    category: Recon
+    description: Fingerprint web technologies, frameworks, and CMS
+    inputs: [targets]
+    outputs: [findings]
+    command: [whatweb, --no-errors, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -a
+        label: Aggression
+        description: Scan level 1 (stealthy) to 4 (heavy)
+        type: string
+        default: '3'
+      - flag: --max-threads
+        label: Max Threads
+        description: Number of concurrent threads
+        type: int
+        default: '25'
+      - flag: --user-agent
+        label: User Agent
+        description: Identify as a custom User-Agent
+        type: string
+      - flag: -v
+        label: Verbose
+        description: Verbose output including plugin descriptions
+        type: flag
+
+  - id: wafw00f
+    name: WAFW00F
+    category: Recon
+    description: Identify and fingerprint Web Application Firewalls
+    inputs: [targets]
+    outputs: [findings]
+    command: [wafw00f, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 180
+    args:
+      - flag: -a
+        label: Find All
+        description: Find all WAFs that match, do not stop at the first
+        type: flag
+      - flag: -v
+        label: Verbose
+        description: Enable verbose logging
+        type: flag
+      - flag: -p
+        label: Proxy
+        description: Route requests through a proxy (http://host:port)
+        type: string
+      - flag: -t
+        label: Test WAF
+        description: Test for a specific WAF by name
+        type: string
+
+  - id: testssl
+    name: testssl.sh
+    category: Network
+    description: Test a server's TLS/SSL ciphers, protocols, and flaws
+    inputs: [targets]
+    outputs: [findings]
+    command: [testssl.sh, --color, '0', '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --fast
+        label: Fast
+        description: Skip some checks for a faster run
+        type: flag
+      - flag: -U
+        label: All Vulns
+        description: Test all known vulnerabilities
+        type: flag
+      - flag: --sneaky
+        label: Sneaky
+        description: Use a less conspicuous User-Agent
+        type: flag
+      - flag: --severity
+        label: Min Severity
+        description: Minimum severity to report (LOW/MEDIUM/HIGH/CRITICAL)
+        type: string
+        default: 'LOW'
+
+  - id: sslscan
+    name: SSLScan
+    category: Network
+    description: Quick query of a server's SSL/TLS configuration
+    inputs: [targets]
+    outputs: [findings]
+    command: [sslscan, --no-colour, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: --show-certificate
+        label: Show Certificate
+        description: Print the full server certificate
+        type: flag
+      - flag: --no-fallback
+        label: No Fallback
+        description: Disable TLS fallback SCSV probing
+        type: flag
+      - flag: --starttls-auto
+        label: STARTTLS Auto
+        description: Auto-detect and use the STARTTLS protocol
+        type: flag
+
+  - id: ghauri
+    name: Ghauri
+    category: Vulnerability
+    description: Advanced SQL injection detection and exploitation
+    inputs: [targets]
+    outputs: [findings]
+    command: [ghauri, -u, '{targets}', --batch]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --level
+        label: Level
+        description: Level of tests to perform (1-3)
+        type: int
+        default: '1'
+      - flag: --dbs
+        label: Enumerate DBs
+        description: Enumerate the available databases
+        type: flag
+      - flag: --tables
+        label: Enumerate Tables
+        description: Enumerate database tables
+        type: flag
+      - flag: --technique
+        label: Technique
+        description: SQLi techniques to use (e.g. BEST, BT, S)
+        type: string
+      - flag: --dbms
+        label: Force DBMS
+        description: Force a back-end DBMS (e.g. MySQL, MSSQL)
+        type: string
+
+  - id: commix
+    name: Commix
+    category: Vulnerability
+    description: Automated command injection detection and exploitation
+    inputs: [targets]
+    outputs: [findings]
+    command: [commix, --url, '{targets}', --batch]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --level
+        label: Level
+        description: Level of tests to perform (1-3)
+        type: int
+        default: '1'
+      - flag: --technique
+        label: Technique
+        description: Injection techniques (e.g. classic, eval-based, time-based)
+        type: string
+      - flag: --os-cmd
+        label: OS Command
+        description: Execute a single operating-system command
+        type: string
+      - flag: --all
+        label: All
+        description: Retrieve everything (host, user, system info)
+        type: flag
+
+  - id: jaeles
+    name: Jaeles
+    category: Vulnerability
+    description: Signature-based web application vulnerability scanner
+    inputs: [targets]
+    outputs: [findings]
+    command: [jaeles, scan, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -s
+        label: Signatures
+        description: Signature selector (e.g. 'cves/', 'common/', 'sensitive/')
+        type: string
+      - flag: -x
+        label: Exclude Signatures
+        description: Signature selector to exclude
+        type: string
+      - flag: -L
+        label: Severity Level
+        description: Filter signatures by severity level (1-5)
+        type: int
+        default: '1'
+      - flag: -p
+        label: Custom Params
+        description: Custom variable to inject into signatures (name=value)
+        type: string
+      - flag: -H
+        label: Header
+        description: Add a default header to every request
+        type: string
+      - flag: --proxy
+        label: Proxy
+        description: Send requests through a proxy (http://host:port)
+        type: string
+      - flag: --timeout
+        label: Timeout
+        description: Per-request timeout in seconds
+        type: int
+        default: '20'
+      - flag: --retry
+        label: Retries
+        description: Number of times to retry a failed request
+        type: int
+        default: '1'
+      - flag: -c
+        label: Concurrency
+        description: Number of concurrent threads
+        type: int
+        default: '20'
+      - flag: --chunk
+        label: Chunk Run
+        description: Split the target list into chunks to reduce memory use
+        type: flag
+      - flag: --passive
+        label: Passive
+        description: Enable passive detections while scanning
+        type: flag
+      - flag: -J
+        label: JSON Output
+        description: Emit results as JSON
+        type: flag
+      - flag: -v
+        label: Verbose
+        description: Verbose output
+        type: flag
+
+  - id: cmseek
+    name: CMSeeK
+    category: Enumeration
+    description: Detect CMS and enumerate versions, plugins, and themes
+    inputs: [targets]
+    outputs: [findings]
+    command: [cmseek, -u, '{targets}', --follow-redirect]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: --random-agent
+        label: Random Agent
+        description: Use a random User-Agent per request
+        type: flag
+      - flag: '--googlebot'
+        label: Googlebot
+        description: Use Googlebot as the User-Agent
+        type: flag
+
+  - id: joomscan
+    name: JoomScan
+    category: Vulnerability
+    description: OWASP Joomla vulnerability and component scanner
+    inputs: [targets]
+    outputs: [findings]
+    command: [joomscan, --url, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -ec
+        label: Enumerate Components
+        description: Enumerate installed components
+        type: flag
+      - flag: --random-agent
+        label: Random Agent
+        description: Use a random User-Agent
+        type: flag
+
+  - id: droopescan
+    name: Droopescan
+    category: Vulnerability
+    description: Plugin-based scanner for Drupal, SilverStripe, and more
+    inputs: [targets]
+    outputs: [findings]
+    command: [droopescan, scan, drupal, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -t
+        label: Threads
+        description: Number of threads to use
+        type: int
+        default: '4'
+      - flag: -e
+        label: Enumerate
+        description: Enumerate 'a'(ll), 'p'(lugins), 't'(hemes), 'v'(ersion)
+        type: string
+        default: 'a'
+
+  - id: nomore403
+    name: nomore403
+    category: Enumeration
+    description: Bypass 40x responses with header, verb, and path tricks
+    inputs: [targets]
+    outputs: [findings]
+    command: [nomore403, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: --http-method
+        label: HTTP Method
+        description: Base HTTP method to bypass with
+        type: string
+        default: GET
+      - flag: -H
+        label: Header
+        description: Add a custom request header (repeatable)
+        type: string
+      - flag: -d
+        label: Payloads Dir
+        description: Directory of custom bypass payloads
+        type: string
+      - flag: -f
+        label: Request File
+        description: Load a raw HTTP request from a file
+        type: string
+      - flag: -m
+        label: Max Retries
+        description: Maximum retries per request
+        type: int
+        default: '3'
+      - flag: -t
+        label: Max Goroutines
+        description: Maximum number of concurrent requests
+        type: int
+        default: '20'
+      - flag: --timeout
+        label: Timeout
+        description: Per-request timeout in milliseconds
+        type: int
+        default: '10000'
+      - flag: -r
+        label: Follow Redirects
+        description: Follow HTTP redirects
+        type: flag
+      - flag: -k
+        label: Bypass Local Paths
+        description: Also attempt local-path traversal bypasses
+        type: flag
+      - flag: --unique
+        label: Unique
+        description: Only display unique responses
+        type: flag
+      - flag: --random-agent
+        label: Random Agent
+        description: Use a random User-Agent per request
+        type: flag
+      - flag: -x
+        label: Proxy
+        description: Send requests through a proxy (http://host:port)
+        type: string
+
+  - id: oralyzer
+    name: Oralyzer
+    category: Vulnerability
+    description: Detect open redirection and CRLF injection flaws
+    inputs: [targets]
+    outputs: [findings]
+    command: [oralyzer, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -p
+        label: Payloads
+        description: Path to a custom payloads file
+        type: string
+      - flag: -t
+        label: Threads
+        description: Number of concurrent threads
+        type: int
+        default: '10'
+
+  - id: dirb
+    name: Dirb
+    category: Enumeration
+    description: Classic recursive web content and directory brute-forcer
+    inputs: [targets, wordlist]
+    outputs: [findings]
+    command: [dirb, '{targets}', '{wordlist_file}', -S]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -r
+        label: Non-Recursive
+        description: Do not search recursively
+        type: flag
+      - flag: -X
+        label: Extensions
+        description: Append each word with these extensions (e.g. .php,.bak)
+        type: string
+      - flag: -z
+        label: Delay
+        description: Milliseconds of delay between requests
+        type: int
+        default: '0'
+
+  # ── Kubernetes ─────────────────────────────────────────────
+  - id: kube-hunter
+    name: kube-hunter
+    category: Kubernetes
+    description: Hunt for security weaknesses in Kubernetes clusters (remote or in-cluster)
+    inputs:
+      - targets
+    outputs:
+      - findings
+    command:
+      - kube-hunter
+      - --remote
+      - '{targets}'
+      - --report
+      - json
+    output_mode: stdout
+    timeout_seconds: 600
+    # Passive discovery only. Active hunting (--active) can change cluster
+    # state and is intentionally NOT exposed as a toggle here: the platform
+    # has no approval-gate enforcement yet, so a state-changing flag must not
+    # be one click away. Run active hunts manually under an approved change.
+    args:
+      - flag: --pod
+        label: Pod Mode
+        description: Run as if inside a cluster pod
+        type: flag
+      - flag: --cidr
+        label: CIDR
+        description: Scan a network CIDR range for clusters
+        type: string
+
+  - id: kube-bench
+    name: kube-bench
+    category: Kubernetes
+    description: Check whether Kubernetes is deployed per the CIS Kubernetes Benchmark. Runs against the active kubeconfig context.
+    inputs: []
+    outputs:
+      - findings
+    command:
+      - kube-bench
+      - --json
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --targets
+        label: Targets
+        description: Comma-separated components to check (master,node,etcd,policies)
+        type: string
+      - flag: --benchmark
+        label: Benchmark Version
+        description: Explicit CIS benchmark version to run against
+        type: string
+
+  - id: kubeaudit
+    name: kubeaudit
+    category: Kubernetes
+    description: Audit Kubernetes clusters against common security concerns. Runs against the active kubeconfig context (override with --kubeconfig).
+    inputs: []
+    outputs:
+      - findings
+    command:
+      - kubeaudit
+      - all
+      - --format
+      - json
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --kubeconfig
+        label: Kubeconfig
+        description: Path to a kubeconfig file for the target cluster
+        type: string
+      - flag: --namespace
+        label: Namespace
+        description: Restrict the audit to a single namespace
+        type: string
+
+  - id: trivy
+    name: Trivy
+    category: Kubernetes
+    description: Scan container images, filesystems, and IaC for vulnerabilities and misconfigurations
+    inputs:
+      - targets
+      - folder
+    outputs:
+      - findings
+    command:
+      - trivy
+      - image
+      - --format
+      - json
+      - '{targets}'
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --severity
+        label: Severity
+        description: Filter by severity (UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL)
+        type: string
+        default: HIGH,CRITICAL
+      - flag: --ignore-unfixed
+        label: Ignore Unfixed
+        description: Report only vulnerabilities that have a fix available
+        type: flag
+      - flag: --scanners
+        label: Scanners
+        description: Comma-separated scanners to enable (vuln,misconfig,secret)
+        type: string
+
+  - id: kubeletctl
+    name: kubeletctl
+    category: Kubernetes
+    description: Interact with an exposed kubelet API to enumerate pods and running containers
+    inputs:
+      - targets
+    outputs:
+      - findings
+    command:
+      - kubeletctl
+      - pods
+      - --server
+      - '{targets}'
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: --port
+        label: Port
+        description: Kubelet API port (default 10250)
+        type: int
+        default: '10250'
+      - flag: -i
+        label: Insecure
+        description: Skip TLS verification against the kubelet endpoint
+        type: flag
+
+  - id: popeye
+    name: Popeye
+    category: Kubernetes
+    description: Scan live Kubernetes clusters for misconfigurations and resource hygiene issues. Runs against the active kubeconfig context (override with --kubeconfig).
+    inputs: []
+    outputs:
+      - findings
+    command:
+      - popeye
+      - --out
+      - json
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: --namespace
+        label: Namespace
+        description: Restrict the scan to a single namespace
+        type: string
+      - flag: --kubeconfig
+        label: Kubeconfig
+        description: Path to a kubeconfig file for the target cluster
+        type: string
+
+  # ── Cloud (extended) ───────────────────────────────────────
+  - id: prowler
+    name: Prowler
+    category: Cloud
+    description: Assess an AWS account against CIS and other compliance frameworks. Uses the ambient AWS credentials/profile.
+    inputs: []
+    outputs:
+      - findings
+    command:
+      - prowler
+      - aws
+      - --output-formats
+      - json
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --services
+        label: Services
+        description: Comma-separated services to scope the assessment to
+        type: string
+      - flag: --severity
+        label: Severity
+        description: Filter findings by severity (low, medium, high, critical)
+        type: string
+
+  - id: scoutsuite
+    name: ScoutSuite
+    category: Cloud
+    description: Audit an AWS account and surface risky configuration. Uses the ambient AWS credentials/profile.
+    inputs: []
+    outputs:
+      - findings
+    command:
+      - scout
+      - aws
+      - --no-browser
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --report-dir
+        label: Report Directory
+        description: Directory to write the ScoutSuite report into
+        type: string
+
+  - id: cloudsploit
+    name: CloudSploit
+    category: Cloud
+    description: Detect security risks in a cloud account across common misconfiguration checks. Uses the ambient cloud credentials.
+    inputs: []
+    outputs:
+      - findings
+    command:
+      - cloudsploit
+      - scan
+      - --console
+      - json
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --cloud
+        label: Cloud
+        description: Cloud provider to scan (aws, azure, google, oracle)
+        type: string
+        default: aws
+      - flag: --compliance
+        label: Compliance
+        description: Map findings to a compliance framework (hipaa, pci, cis)
+        type: string
+
+  - id: gcpbucketbrute
+    name: GCPBucketBrute
+    category: Cloud
+    description: Enumerate Google Cloud Storage buckets from a keyword and test their permissions
+    inputs:
+      - targets
+    outputs:
+      - findings
+    # Keyword comes from the workflow target ({targets}); -u keeps the probe to
+    # unauthenticated (public-exposure) checks by default. Neither is re-exposed
+    # as an arg to avoid passing a duplicate -k/-u to the CLI.
+    command:
+      - gcpbucketbrute
+      - -k
+      - '{targets}'
+      - -u
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: --check-endpoints
+        label: Check Endpoints
+        description: Also probe for accessible service endpoints on discovered buckets
+        type: flag
+
+  # ── Recon (DNS expansion & certificates) ───────────────────
+  - id: puredns
+    name: PureDNS
+    category: Recon
+    description: Fast subdomain bruteforce and resolver with wildcard filtering
+    inputs: [domain, wordlist]
+    outputs: [targets]
+    command: [puredns, bruteforce, '{wordlist_file}', '{domain}', --quiet]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -r
+        label: Resolvers
+        description: Path to a file of trusted DNS resolvers
+        type: string
+      - flag: --rate-limit
+        label: Rate Limit
+        description: Maximum DNS queries per second
+        type: int
+
+  - id: alterx
+    name: AlterX
+    category: Recon
+    description: Fast and customizable subdomain permutation generator
+    inputs: [targets]
+    outputs: [targets]
+    command: [alterx, -l, '{targets_file}', -silent]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -enrich
+        label: Enrich
+        description: Use known subdomains to enrich the permutation wordlist
+        type: flag
+
+  - id: dnsgen
+    name: DNSGen
+    category: Recon
+    description: Generate domain name permutations from a list of domains
+    inputs: [targets]
+    outputs: [targets]
+    command: [dnsgen, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -w
+        label: Wordlist
+        description: Custom permutation wordlist
+        type: string
+
+  - id: gotator
+    name: Gotator
+    category: Recon
+    description: Generate DNS permutations from subdomains and a wordlist
+    inputs: [targets, wordlist]
+    outputs: [targets]
+    command: [gotator, -sub, '{targets_file}', -perm, '{wordlist_file}', -silent]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -depth
+        label: Depth
+        description: Number of permutation levels to generate
+        type: int
+        default: '1'
+
+  - id: tlsx
+    name: TLSX
+    category: Recon
+    description: Gather TLS/SSL data and extract SAN/CN hostnames from certificates
+    inputs: [targets]
+    outputs: [targets]
+    command: [tlsx, -l, '{targets_file}', -silent, -san, -cn, -resp-only]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -c
+        label: Concurrency
+        description: Number of concurrent connections
+        type: int
+        default: '50'
+
+  - id: asnmap
+    name: ASNMap
+    category: Recon
+    description: Map an organization or domain to its ASN CIDR ranges
+    inputs: [domain]
+    outputs: [targets]
+    command: [asnmap, -d, '{domain}', -silent]
+    output_mode: stdout
+    timeout_seconds: 120
+    args: []
+
+  - id: cero
+    name: Cero
+    category: Recon
+    description: Scrape domain names from TLS certificates of live hosts
+    inputs: [targets]
+    outputs: [targets]
+    command: [cero, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -p
+        label: Ports
+        description: Comma-separated ports to connect to for certificates
+        type: string
+        default: '443'
+
+  # ── Network (CIDR / CDN / ports) ───────────────────────────
+  - id: mapcidr
+    name: MapCIDR
+    category: Network
+    description: Expand, aggregate, and manipulate CIDR ranges and IP lists
+    inputs: [targets]
+    outputs: [targets]
+    command: [mapcidr, -cl, '{targets_file}', -silent]
+    output_mode: stdout
+    timeout_seconds: 120
+    args:
+      - flag: -aggregate
+        label: Aggregate
+        description: Aggregate IPs into the smallest set of CIDR ranges
+        type: flag
+
+  - id: cdncheck
+    name: CDNCheck
+    category: Network
+    description: Detect whether hosts sit behind a CDN, WAF, or cloud provider
+    inputs: [targets]
+    outputs: [findings]
+    command: [cdncheck, -l, '{targets_file}', -resp]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -cdn
+        label: CDN Only
+        description: Only match against CDN ranges
+        type: flag
+
+  - id: smap
+    name: Smap
+    category: Network
+    description: Passive Nmap-style port scanner powered by Shodan's Internetdb
+    inputs: [targets]
+    outputs: [findings]
+    command: [smap, -iL, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -oJ
+        label: JSON Output
+        description: Emit results as JSON
+        type: flag
+
+  # ── Recon (visual / screenshots) ───────────────────────────
+  - id: gowitness
+    name: GoWitness
+    category: Recon
+    description: Screenshot web servers and record response metadata
+    inputs: [targets, url]
+    outputs: [folder, findings]
+    command: [gowitness, file, -f, '{targets_file}']
+    output_mode: file
+    timeout_seconds: 600
+    args:
+      - flag: --screenshot-fullpage
+        label: Full Page
+        description: Capture the full scrollable page rather than the viewport
+        type: flag
+
+  - id: aquatone
+    name: Aquatone
+    category: Recon
+    description: Visual inspection of websites across a large number of hosts
+    inputs: [targets, url]
+    outputs: [folder]
+    command: [aquatone, -out, '{artifact_dir}']
+    output_mode: file
+    timeout_seconds: 600
+    args:
+      - flag: -ports
+        label: Ports
+        description: Ports to scan (small, medium, large, xlarge, or a list)
+        type: string
+        default: medium
+
+  # ── JS Analysis (secrets / endpoints) ──────────────────────
+  - id: jsluice
+    name: jsluice
+    category: JSAnalysis
+    description: Extract URLs, paths, and secrets from JavaScript with a parser
+    inputs: [targets, url, file]
+    outputs: [findings]
+    command: [jsluice, urls, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -R
+        label: Resolve Paths
+        description: Resolve relative paths against a base URL
+        type: string
+
+  - id: mantra
+    name: Mantra
+    category: JSAnalysis
+    description: Hunt for hardcoded API keys and secrets inside JavaScript files
+    inputs: [targets, url, file]
+    outputs: [findings]
+    command: [mantra, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  - id: xnlinkfinder
+    name: xnLinkFinder
+    category: JSAnalysis
+    description: Discover endpoints and parameters from JS, sitemaps, and archives
+    inputs: [targets, url, file]
+    outputs: [url]
+    command: [xnLinkFinder, -i, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -sf
+        label: Scope Filter
+        description: Restrict results to a scope domain
+        type: string
+
+  # ── API (GraphQL) ──────────────────────────────────────────
+  - id: graphw00f
+    name: graphw00f
+    category: API
+    description: Fingerprint the GraphQL engine behind an endpoint
+    inputs: [targets, url]
+    outputs: [findings]
+    command: [graphw00f, -t, '{targets}', -d]
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  - id: graphql-cop
+    name: GraphQL Cop
+    category: API
+    description: Audit a GraphQL endpoint for common security misconfigurations
+    inputs: [url, targets]
+    outputs: [findings]
+    command: [graphql-cop, -t, '{targets}', -o, json]
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  - id: clairvoyance
+    name: Clairvoyance
+    category: API
+    description: Recover a GraphQL schema even when introspection is disabled
+    inputs: [url, targets]
+    outputs: [findings]
+    command: [clairvoyance, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -w
+        label: Wordlist
+        description: Field-name wordlist used to probe the schema
+        type: string
+
+  # ── Vulnerability (reflected params / smuggling / libs) ────
+  - id: gxss
+    name: Gxss
+    category: Vulnerability
+    description: Check URL parameters for reflected values (XSS candidates)
+    inputs: [url, targets]
+    outputs: [findings]
+    command: [Gxss, -p, Gxss]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -c
+        label: Concurrency
+        description: Number of concurrent workers
+        type: int
+        default: '20'
+
+  - id: kxss
+    name: kxss
+    category: Vulnerability
+    description: Identify URL parameters that reflect unfiltered special characters
+    inputs: [url, targets]
+    outputs: [findings]
+    command: [kxss]
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  - id: smuggler
+    name: Smuggler
+    category: Vulnerability
+    description: Detect HTTP request smuggling desync vulnerabilities
+    inputs: [targets, url]
+    outputs: [findings]
+    command: [smuggler, -u, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  - id: retire
+    name: Retire.js
+    category: Vulnerability
+    description: Scan for JavaScript libraries with known vulnerabilities
+    inputs: [targets, url, file]
+    outputs: [findings]
+    command: [retire, --outputformat, json]
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  # ── Secrets (static analysis) ──────────────────────────────
+  - id: semgrep
+    name: Semgrep
+    category: Secrets
+    description: Static analysis for bugs and secrets across a source tree
+    inputs: [folder, file]
+    outputs: [findings]
+    command: [semgrep, --config, auto, --json, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: --config
+        label: Ruleset
+        description: Ruleset to run (auto, p/ci, p/secrets, or a path)
+        type: string
+        default: auto
+
+  # ── Recon (technology fingerprint) ─────────────────────────
+  - id: wappalyzer
+    name: Wappalyzer
+    category: Recon
+    description: Identify the technology stack running on target web applications
+    inputs: [url, targets]
+    outputs: [findings]
+    command: [wappalyzer, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  # ── Recon (probing / URL discovery) ────────────────────────
+  - id: httprobe
+    name: httprobe
+    category: Recon
+    description: Probe a list of hosts for working HTTP and HTTPS servers
+    inputs: [targets]
+    outputs: [targets, url]
+    command: [httprobe]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -p
+        label: Extra Ports
+        description: Additional port to probe, e.g. http:8080
+        type: string
+
+  - id: urlfinder
+    name: URLFinder
+    category: Recon
+    description: Passively collect URLs for a domain from multiple online sources
+    inputs: [domain]
+    outputs: [targets, url]
+    command: [urlfinder, -d, '{domain}', -silent]
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  - id: hakip2host
+    name: hakip2host
+    category: Recon
+    description: Discover hostnames tied to a list of IP addresses
+    inputs: [targets]
+    outputs: [targets]
+    command: [hakip2host]
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  # ── Crawling ───────────────────────────────────────────────
+  - id: cariddi
+    name: Cariddi
+    category: Crawling
+    description: Crawl endpoints and hunt for secrets, tokens, and juicy files
+    inputs: [targets, url]
+    outputs: [url, findings]
+    command: [cariddi, -s]
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -e
+        label: Endpoints
+        description: Hunt for known juicy endpoints
+        type: flag
+      - flag: -info
+        label: Info
+        description: Hunt for information disclosure (emails, tokens)
+        type: flag
+
+  # ── Utility ────────────────────────────────────────────────
+  - id: dsieve
+    name: dsieve
+    category: Utility
+    description: Filter and extract subdomains by level from a list
+    inputs: [targets]
+    outputs: [targets]
+    command: [dsieve, -if, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 120
+    args:
+      - flag: -f
+        label: Level Filter
+        description: Domain level(s) to keep, e.g. 3 or 2:4
+        type: string
+
+  - id: dnsvalidator
+    name: DNSValidator
+    category: Utility
+    description: Build a list of reliable, non-poisoned DNS resolvers
+    inputs: [targets]
+    outputs: [targets]
+    command: [dnsvalidator, -tL, '{targets_file}', -threads, '20']
+    output_mode: stdout
+    timeout_seconds: 600
+    args: []
+
+  # ── OSINT (GitHub) ─────────────────────────────────────────
+  - id: github-subdomains
+    name: GitHub Subdomains
+    category: OSINT
+    description: Discover subdomains referenced across public GitHub code
+    inputs: [domain]
+    outputs: [targets]
+    command: [github-subdomains, -d, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -e
+        label: Extended
+        description: Also search for subdomains in a wider result set
+        type: flag
+
+  - id: gitdorker
+    name: GitDorker
+    category: OSINT
+    description: Search GitHub with dork lists to surface leaked secrets and info
+    inputs: [domain]
+    outputs: [findings]
+    command: [gitdorker, -q, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args: []
+
+  # ── Vulnerability / Enumeration ────────────────────────────
+  - id: ppfuzz
+    name: ppfuzz
+    category: Vulnerability
+    description: Fuzz web applications for client-side prototype pollution
+    inputs: [url, targets]
+    outputs: [findings]
+    command: [ppfuzz, -l, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  - id: shortscan
+    name: Shortscan
+    category: Enumeration
+    description: Discover IIS 8.3 short filenames via tilde enumeration
+    inputs: [targets, url]
+    outputs: [findings]
+    command: [shortscan, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -F
+        label: Full URLs
+        description: Output full candidate URLs for discovered names
+        type: flag
+
+  # ── Recon (more subdomain sources & resolution) ────────────
+  - id: bbot
+    name: BBOT
+    category: Recon
+    description: Recursive OSINT engine for subdomains, emails, and web assets
+    inputs: [domain]
+    outputs: [targets, findings]
+    command: [bbot, -t, '{domain}', -f, subdomain-enum, -y, --silent]
+    output_mode: stdout
+    timeout_seconds: 900
+    args:
+      - flag: -f
+        label: Flags
+        description: Module flags to enable (e.g. subdomain-enum,cloud-enum)
+        type: string
+        default: subdomain-enum
+
+  - id: crtsh
+    name: crt.sh
+    category: Recon
+    description: Pull subdomains from certificate transparency logs (crt.sh)
+    inputs: [domain]
+    outputs: [targets]
+    command: [crtsh, -d, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 120
+    args: []
+
+  - id: massdns
+    name: MassDNS
+    category: Recon
+    description: High-performance DNS stub resolver for bulk name resolution
+    inputs: [targets]
+    outputs: [targets]
+    command: [massdns, -r, resolvers.txt, -t, A, -o, S, -q, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -s
+        label: Hashmap Size
+        description: Concurrent lookups (hashmap size)
+        type: int
+        default: '10000'
+
+  - id: csprecon
+    name: CSPRecon
+    category: Recon
+    description: Discover new domains by parsing Content-Security-Policy headers
+    inputs: [targets, url]
+    outputs: [targets]
+    command: [csprecon, -l, '{targets_file}', -s]
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  # ── OSINT (code hosting) ───────────────────────────────────
+  - id: github-endpoints
+    name: GitHub Endpoints
+    category: OSINT
+    description: Extract endpoints and URLs referenced across public GitHub code
+    inputs: [domain]
+    outputs: [url]
+    command: [github-endpoints, -d, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  - id: gitlab-subdomains
+    name: GitLab Subdomains
+    category: OSINT
+    description: Discover subdomains referenced across public GitLab projects
+    inputs: [domain]
+    outputs: [targets]
+    command: [gitlab-subdomains, -d, '{domain}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  # ── Network (IP enrichment) ────────────────────────────────
+  - id: nrich
+    name: nrich
+    category: Network
+    description: Enrich a list of IPs with open ports and CVEs from InternetDB
+    inputs: [targets]
+    outputs: [findings]
+    command: [nrich, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args: []
+
+  # ── Takeover ───────────────────────────────────────────────
+  - id: dnsreaper
+    name: DNSReaper
+    category: Takeover
+    description: Scan for subdomain takeover across dozens of signatures
+    inputs: [targets]
+    outputs: [findings]
+    command: [dnsreaper, file, --filename, '{targets_file}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args: []
+
+  # ── Scanner (automated frameworks) ─────────────────────────
+  - id: sn1per
+    name: Sn1per
+    category: Scanner
+    description: Automated reconnaissance and vulnerability scanning framework
+    inputs: [targets]
+    outputs: [findings]
+    command: [sniper, -t, '{targets}', -o, --noreport]
+    output_mode: stdout
+    timeout_seconds: 1800
+    args:
+      - flag: -m
+        label: Mode
+        description: Scan mode (normal, stealth, discover, web, webscan, massvulnscan)
+        type: string
+        default: normal
+      - flag: -w
+        label: Workspace
+        description: Workspace name to store results under
+        type: string
+      - flag: -re
+        label: Recon
+        description: Enable OSINT reconnaissance
+        type: flag
+      - flag: -b
+        label: Bruteforce
+        description: Enable brute-force of discovered services
+        type: flag
+      - flag: -fp
+        label: Full Ports
+        description: Scan all 65535 TCP ports
+        type: flag
+      - flag: --osint
+        label: OSINT
+        description: Enable OSINT collection modules
+        type: flag
+      - flag: --skipportscan
+        label: Skip Port Scan
+        description: Skip the port-scanning phase
+        type: flag
+      - flag: --skipwebscan
+        label: Skip Web Scan
+        description: Skip the web-application scanning phase
+        type: flag
+
+  # ── API (JWT) ──────────────────────────────────────────────
+  - id: jwt_tool
+    name: JWT Tool
+    category: API
+    description: Test, tamper, and attack JSON Web Tokens
+    inputs: [targets, url]
+    outputs: [findings]
+    command: [jwt_tool, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -M
+        label: Mode
+        description: Scanning mode (pb=playbook, at=all-tests, cd=common, er=errors)
+        type: string
+      - flag: -X
+        label: Exploit
+        description: Exploit type (a=alg:none, n=null-sig, b=blank, s=key-confusion, k=key-inject)
+        type: string
+      - flag: -I
+        label: Inject Claims
+        description: Tamper with the token and inject claims
+        type: flag
+      - flag: -pc
+        label: Payload Claim
+        description: Claim name to tamper (used with -pv)
+        type: string
+      - flag: -pv
+        label: Payload Value
+        description: New value for the tampered claim
+        type: string
+      - flag: -S
+        label: Sign Algorithm
+        description: Signing algorithm to re-sign with (e.g. hs256, rs256)
+        type: string
+      - flag: -k
+        label: Key File
+        description: Path to a key file for verification/signing
+        type: string
+      - flag: -rc
+        label: Cookies
+        description: Cookie header to send when probing a live target
+        type: string
+      - flag: -rh
+        label: Header
+        description: Extra request header when probing a live target
+        type: string
+      - flag: -p
+        label: Password
+        description: Password/secret for HMAC brute or signing
+        type: string
+
+  # ── Vulnerability (full web scanners) ──────────────────────
+  - id: wapiti
+    name: Wapiti
+    category: Vulnerability
+    description: Black-box web-application vulnerability scanner
+    inputs: [targets, url]
+    outputs: [findings]
+    command: [wapiti, -u, '{targets}', -f, json, -o, wapiti-report.json]
+    output_mode: file
+    timeout_seconds: 1800
+    args:
+      - flag: -m
+        label: Modules
+        description: Attack modules to run (e.g. xss,sql,exec,file,ssrf)
+        type: string
+      - flag: --scope
+        label: Scope
+        description: Crawl scope (page, folder, domain, url, punk)
+        type: string
+        default: folder
+      - flag: -d
+        label: Depth
+        description: Maximum crawl depth
+        type: int
+        default: '40'
+      - flag: --max-links-per-page
+        label: Max Links/Page
+        description: Cap on links extracted per page
+        type: int
+      - flag: -x
+        label: Exclude
+        description: URL pattern to exclude from the scan
+        type: string
+      - flag: -p
+        label: Proxy
+        description: Send traffic through an HTTP proxy (http://host:port)
+        type: string
+      - flag: -H
+        label: Header
+        description: Add a custom request header
+        type: string
+      - flag: -A
+        label: User-Agent
+        description: Override the User-Agent string
+        type: string
+      - flag: -l
+        label: Level
+        description: Attack level (1=quick, 2=thorough)
+        type: int
+        default: '1'
+      - flag: -t
+        label: Timeout
+        description: Per-request timeout in seconds
+        type: int
+        default: '6'
+      - flag: --flush-session
+        label: Flush Session
+        description: Start a fresh scan, ignoring any saved session
+        type: flag
+
+  - id: zaproxy
+    name: OWASP ZAP
+    category: Vulnerability
+    description: Run an OWASP ZAP baseline passive scan against a target
+    inputs: [targets, url]
+    outputs: [findings]
+    command: [zap-baseline.py, -t, '{targets}', -J, zap-report.json]
+    output_mode: file
+    timeout_seconds: 1800
+    args:
+      - flag: -a
+        label: Include Alpha
+        description: Include alpha-quality passive scan rules
+        type: flag
+      - flag: -j
+        label: AJAX Spider
+        description: Use the AJAX spider in addition to the traditional one
+        type: flag
+      - flag: -m
+        label: Spider Minutes
+        description: Minutes to spider before scanning
+        type: int
+        default: '1'
+      - flag: -T
+        label: Max Time
+        description: Maximum total run time in minutes
+        type: int
+      - flag: -l
+        label: Min Level
+        description: Minimum alert level to report (PASS, IGNORE, INFO, WARN, FAIL)
+        type: string
+        default: WARN
+      - flag: -d
+        label: Debug
+        description: Show debug messages
+        type: flag
+      - flag: -s
+        label: Short
+        description: Short output format
+        type: flag
+
+  # ── Enumeration (content / bypass) ─────────────────────────
+  - id: dirhunt
+    name: Dirhunt
+    category: Enumeration
+    description: Find and analyze web directories by parsing index pages
+    inputs: [targets, url]
+    outputs: [findings]
+    command: [dirhunt, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 600
+    args:
+      - flag: -t
+        label: Threads
+        description: Number of concurrent threads
+        type: int
+        default: '10'
+      - flag: -e
+        label: Exclude Flags
+        description: Result flags to exclude (e.g. 404,not_found)
+        type: string
+      - flag: -i
+        label: Include Flags
+        description: Only show results with these flags (e.g. 200,html)
+        type: string
+      - flag: --max-depth
+        label: Max Depth
+        description: Maximum directory recursion depth
+        type: int
+        default: '3'
+      - flag: -p
+        label: Proxy
+        description: Send traffic through an HTTP proxy (http://host:port)
+        type: string
+      - flag: -a
+        label: User-Agent
+        description: Override the User-Agent string
+        type: string
+      - flag: --timeout
+        label: Timeout
+        description: Per-request timeout in seconds
+        type: int
+        default: '10'
+
+  - id: byp4xx
+    name: byp4xx
+    category: Enumeration
+    description: Bypass 40x responses via verbs, headers, and path mutations
+    inputs: [targets, url]
+    outputs: [findings]
+    command: [byp4xx, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -t
+        label: Threads
+        description: Number of concurrent threads
+        type: int
+        default: '10'
+      - flag: -H
+        label: Header
+        description: Add a custom request header
+        type: string
+      - flag: -x
+        label: Proxy
+        description: Send requests through an HTTP proxy (http://host:port)
+        type: string
+      - flag: --timeout
+        label: Timeout
+        description: Per-request timeout in seconds
+        type: int
+        default: '10'
+
+  # ── Crawling (headless) ────────────────────────────────────
+  - id: crawlergo
+    name: crawlergo
+    category: Crawling
+    description: Headless-Chrome crawler that exercises the DOM and forms
+    inputs: [targets, url]
+    outputs: [url]
+    command: [crawlergo, -c, /usr/bin/chromium, '{targets}']
+    output_mode: stdout
+    timeout_seconds: 900
+    args:
+      - flag: -t
+        label: Max Tabs
+        description: Number of parallel browser tabs
+        type: int
+        default: '8'
+      - flag: --fuzz-path
+        label: Fuzz Path
+        description: Fuzz common paths using a built-in dictionary
+        type: flag
+      - flag: --robots-path
+        label: Robots Path
+        description: Seed the crawl from /robots.txt
+        type: flag
+      - flag: --max-crawled-count
+        label: Max Crawled
+        description: Maximum number of tasks to crawl
+        type: int
+      - flag: -f
+        label: Filter Mode
+        description: URL de-duplication mode (simple, smart, strict)
+        type: string
+        default: smart
+      - flag: -i
+        label: Ignore Keywords
+        description: Comma-separated keywords to skip in URLs (e.g. logout,delete)
+        type: string
+
+  # ── Recon (fingerprint) ────────────────────────────────────
+  - id: webanalyze
+    name: webanalyze
+    category: Recon
+    description: Fingerprint web technologies (Wappalyzer engine) at scale
+    inputs: [targets, url]
+    outputs: [findings]
+    command: [webanalyze, -host, '{targets}', -output, json]
+    output_mode: stdout
+    timeout_seconds: 300
+    args:
+      - flag: -crawl
+        label: Crawl Depth
+        description: Links to crawl per host (0 = only the host itself)
+        type: int
+        default: '0'
+      - flag: -worker
+        label: Workers
+        description: Number of concurrent workers
+        type: int
+        default: '4'
+      - flag: -redirect
+        label: Follow Redirect
+        description: Follow HTTP redirects to the final destination
+        type: flag
+      - flag: -silent
+        label: Silent
+        description: Suppress the progress banner
+        type: flag
+

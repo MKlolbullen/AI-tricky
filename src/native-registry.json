@@ -1,0 +1,7 @@
+{
+  "native_scope": {"name":"Selected scope","inputs":[],"output":"targets","description":"Immutable selected run targets"},
+  "native_tcp": {"name":"TCP inventory","inputs":["targets"],"output":"services","description":"Bounded native TCP connect checks"},
+  "native_http": {"name":"HTTP evidence","inputs":["targets","services","url"],"output":"observations","description":"Scoped GET; no redirect following"},
+  "native_summary": {"name":"Evidence summary","inputs":["services","observations","report"],"output":"report","description":"Observation counts and coverage limits"},
+  "native_cai": {"name":"CAI evidence analyst","inputs":["observations"],"output":"report","description":"Analyze captured evidence; no target tools"}
+}

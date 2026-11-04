@@ -1,0 +1,74 @@
+"""Real CAI Runner -> loopback model fixture -> scoped tool -> local report."""
+import asyncio
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import pytest
+from backend.cai_adapter import assess, installed_version
+
+
+@pytest.mark.skipif(installed_version()!='0.5.10',reason='Optional CAI SDK not installed')
+@pytest.mark.parametrize('tool_name',['fetch_target','probe_ports'])
+def test_real_cai_sdk_uses_loopback_model_and_tool(monkeypatch,tool_name):
+    class ModelHandler(BaseHTTPRequestHandler):
+        calls=[]
+        def do_POST(self):
+            payload=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            self.calls.append(payload)
+            assert self.path == '/v1/chat/completions'
+            if len(self.calls)==1:
+                message={'role':'assistant','content':None,'tool_calls':[{'id':'call_local_test','type':'function','function':{'name':tool_name,'arguments':json.dumps({'url':'http://127.0.0.1:7777/'} if tool_name=='fetch_target' else {'target':'127.0.0.1/32','ports':[8080]})}}]}
+                finish='tool_calls'
+            else:
+                assert any(m['role']=='tool' for m in payload['messages'])
+                message={'role':'assistant','content':'Observed local fixture evidence. Candidate only.'}
+                finish='stop'
+            result={'id':'test','object':'chat.completion','created':1,'model':'local-fixture','choices':[{'index':0,'message':message,'finish_reason':finish}],'usage':{'prompt_tokens':10,'completion_tokens':5,'total_tokens':15}}
+            body=json.dumps(result).encode()
+            self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+        def log_message(self,*args): pass
+    server=ThreadingHTTPServer(('127.0.0.1',0),ModelHandler)
+    threading.Thread(target=server.serve_forever,daemon=True).start()
+    monkeypatch.setenv('CAI_MODEL_BASE_URL',f'http://127.0.0.1:{server.server_port}/v1')
+    # A provider-looking model name must still route only to loopback.
+    monkeypatch.setenv('CAI_MODEL','openai/provider-looking-local-model')
+    calls=[]
+    async def scoped_tool(url):
+        calls.append(url)
+        return {'status':200,'body':'local fixture evidence'}
+    async def network_tool(target,ports):
+        calls.append((target,ports))
+        return {'results':[{'host':'127.0.0.1','port':8080,'state':'open'}]}
+    try:
+        result=asyncio.run(assess(['http://127.0.0.1:7777/'],'Read the target once.',scoped_tool,network_tool=network_tool if tool_name=='probe_ports' else None,timeout=30))
+        assert result['report']=='Observed local fixture evidence. Candidate only.'
+        assert calls==(['http://127.0.0.1:7777/'] if tool_name=='fetch_target' else [('127.0.0.1/32',[8080])])
+        assert len(ModelHandler.calls)==2
+        assert ModelHandler.calls[0]['model']=='openai/provider-looking-local-model'
+    finally:
+        server.shutdown();server.server_close()
+
+
+@pytest.mark.skipif(installed_version()!='0.5.10',reason='Optional CAI SDK not installed')
+def test_real_cai_evidence_only_attaches_no_tools(monkeypatch):
+    class Handler(BaseHTTPRequestHandler):
+        calls=[]
+        def do_POST(self):
+            payload=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            self.calls.append(payload)
+            assert not payload.get('tools')
+            message={'role':'assistant','content':'{"summary":"Fixture evidence only","candidates":[],"coverage_limits":["One response"]}'}
+            result={'id':'fixture','object':'chat.completion','created':1,'model':'local-fixture','choices':[{'index':0,'message':message,'finish_reason':'stop'}]}
+            body=json.dumps(result).encode()
+            self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
+        def log_message(self,*args):pass
+    server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+    threading.Thread(target=server.serve_forever,daemon=True).start()
+    monkeypatch.setenv('CAI_MODEL_BASE_URL',f'http://127.0.0.1:{server.server_port}/v1')
+    async def forbidden(url):raise AssertionError('No target tools should be attached')
+    try:
+        result=asyncio.run(assess([], 'Review captured evidence.', forbidden, evidence_only=True))
+        assert json.loads(result['report'])['candidates']==[]
+        assert len(Handler.calls)==1
+    finally:
+        server.shutdown();server.server_close()

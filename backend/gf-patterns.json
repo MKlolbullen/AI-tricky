@@ -1,0 +1,9 @@
+{
+  "xss":{"flags":"-iE","pattern":"[?&](q|query|search|s|callback|name|message|return|url)="},
+  "sqli":{"flags":"-iE","pattern":"[?&](id|uid|item|product|page|sort|order|filter)="},
+  "ssrf":{"flags":"-iE","pattern":"[?&](url|uri|host|path|dest|destination|redirect|callback|endpoint)="},
+  "lfi":{"flags":"-iE","pattern":"[?&](file|path|page|template|include|document)="},
+  "ssti":{"flags":"-iE","pattern":"[?&](template|view|name|message|content)="},
+  "rce":{"flags":"-iE","pattern":"[?&](cmd|command|exec|execute|ping|host)="},
+  "redirect":{"flags":"-iE","pattern":"[?&](next|return|returnurl|redirect|redirect_uri|continue|dest)="}
+}

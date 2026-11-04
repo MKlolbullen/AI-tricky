@@ -1,0 +1,2938 @@
+{
+  "schema": "offsecs-u-ai.templates/v1",
+  "version": 1,
+  "catalogScope": "Curated independent equivalents and one attributed MIT pipeline adaptation. Not a copy of the complete hosted Trickest catalog.",
+  "tools": [
+    {
+      "id": "subfinder",
+      "name": "subfinder",
+      "category": "Domain discovery",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "domain_list",
+      "targets": [
+        "domain"
+      ],
+      "description": "Collect subdomain candidates from passive sources. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/projectdiscovery/subfinder",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "subfinder"
+    },
+    {
+      "id": "assetfinder",
+      "name": "assetfinder",
+      "category": "Domain discovery",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "domain_list",
+      "targets": [
+        "domain"
+      ],
+      "description": "Collect related domain candidates. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/tomnomnom/assetfinder",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "assetfinder"
+    },
+    {
+      "id": "amass",
+      "name": "amass",
+      "category": "Domain discovery",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "domain_list",
+      "targets": [
+        "domain"
+      ],
+      "description": "Map domain relationships and candidate hosts. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/owasp-amass/amass",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "amass"
+    },
+    {
+      "id": "findomain",
+      "name": "findomain",
+      "category": "Domain discovery",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "domain_list",
+      "targets": [
+        "domain"
+      ],
+      "description": "Collect domain candidates. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/Findomain/Findomain",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "findomain"
+    },
+    {
+      "id": "puredns",
+      "name": "puredns",
+      "category": "Domain discovery",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "domain_list",
+      "targets": [
+        "domain"
+      ],
+      "description": "Validate and resolve candidate domain lists. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/d3mondev/puredns",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "puredns"
+    },
+    {
+      "id": "dnsx",
+      "name": "dnsx",
+      "category": "Domain discovery",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "host_list",
+      "targets": [
+        "domain"
+      ],
+      "description": "Resolve DNS records for host discovery. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/projectdiscovery/dnsx",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "dnsx"
+    },
+    {
+      "id": "shuffledns",
+      "name": "shuffledns",
+      "category": "Domain discovery",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "domain_list",
+      "targets": [
+        "domain"
+      ],
+      "description": "Resolve candidate hostnames using a DNS wordlist. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/projectdiscovery/shuffledns",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "shuffledns"
+    },
+    {
+      "id": "gotator",
+      "name": "gotator",
+      "category": "Domain discovery",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "domain_list",
+      "targets": [
+        "domain"
+      ],
+      "description": "Generate hostname variations from discovered names. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/Josue87/gotator",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "gotator"
+    },
+    {
+      "id": "dsieve",
+      "name": "dsieve",
+      "category": "Domain discovery",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "domain_list",
+      "targets": [
+        "domain"
+      ],
+      "description": "Select and group domain names by level. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/trickest/dsieve",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "dsieve"
+    },
+    {
+      "id": "mksub",
+      "name": "mksub",
+      "category": "Domain discovery",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "domain_list",
+      "targets": [
+        "domain"
+      ],
+      "description": "Prepare domain candidates for enumeration. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/trickest/mksub",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "mksub"
+    },
+    {
+      "id": "httpx",
+      "name": "httpx",
+      "category": "Web discovery",
+      "inputs": [
+        "host_list"
+      ],
+      "output": "url_list",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr"
+      ],
+      "description": "Inspect HTTP services on discovered hosts. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/projectdiscovery/httpx",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "httpx"
+    },
+    {
+      "id": "katana",
+      "name": "katana",
+      "category": "Web discovery",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "url_list",
+      "targets": [
+        "url"
+      ],
+      "description": "Collect URLs through web crawling. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/projectdiscovery/katana",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "katana"
+    },
+    {
+      "id": "hakrawler",
+      "name": "hakrawler",
+      "category": "Web discovery",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "url_list",
+      "targets": [
+        "url"
+      ],
+      "description": "Collect links from web pages. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/hakluke/hakrawler",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "hakrawler"
+    },
+    {
+      "id": "gau",
+      "name": "gau",
+      "category": "Web discovery",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "url_list",
+      "targets": [
+        "domain"
+      ],
+      "description": "Collect historical URLs for entered domains. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/lc/gau",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "gau"
+    },
+    {
+      "id": "waybackurls",
+      "name": "waybackurls",
+      "category": "Web discovery",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "url_list",
+      "targets": [
+        "domain"
+      ],
+      "description": "Collect archived URL candidates. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/tomnomnom/waybackurls",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "waybackurls"
+    },
+    {
+      "id": "feroxbuster",
+      "name": "feroxbuster",
+      "category": "Web discovery",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "url_list",
+      "targets": [
+        "url"
+      ],
+      "description": "Discover web paths using a wordlist. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/epi052/feroxbuster",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "feroxbuster"
+    },
+    {
+      "id": "ffuf",
+      "name": "ffuf",
+      "category": "Web discovery",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "url_list",
+      "targets": [
+        "url"
+      ],
+      "description": "Map web content using configured input lists. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/ffuf/ffuf",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "ffuf"
+    },
+    {
+      "id": "dirsearch",
+      "name": "dirsearch",
+      "category": "Web discovery",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "url_list",
+      "targets": [
+        "url"
+      ],
+      "description": "Discover web directories and paths. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/maurosoria/dirsearch",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "dirsearch"
+    },
+    {
+      "id": "gospider",
+      "name": "gospider",
+      "category": "Web discovery",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "url_list",
+      "targets": [
+        "url"
+      ],
+      "description": "Collect URLs and links from web targets. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/jaeles-project/gospider",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "gospider"
+    },
+    {
+      "id": "unfurl",
+      "name": "unfurl",
+      "category": "Web discovery",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "records",
+      "targets": [
+        "url"
+      ],
+      "description": "Extract URL components into records. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/tomnomnom/unfurl",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "unfurl"
+    },
+    {
+      "id": "naabu",
+      "name": "naabu",
+      "category": "Network",
+      "inputs": [
+        "host_list"
+      ],
+      "output": "service_list",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr"
+      ],
+      "description": "Discover listening TCP ports. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/projectdiscovery/naabu",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "naabu"
+    },
+    {
+      "id": "nmap",
+      "name": "nmap",
+      "category": "Network",
+      "inputs": [
+        "host_list"
+      ],
+      "output": "service_list",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr"
+      ],
+      "description": "Map network services on entered hosts. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/nmap/nmap",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "nmap"
+    },
+    {
+      "id": "rustscan",
+      "name": "rustscan",
+      "category": "Network",
+      "inputs": [
+        "host_list"
+      ],
+      "output": "service_list",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr"
+      ],
+      "description": "Discover listening ports for service inventory. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/RustScan/RustScan",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "rustscan"
+    },
+    {
+      "id": "tlsx",
+      "name": "tlsx",
+      "category": "Network",
+      "inputs": [
+        "host_list"
+      ],
+      "output": "records",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr"
+      ],
+      "description": "Collect TLS connection metadata. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/projectdiscovery/tlsx",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "tlsx"
+    },
+    {
+      "id": "testssl.sh",
+      "name": "testssl.sh",
+      "category": "Network",
+      "inputs": [
+        "host_list"
+      ],
+      "output": "records",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr"
+      ],
+      "description": "Review TLS configuration and certificates. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/testssl/testssl.sh",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "testssl.sh"
+    },
+    {
+      "id": "ssh-audit",
+      "name": "ssh-audit",
+      "category": "Network",
+      "inputs": [
+        "host_list"
+      ],
+      "output": "records",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr"
+      ],
+      "description": "Review SSH protocol and algorithm configuration. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/jtesta/ssh-audit",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "ssh-audit"
+    },
+    {
+      "id": "nuclei",
+      "name": "nuclei",
+      "category": "Assessment",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "findings",
+      "targets": [
+        "url"
+      ],
+      "description": "Assess URLs with a selected template set. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/projectdiscovery/nuclei",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "nuclei"
+    },
+    {
+      "id": "wappalyzer",
+      "name": "wappalyzer",
+      "category": "Assessment",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "records",
+      "targets": [
+        "url"
+      ],
+      "description": "Identify web technologies. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/httparchive/wappalyzer",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "wappalyzer"
+    },
+    {
+      "id": "whatweb",
+      "name": "whatweb",
+      "category": "Assessment",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "records",
+      "targets": [
+        "url"
+      ],
+      "description": "Collect web technology fingerprints. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/urbanadventurer/WhatWeb",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "whatweb"
+    },
+    {
+      "id": "retire",
+      "name": "retire",
+      "category": "Assessment",
+      "inputs": [
+        "file_list"
+      ],
+      "output": "findings",
+      "targets": [
+        "file"
+      ],
+      "description": "Review JavaScript dependency versions. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/RetireJS/retire.js",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "retire"
+    },
+    {
+      "id": "trufflehog",
+      "name": "trufflehog",
+      "category": "Assessment",
+      "inputs": [
+        "file_list"
+      ],
+      "output": "findings",
+      "targets": [
+        "file"
+      ],
+      "description": "Review local repository content for secrets. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/trufflesecurity/trufflehog",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "trufflehog"
+    },
+    {
+      "id": "gitleaks",
+      "name": "gitleaks",
+      "category": "Assessment",
+      "inputs": [
+        "file_list"
+      ],
+      "output": "findings",
+      "targets": [
+        "file"
+      ],
+      "description": "Review local repository content for secrets. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/gitleaks/gitleaks",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "gitleaks"
+    },
+    {
+      "id": "semgrep",
+      "name": "semgrep",
+      "category": "Assessment",
+      "inputs": [
+        "file_list"
+      ],
+      "output": "findings",
+      "targets": [
+        "file"
+      ],
+      "description": "Review source files with static analysis rules. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/semgrep/semgrep",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "semgrep"
+    },
+    {
+      "id": "trivy",
+      "name": "trivy",
+      "category": "Assessment",
+      "inputs": [
+        "file_list"
+      ],
+      "output": "findings",
+      "targets": [
+        "file"
+      ],
+      "description": "Review local artifacts for dependency and configuration issues. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/aquasecurity/trivy",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "trivy"
+    },
+    {
+      "id": "checkov",
+      "name": "checkov",
+      "category": "Assessment",
+      "inputs": [
+        "file_list"
+      ],
+      "output": "findings",
+      "targets": [
+        "file"
+      ],
+      "description": "Review infrastructure-as-code configuration. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/bridgecrewio/checkov",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "checkov"
+    },
+    {
+      "id": "gowitness",
+      "name": "gowitness",
+      "category": "Visual & OSINT",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "file_list",
+      "targets": [
+        "url"
+      ],
+      "description": "Capture website screenshots for visual review. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/sensepost/gowitness",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "gowitness"
+    },
+    {
+      "id": "aquatone",
+      "name": "aquatone",
+      "category": "Visual & OSINT",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "file_list",
+      "targets": [
+        "url"
+      ],
+      "description": "Organize web targets for visual review. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/michenriksen/aquatone",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "aquatone"
+    },
+    {
+      "id": "asnmap",
+      "name": "asnmap",
+      "category": "Visual & OSINT",
+      "inputs": [
+        "host_list"
+      ],
+      "output": "records",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr"
+      ],
+      "description": "Collect network ownership relationships. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/projectdiscovery/asnmap",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "asnmap"
+    },
+    {
+      "id": "mapcidr",
+      "name": "mapcidr",
+      "category": "Visual & OSINT",
+      "inputs": [
+        "host_list"
+      ],
+      "output": "host_list",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr"
+      ],
+      "description": "Transform and normalize network ranges. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/projectdiscovery/mapcidr",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "mapcidr"
+    },
+    {
+      "id": "cloud_enum",
+      "name": "cloud_enum",
+      "category": "Visual & OSINT",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "records",
+      "targets": [
+        "domain"
+      ],
+      "description": "Enumerate candidate cloud resource names. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/initstring/cloud_enum",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "cloud_enum"
+    },
+    {
+      "id": "s3scanner",
+      "name": "s3scanner",
+      "category": "Visual & OSINT",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "records",
+      "targets": [
+        "domain"
+      ],
+      "description": "Review candidate object storage buckets. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/sa7mon/S3Scanner",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "s3scanner"
+    },
+    {
+      "id": "anew",
+      "name": "anew",
+      "category": "Utilities",
+      "inputs": [
+        "records"
+      ],
+      "output": "records",
+      "targets": [
+        "file"
+      ],
+      "description": "Append previously unseen records. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/tomnomnom/anew",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "anew"
+    },
+    {
+      "id": "jq",
+      "name": "jq",
+      "category": "Utilities",
+      "inputs": [
+        "records"
+      ],
+      "output": "records",
+      "targets": [
+        "file"
+      ],
+      "description": "Transform structured JSON records. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/jqlang/jq",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "jq"
+    },
+    {
+      "id": "yq",
+      "name": "yq",
+      "category": "Utilities",
+      "inputs": [
+        "records"
+      ],
+      "output": "records",
+      "targets": [
+        "file"
+      ],
+      "description": "Transform structured YAML records. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/mikefarah/yq",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "yq"
+    },
+    {
+      "id": "uro",
+      "name": "uro",
+      "category": "Utilities",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "url_list",
+      "targets": [
+        "url"
+      ],
+      "description": "Normalize and reduce URL lists. Local adapter required; binaries are not bundled.",
+      "repository": "https://github.com/s0md3v/uro",
+      "availability": "adapter-required",
+      "license": "Upstream license applies; binary not bundled",
+      "provenance": "Independent descriptor; see upstream project",
+      "binary": "uro"
+    },
+    {
+      "id": "targets",
+      "name": "Targets",
+      "category": "Platform",
+      "inputs": [],
+      "output": "host_list",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr",
+        "url",
+        "file"
+      ],
+      "description": "Declarative workflow step. Canvas preview uses fixtures.",
+      "repository": "",
+      "availability": "canvas-only",
+      "license": "Project-authored descriptor",
+      "provenance": "Offsecs-u-AI",
+      "binary": null
+    },
+    {
+      "id": "domains",
+      "name": "Domain list",
+      "category": "Platform",
+      "inputs": [],
+      "output": "domain_list",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr",
+        "url",
+        "file"
+      ],
+      "description": "Declarative workflow step. Canvas preview uses fixtures.",
+      "repository": "",
+      "availability": "canvas-only",
+      "license": "Project-authored descriptor",
+      "provenance": "Offsecs-u-AI",
+      "binary": null
+    },
+    {
+      "id": "urls",
+      "name": "URL list",
+      "category": "Platform",
+      "inputs": [],
+      "output": "url_list",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr",
+        "url",
+        "file"
+      ],
+      "description": "Declarative workflow step. Canvas preview uses fixtures.",
+      "repository": "",
+      "availability": "canvas-only",
+      "license": "Project-authored descriptor",
+      "provenance": "Offsecs-u-AI",
+      "binary": null
+    },
+    {
+      "id": "files",
+      "name": "Local file list",
+      "category": "Platform",
+      "inputs": [],
+      "output": "file_list",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr",
+        "url",
+        "file"
+      ],
+      "description": "Declarative workflow step. Canvas preview uses fixtures.",
+      "repository": "",
+      "availability": "canvas-only",
+      "license": "Project-authored descriptor",
+      "provenance": "Offsecs-u-AI",
+      "binary": null
+    },
+    {
+      "id": "dedupe-domains",
+      "name": "Dedupe domains",
+      "category": "Platform",
+      "inputs": [
+        "domain_list"
+      ],
+      "output": "domain_list",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr",
+        "url",
+        "file"
+      ],
+      "description": "Declarative workflow step. Canvas preview uses fixtures.",
+      "repository": "",
+      "availability": "canvas-only",
+      "license": "Project-authored descriptor",
+      "provenance": "Offsecs-u-AI",
+      "binary": null
+    },
+    {
+      "id": "dedupe-urls",
+      "name": "Dedupe URLs",
+      "category": "Platform",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "url_list",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr",
+        "url",
+        "file"
+      ],
+      "description": "Declarative workflow step. Canvas preview uses fixtures.",
+      "repository": "",
+      "availability": "canvas-only",
+      "license": "Project-authored descriptor",
+      "provenance": "Offsecs-u-AI",
+      "binary": null
+    },
+    {
+      "id": "extract-js",
+      "name": "Select JavaScript files",
+      "category": "Platform",
+      "inputs": [
+        "url_list"
+      ],
+      "output": "file_list",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr",
+        "url",
+        "file"
+      ],
+      "description": "Declarative workflow step. Canvas preview uses fixtures.",
+      "repository": "",
+      "availability": "canvas-only",
+      "license": "Project-authored descriptor",
+      "provenance": "Offsecs-u-AI",
+      "binary": null
+    },
+    {
+      "id": "cai-review",
+      "name": "CAI evidence review",
+      "category": "Platform",
+      "inputs": [
+        "records"
+      ],
+      "output": "findings",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr",
+        "url",
+        "file"
+      ],
+      "description": "Declarative workflow step. Canvas preview uses fixtures.",
+      "repository": "",
+      "availability": "canvas-only",
+      "license": "Project-authored descriptor",
+      "provenance": "Offsecs-u-AI",
+      "binary": null
+    }
+  ],
+  "workflows": [
+    {
+      "id": "inventory",
+      "name": "IP / CIDR service inventory",
+      "category": "Network",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr",
+        "url"
+      ],
+      "description": "Run the built-in bounded DNS, TCP and HTTP inventory engine against selected domains, IPs, CIDRs or URLs.",
+      "availability": "native-preset",
+      "engine": "inventory",
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [],
+      "edges": []
+    },
+    {
+      "id": "cai",
+      "name": "CAI scoped assessment",
+      "category": "AI",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6",
+        "cidr",
+        "url"
+      ],
+      "description": "Open the real CAI assessment runner with application-owned scoped HTTP/TCP tools. Configure the model endpoint first.",
+      "availability": "native-preset",
+      "engine": "cai",
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [],
+      "edges": []
+    },
+    {
+      "id": "subdomains",
+      "name": "Passive subdomain discovery",
+      "category": "Domain discovery",
+      "targets": [
+        "domain"
+      ],
+      "description": "Compose subfinder, dedupe-domains, dnsx into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "domains",
+            "title": "Domain list",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "subfinder",
+            "title": "subfinder",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t3",
+          "type": "tool",
+          "position": {
+            "x": 470,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "dedupe-domains",
+            "title": "Dedupe domains",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t4",
+          "type": "tool",
+          "position": {
+            "x": 705,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "dnsx",
+            "title": "dnsx",
+            "description": "Template \u00b7 preview only",
+            "output": "host_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e1",
+          "source": "t2",
+          "target": "t3",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e2",
+          "source": "t3",
+          "target": "t4",
+          "label": "domain_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "amass-recon",
+      "name": "Amass domain discovery",
+      "category": "Domain discovery",
+      "targets": [
+        "domain"
+      ],
+      "description": "Compose amass, dedupe-domains, dnsx into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "domains",
+            "title": "Domain list",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "amass",
+            "title": "amass",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t3",
+          "type": "tool",
+          "position": {
+            "x": 470,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "dedupe-domains",
+            "title": "Dedupe domains",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t4",
+          "type": "tool",
+          "position": {
+            "x": 705,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "dnsx",
+            "title": "dnsx",
+            "description": "Template \u00b7 preview only",
+            "output": "host_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e1",
+          "source": "t2",
+          "target": "t3",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e2",
+          "source": "t3",
+          "target": "t4",
+          "label": "domain_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "web-recon",
+      "name": "Domain to live web services",
+      "category": "Web discovery",
+      "targets": [
+        "domain"
+      ],
+      "description": "Compose subfinder, dnsx, httpx into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "domains",
+            "title": "Domain list",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "subfinder",
+            "title": "subfinder",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t3",
+          "type": "tool",
+          "position": {
+            "x": 470,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "dnsx",
+            "title": "dnsx",
+            "description": "Template \u00b7 preview only",
+            "output": "host_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t4",
+          "type": "tool",
+          "position": {
+            "x": 705,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "httpx",
+            "title": "httpx",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "host_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e1",
+          "source": "t2",
+          "target": "t3",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e2",
+          "source": "t3",
+          "target": "t4",
+          "label": "host_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "archive",
+      "name": "Historical URL collection",
+      "category": "Web discovery",
+      "targets": [
+        "domain"
+      ],
+      "description": "Compose gau, uro into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "domains",
+            "title": "Domain list",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "gau",
+            "title": "gau",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t3",
+          "type": "tool",
+          "position": {
+            "x": 470,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "uro",
+            "title": "uro",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e1",
+          "source": "t2",
+          "target": "t3",
+          "label": "url_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "wayback",
+      "name": "Archived URL inventory",
+      "category": "Web discovery",
+      "targets": [
+        "domain"
+      ],
+      "description": "Compose waybackurls, dedupe-urls into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "domains",
+            "title": "Domain list",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "waybackurls",
+            "title": "waybackurls",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t3",
+          "type": "tool",
+          "position": {
+            "x": 470,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "dedupe-urls",
+            "title": "Dedupe URLs",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e1",
+          "source": "t2",
+          "target": "t3",
+          "label": "url_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "crawl",
+      "name": "Website crawling",
+      "category": "Web discovery",
+      "targets": [
+        "url"
+      ],
+      "description": "Compose katana, uro into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "urls",
+            "title": "URL list",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "katana",
+            "title": "katana",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t3",
+          "type": "tool",
+          "position": {
+            "x": 470,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "uro",
+            "title": "uro",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "url_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e1",
+          "source": "t2",
+          "target": "t3",
+          "label": "url_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "directory",
+      "name": "Directory discovery",
+      "category": "Web discovery",
+      "targets": [
+        "url"
+      ],
+      "description": "Compose feroxbuster, dedupe-urls into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "urls",
+            "title": "URL list",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "feroxbuster",
+            "title": "feroxbuster",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t3",
+          "type": "tool",
+          "position": {
+            "x": 470,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "dedupe-urls",
+            "title": "Dedupe URLs",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "url_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e1",
+          "source": "t2",
+          "target": "t3",
+          "label": "url_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "content",
+      "name": "Content discovery with ffuf",
+      "category": "Web discovery",
+      "targets": [
+        "url"
+      ],
+      "description": "Compose ffuf, dedupe-urls into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "urls",
+            "title": "URL list",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "ffuf",
+            "title": "ffuf",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t3",
+          "type": "tool",
+          "position": {
+            "x": 470,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "dedupe-urls",
+            "title": "Dedupe URLs",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "url_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e1",
+          "source": "t2",
+          "target": "t3",
+          "label": "url_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "screenshots",
+      "name": "Website screenshots",
+      "category": "Visual & OSINT",
+      "targets": [
+        "url"
+      ],
+      "description": "Compose gowitness into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "urls",
+            "title": "URL list",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "gowitness",
+            "title": "gowitness",
+            "description": "Template \u00b7 preview only",
+            "output": "file_list",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "url_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "ports",
+      "name": "Network service mapping",
+      "category": "Network",
+      "targets": [
+        "ipv4",
+        "ipv6",
+        "cidr",
+        "domain"
+      ],
+      "description": "Compose nmap into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "targets",
+            "title": "Targets",
+            "description": "Template \u00b7 preview only",
+            "output": "host_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "nmap",
+            "title": "nmap",
+            "description": "Template \u00b7 preview only",
+            "output": "service_list",
+            "inputs": [
+              "host_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "host_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "tls",
+      "name": "TLS configuration review",
+      "category": "Network",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6"
+      ],
+      "description": "Compose testssl.sh into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "targets",
+            "title": "Targets",
+            "description": "Template \u00b7 preview only",
+            "output": "host_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "testssl.sh",
+            "title": "testssl.sh",
+            "description": "Template \u00b7 preview only",
+            "output": "records",
+            "inputs": [
+              "host_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "host_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "ssh",
+      "name": "SSH algorithm review",
+      "category": "Network",
+      "targets": [
+        "domain",
+        "ipv4",
+        "ipv6"
+      ],
+      "description": "Compose ssh-audit into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "targets",
+            "title": "Targets",
+            "description": "Template \u00b7 preview only",
+            "output": "host_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "ssh-audit",
+            "title": "ssh-audit",
+            "description": "Template \u00b7 preview only",
+            "output": "records",
+            "inputs": [
+              "host_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "host_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "templates",
+      "name": "Web template assessment",
+      "category": "Assessment",
+      "targets": [
+        "url"
+      ],
+      "description": "Compose nuclei into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "urls",
+            "title": "URL list",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "nuclei",
+            "title": "nuclei",
+            "description": "Template \u00b7 preview only",
+            "output": "findings",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "url_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "fingerprint",
+      "name": "Web technology inventory",
+      "category": "Assessment",
+      "targets": [
+        "url"
+      ],
+      "description": "Compose whatweb into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "urls",
+            "title": "URL list",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "whatweb",
+            "title": "whatweb",
+            "description": "Template \u00b7 preview only",
+            "output": "records",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "url_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "js-audit",
+      "name": "JavaScript dependency review",
+      "category": "Assessment",
+      "targets": [
+        "url"
+      ],
+      "description": "Compose katana, extract-js, retire into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "urls",
+            "title": "URL list",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "katana",
+            "title": "katana",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t3",
+          "type": "tool",
+          "position": {
+            "x": 470,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "extract-js",
+            "title": "Select JavaScript files",
+            "description": "Template \u00b7 preview only",
+            "output": "file_list",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t4",
+          "type": "tool",
+          "position": {
+            "x": 705,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "retire",
+            "title": "retire",
+            "description": "Template \u00b7 preview only",
+            "output": "findings",
+            "inputs": [
+              "file_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "url_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e1",
+          "source": "t2",
+          "target": "t3",
+          "label": "url_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e2",
+          "source": "t3",
+          "target": "t4",
+          "label": "file_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "secrets",
+      "name": "Local repository secrets review",
+      "category": "Assessment",
+      "targets": [
+        "file"
+      ],
+      "description": "Compose gitleaks into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "files",
+            "title": "Local file list",
+            "description": "Template \u00b7 preview only",
+            "output": "file_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "gitleaks",
+            "title": "gitleaks",
+            "description": "Template \u00b7 preview only",
+            "output": "findings",
+            "inputs": [
+              "file_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "file_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "code",
+      "name": "Static source review",
+      "category": "Assessment",
+      "targets": [
+        "file"
+      ],
+      "description": "Compose semgrep into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "files",
+            "title": "Local file list",
+            "description": "Template \u00b7 preview only",
+            "output": "file_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "semgrep",
+            "title": "semgrep",
+            "description": "Template \u00b7 preview only",
+            "output": "findings",
+            "inputs": [
+              "file_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "file_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "iac",
+      "name": "Infrastructure configuration review",
+      "category": "Assessment",
+      "targets": [
+        "file"
+      ],
+      "description": "Compose checkov into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "files",
+            "title": "Local file list",
+            "description": "Template \u00b7 preview only",
+            "output": "file_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "checkov",
+            "title": "checkov",
+            "description": "Template \u00b7 preview only",
+            "output": "findings",
+            "inputs": [
+              "file_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "file_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "cloud",
+      "name": "Cloud resource discovery",
+      "category": "Visual & OSINT",
+      "targets": [
+        "domain"
+      ],
+      "description": "Compose cloud_enum into a reusable local workflow plan.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://trickest.com/library",
+      "provenance": "Independent local equivalent; not a Trickest export",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "domains",
+            "title": "Domain list",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "cloud_enum",
+            "title": "cloud_enum",
+            "description": "Template \u00b7 preview only",
+            "output": "records",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "domain_list",
+          "type": "smoothstep"
+        }
+      ]
+    },
+    {
+      "id": "trickest-recon-adaptation",
+      "name": "Trickest recon example \u00b7 local adaptation",
+      "category": "Domain discovery",
+      "targets": [
+        "domain"
+      ],
+      "description": "Adapted discovery and assessment core. Remote GitHub synchronization, SSH key inputs and Trickest machines are omitted.",
+      "availability": "adapter-required",
+      "engine": null,
+      "source": "https://github.com/trickest/recon-and-vulnerability-scanner-template",
+      "provenance": "Adapted pipeline from MIT-licensed Trickest example; see THIRD_PARTY_NOTICES.md",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "domains",
+            "title": "Domain list",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t2",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "subfinder",
+            "title": "subfinder",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t3",
+          "type": "tool",
+          "position": {
+            "x": 470,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "dsieve",
+            "title": "dsieve",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t4",
+          "type": "tool",
+          "position": {
+            "x": 705,
+            "y": 0
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "gotator",
+            "title": "gotator",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t5",
+          "type": "tool",
+          "position": {
+            "x": 0,
+            "y": 240
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "puredns",
+            "title": "puredns",
+            "description": "Template \u00b7 preview only",
+            "output": "domain_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t6",
+          "type": "tool",
+          "position": {
+            "x": 235,
+            "y": 240
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "dnsx",
+            "title": "dnsx",
+            "description": "Template \u00b7 preview only",
+            "output": "host_list",
+            "inputs": [
+              "domain_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t7",
+          "type": "tool",
+          "position": {
+            "x": 470,
+            "y": 240
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "httpx",
+            "title": "httpx",
+            "description": "Template \u00b7 preview only",
+            "output": "url_list",
+            "inputs": [
+              "host_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        },
+        {
+          "id": "t8",
+          "type": "tool",
+          "position": {
+            "x": 705,
+            "y": 240
+          },
+          "data": {
+            "kind": "template",
+            "templateId": "nuclei",
+            "title": "nuclei",
+            "description": "Template \u00b7 preview only",
+            "output": "findings",
+            "inputs": [
+              "url_list"
+            ],
+            "status": "pending",
+            "result": "Fixture output",
+            "timeout": 120,
+            "retries": 0
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e0",
+          "source": "t1",
+          "target": "t2",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e1",
+          "source": "t2",
+          "target": "t3",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e2",
+          "source": "t3",
+          "target": "t4",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e3",
+          "source": "t4",
+          "target": "t5",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e4",
+          "source": "t5",
+          "target": "t6",
+          "label": "domain_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e5",
+          "source": "t6",
+          "target": "t7",
+          "label": "host_list",
+          "type": "smoothstep"
+        },
+        {
+          "id": "e6",
+          "source": "t7",
+          "target": "t8",
+          "label": "url_list",
+          "type": "smoothstep"
+        }
+      ]
+    }
+  ]
+}

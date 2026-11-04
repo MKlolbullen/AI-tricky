@@ -1,2 +1,230 @@
-# AI-tricky
-Local-first, AI-assisted pentesting and ethical bug bounty workflows with typed DAGs, scoped execution and evidence-backed review.
+<p align="center">
+  <img src="docs/assets/ai-tricky-banner.svg" alt="AI-tricky — Local-first AI-assisted security workflows" width="100%" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml/badge.svg" /></a>
+  <img alt="Version 0.4.0" src="https://img.shields.io/badge/version-0.4.0-02d0e5" />
+  <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&amp;logoColor=white" />
+  <img alt="React and React Flow" src="https://img.shields.io/badge/React-React_Flow-61DAFB?logo=react&amp;logoColor=111827" />
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-b66cf3" /></a>
+</p>
+
+**AI-tricky is a locally hosted workbench for authorized penetration testing, ethical bug bounty work, and evidence-driven security assessment.** Build typed visual workflows, run native checks or installed CLI tools, and use an optional CAI analyst to plan assessments and review captured evidence.
+
+The interface, API, SQLite history and execution jobs run on your machine. Assessment targets can be remote domains, IPs, CIDRs or HTTP(S) URLs. Model inference is configured separately: use a local OpenAI-compatible endpoint or explicitly enable a remote provider.
+
+> **Current stage: functional beta.** The migrated catalog contains 151 tool contracts and 57 workflows. 141 entries have CLI adapters; ten require additional context contracts. External binaries are not bundled, and a migrated adapter is not a claim of compatibility with every upstream release.
+
+[Quick start](#quick-start) · [What works](#what-works) · [AI integration](#ai-integration) · [Execution boundaries](#execution-boundaries) · [Development](#development) · [Roadmap](#roadmap)
+
+## Why AI-tricky?
+
+A useful assessment platform needs more than a canvas that launches commands and a chat box that sounds confident. AI-tricky gives each assessment an explicit graph, an immutable scope snapshot, bounded execution and inspectable evidence.
+
+- **Typed workflow studio:** drag nodes, connect named sockets, configure adapters and inspect node output.
+- **Local execution:** FastAPI, SQLite and private job directories; no Docker, Redis, hosted account or cloud deployment is required.
+- **Broad catalog:** the complete MIT-licensed tool/workflow catalog from [mini-tricky](https://github.com/MKlolbullen/mini-tricky), with provenance and explicit readiness states.
+- **AI-assisted reasoning:** optional CAI workflow planning and structured evidence review, alongside clearly labelled deterministic capability planning.
+- **Durable run history:** saved graph/scope snapshots, per-node states, events, CLI invocation records and evidence artifacts.
+- **Honest evidence handling:** model candidates must cite supplied artifact IDs; suggested follow-up tests are proposals, not automatic dispatch or confirmed vulnerabilities.
+
+## What works
+
+| Surface | Current behavior |
+| --- | --- |
+| Native inventory | Domain resolution, bounded TCP connect checks, and scoped HTTP GET evidence collection |
+| Workflow runner | Executes validated native and catalog DAGs; independent branches share configured run limits |
+| Migrated catalog | 151 tool contracts and 57 typed workflows; searchable by source, category, input type and readiness |
+| CLI adapters | 141 application-owned, shell-free adapters with executable preflight, typed files/stdin and scalar fan-out |
+| Registered inputs | Local files/folders, uploaded text inputs, wordlists, SBOMs, resolver lists and reviewed template/signature folders |
+| Agent desk | Native rules or CAI model planning; deterministic capability planning over the migrated catalog |
+| Evidence review | Optional CAI analysis of captured HTTP evidence with structured candidates, references and coverage limits |
+| Run controls | Pause/resume, cancellation, node deadlines, separate native-operation and CLI-launch budgets |
+| Artifact routing | Named multi-output sockets, same-run file references, merge/dedupe, payload sources and collectors |
+| Canvas preview | Explicit fixture simulation, separate from real execution |
+
+The ten context-restricted entries concern account/cluster scope, callbacks, notifications or arbitrary command strings. Preflight reports these restrictions; installing a binary does not remove them. See the [complete migration matrix](docs/CATALOG-MIGRATION.md).
+
+Burp/burpaderp and Strix adapters, a separate finding lifecycle and broad real-binary version validation remain unfinished.
+
+## Quick start
+
+### Requirements
+
+- **Python 3.12**
+- **Node.js 20.19+ or 22.12+**; Node 22 is used in CI
+- npm
+- The external security binaries required by the CLI workflows you choose
+
+Linux/macOS:
+
+```bash
+git clone https://github.com/MKlolbullen/AI-tricky.git
+cd AI-tricky
+
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+npm ci
+npm run build
+
+./start-local.sh
+```
+
+Open **http://127.0.0.1:8787**. The Python backend intentionally binds to loopback. Run history, registered inputs and evidence are stored under `local-data/` by default, which is excluded from git.
+
+Native inventory works without installing the optional CAI SDK or any CLI scanners.
+
+### First workflow
+
+1. Open **Local workspace → Targets** and enter the authorized domains, IPs, CIDRs or URL path scopes.
+2. Choose **Workflow actions → Load runnable native workflow**, or load a migrated graph from **Templates → mini-tricky**.
+3. Register any required files/folders under **Local workspace → Inputs**, then bind them in the node inspector.
+4. Open **Run workflow**, select targets and limits, and run **Check workflow readiness**.
+5. Enable execution when ready. Catalog workflows also require the explicit CLI execution setting.
+6. Inspect **Runs**, node evidence, invocation logs and artifacts. A successful tool exit remains an observation, not proof of a vulnerability.
+
+Nuclei and Jaeles require a registered, reviewed template/signature folder. DNS adapters that require resolver files use registered resolver inputs. Missing binaries and missing context are reported before a live run starts.
+
+## AI integration
+
+Install the optional, pinned CAI dependency snapshot:
+
+```bash
+.venv/bin/python -m pip install -r requirements-cai.lock
+```
+
+### Local model endpoint
+
+For a tool-capable model served through a local OpenAI-compatible API:
+
+```bash
+export CAI_MODEL_BASE_URL=http://127.0.0.1:11434/v1
+export CAI_MODEL=your-installed-model
+./start-local.sh
+```
+
+### Remote model endpoint
+
+Remote inference is a separate, explicit choice:
+
+```bash
+export CAI_ALLOW_REMOTE_MODEL=1
+export CAI_MODEL_BASE_URL=https://your-provider.example/v1
+export CAI_MODEL=your-model-id
+# Set CAI_MODEL_API_KEY securely in your server-side environment if required.
+./start-local.sh
+```
+
+When enabled, the configured provider receives the goal and selected evidence. Credentials remain server-side. Model names cannot silently route to another provider; the adapter uses the configured endpoint. SDK tracing is disabled.
+
+The **CAI evidence analyst** has no target tools. It reviews at most 12 supplied HTTP records, with selected metadata and up to 1,200 body characters per record. Full captured responses remain in local artifacts. Schema validation and artifact-reference checks establish provenance, not the factual correctness of a model's claim.
+
+The separate CAI assessment preset uses application-owned scoped HTTP/TCP tools. No arbitrary CAI shell or browser tools are attached.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    UI["React workflow studio"] --> API["Local FastAPI"]
+    API --> DAG["Validated DAG runner"]
+    DAG --> N["Native HTTP / TCP"]
+    DAG --> C["CLI adapters"]
+    DAG --> A["CAI evidence review"]
+    N --> DB["SQLite and artifacts"]
+    C --> DB
+    A --> DB
+```
+
+| Path | Purpose |
+| --- | --- |
+| `src/` | React UI, typed canvas, catalog browser, node inspector and agent desk |
+| `backend/app.py` | Local API, run admission, controls and native target tools |
+| `backend/workflows.py` | DAG validation, scheduling, node state and evidence linkage |
+| `backend/cli_runner.py` | Argument construction, process lifecycle and bounded CLI artifacts |
+| `backend/catalog*.py` | Catalog contracts, import, preflight and capability planning |
+| `backend/cai_adapter.py` | Explicit-endpoint CAI SDK integration |
+| `third-party/mini-tricky/` | Pinned MIT source catalog, attribution and wordlists |
+| `scripts/migrate-catalog.py` | Reproducible offline conversion and drift checks |
+| `backend/tests/`, `tests/` | Python integration and JavaScript contract/build tests |
+
+## Execution boundaries
+
+### Scope
+
+| Entered target | Native authorization boundary |
+| --- | --- |
+| `example.com` | Exact host; discovered subdomains need separate active authorization |
+| `192.168.1.10` or an IPv6 address | Exact IP |
+| `10.10.0.0/24` | Addresses inside the CIDR, subject to host limits |
+| `https://app.example.com/api` | HTTPS, exact host/port, `/api` and descendants; no general port enumeration |
+
+Native HTTP requests validate and pin the resolved destination, preserve Host/TLS naming and never automatically follow redirects. Special-use destinations such as metadata/link-local addresses are blocked. Explicit loopback and LAN labs are supported.
+
+### Native tools and external binaries have different accounting
+
+**`max_requests` counts native HTTP/TCP admissions. `max_cli_invocations` counts CLI process launches.** The native request cap does not count or constrain network requests inside a binary.
+
+CLI adapters screen inputs against the selected run scope and use application-owned argument vectors. They do not use the native pinned-address HTTP transport. A binary may resolve destinations, follow links, contact providers or update its own data internally. This is application-level control, **not an OS network sandbox**.
+
+Processes use private working directories, bounded stdout/stderr and file artifacts, node deadlines and executable hash checks. POSIX pause/resume and cleanup operate on process groups. Windows behavior and deliberately daemonized children have not been validated here; see the [migration notes](docs/CATALOG-MIGRATION.md).
+
+The local API checks loopback peers, Host, Origin and JSON writes. It has no multi-user authentication and is intended for a single-user machine. Publishing this source repository does not deploy the running service.
+
+## Development
+
+```bash
+.venv/bin/python -m pip install -r requirements-dev.txt
+npm ci
+
+npm run dev                       # Python API + Vite, local development
+.venv/bin/python -m pytest backend/tests -q
+.venv/bin/python scripts/migrate-catalog.py --check
+npm run build
+npm test
+```
+
+To regenerate the committed catalog after editing the pinned source descriptors:
+
+```bash
+.venv/bin/python scripts/migrate-catalog.py
+```
+
+Runtime catalog reads use generated JSON; PyYAML is only needed for migration/development checks.
+
+### Verification status
+
+The 0.4 validation baseline contains **221 Python tests and 12 JavaScript tests**, a production build, rendering smoke checks and a real offline URO execution through the local HTTP API.
+
+The adapter matrix uses executable fixtures across all 151 entries: 141 exercise execution contracts and ten assert their explicit restrictions. Those fixtures do not establish compatibility with every external tool version. CAI tests use local model fixtures; the three SDK tests skip when the optional SDK is absent. The URO test skips if that binary is unavailable beside the selected Python interpreter.
+
+Interactive browser QA and broader real-binary version validation remain open. See [the validation record](docs/VALIDATION.md).
+
+## Configuration and compatibility
+
+| Variable | Purpose |
+| --- | --- |
+| `AI_TRICKY_DATA_DIR` | Override the local database, input and evidence directory |
+| `CAI_MODEL_BASE_URL` | Explicit local or permitted remote model endpoint |
+| `CAI_MODEL` | Model identifier at that endpoint |
+| `CAI_MODEL_API_KEY` | Optional server-side provider credential |
+| `CAI_ALLOW_REMOTE_MODEL=1` | Permit a remote HTTPS model endpoint |
+
+AI-tricky continues the Offsecs-u-AI prototype. Existing `OFFSECS_U_AI_*` and `RECONFORGE_*` environment names remain supported. Existing database selection and the `offsecs-u-ai.workflow/v1` interchange schema are retained; legacy `reconforge.prototype.workflow/v1` imports remain readable. These identifiers are compatibility details, not separate products.
+
+## Roadmap
+
+- Dedicated account, cluster, callback and notification contracts for restricted catalog entries.
+- Real-binary compatibility coverage across supported tool versions and platforms.
+- Durable finding IDs, review state, deduplication, run diffs and controlled replay.
+- Request-bound follow-up proposal execution and controlled multi-identity testing.
+- Burp/burpaderp and Strix integration through their own policy and evidence contracts.
+- Interactive browser QA and refinement of the desktop-first workflow studio.
+
+## Attribution and license
+
+Created by [Victor Åhgren / MKlolbullen](https://github.com/MKlolbullen), building on the architecture and catalog of [mini-tricky](https://github.com/MKlolbullen/mini-tricky).
+
+Application code is licensed under [MIT](LICENSE). The mini-tricky catalog is pinned to commit `96971000b0058423da52884d9028250ab76b0633`, with its MIT license retained. Other curated examples and descriptors are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). This is not the complete hosted Trickest service or its proprietary wrappers.
+
+External binaries, model providers and SDKs retain their own licenses. The optional CAI 0.5.10 package has mixed MIT/proprietary terms and is not bundled. Use AI-tricky only for systems and data you are authorized to assess.

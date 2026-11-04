@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/MKlolbullen/mini-tricky",
+  "commit": "96971000b0058423da52884d9028250ab76b0633",
+  "license": "MIT",
+  "files": [
+    "tools.yaml",
+    "tools.nextgen.yaml",
+    "templates.yaml",
+    "templates.nextgen.yaml",
+    "capabilities.yaml"
+  ]
+}

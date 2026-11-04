@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml/badge.svg" /></a>
-  <img alt="Version 0.4.0" src="https://img.shields.io/badge/version-0.4.0-02d0e5" />
+  <img alt="Version 0.5.0" src="https://img.shields.io/badge/version-0.5.0-02d0e5" />
   <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&amp;logoColor=white" />
   <img alt="React and React Flow" src="https://img.shields.io/badge/React-React_Flow-61DAFB?logo=react&amp;logoColor=111827" />
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-b66cf3" /></a>
@@ -40,13 +40,14 @@ A useful assessment platform needs more than a canvas that launches commands and
 | Registered inputs | Local files/folders, uploaded text inputs, wordlists, SBOMs, resolver lists and reviewed template/signature folders |
 | Agent desk | Native rules or CAI model planning; deterministic capability planning over the migrated catalog |
 | Evidence review | Optional CAI analysis of captured HTTP evidence with structured candidates, references and coverage limits |
+| Evidence workbench | Structured observations, persistent candidate IDs, operator review history and run comparisons |
 | Run controls | Pause/resume, cancellation, node deadlines, separate native-operation and CLI-launch budgets |
 | Artifact routing | Named multi-output sockets, same-run file references, merge/dedupe, payload sources and collectors |
 | Canvas preview | Explicit fixture simulation, separate from real execution |
 
 The ten context-restricted entries concern account/cluster scope, callbacks, notifications or arbitrary command strings. Preflight reports these restrictions; installing a binary does not remove them. See the [complete migration matrix](docs/CATALOG-MIGRATION.md).
 
-Burp/burpaderp and Strix adapters, a separate finding lifecycle and broad real-binary version validation remain unfinished.
+Burp/burpaderp and Strix adapters and broad real-binary version validation remain unfinished.
 
 ## Quick start
 
@@ -85,6 +86,17 @@ Native inventory works without installing the optional CAI SDK or any CLI scanne
 6. Inspect **Runs**, node evidence, invocation logs and artifacts. A successful tool exit remains an observation, not proof of a vulnerability.
 
 Nuclei and Jaeles require a registered, reviewed template/signature folder. DNS adapters that require resolver files use registered resolver inputs. Missing binaries and missing context are reported before a live run starts.
+
+## Evidence workbench — 0.5
+
+Open **Local workspace → Observations**, **Findings** or **Compare runs** after recording assessments.
+
+- **Observations:** native HTTP/TCP captures and versioned parsers for the default outputs of httpx, dnsx, Naabu, Nmap, Katana and Nuclei. Every normalized record links to the original artifact, run and node. Unsupported formats remain raw evidence.
+- **Findings:** Nuclei matches and structured CAI evidence candidates receive durable IDs, deduplicated occurrences and first/last seen timestamps. Filter by run, title/asset, severity and review status. Severity, confidence and status remain independent.
+- **Review:** record candidate, triaged, verified, rejected or resolved decisions with an explanatory note. Verification requires an attached HTTP/CLI capture. Reviews are revision checked and retained in history; new scanner/model output preserves operator decisions and flags evidence captured after the latest review.
+- **Compare runs:** inspect new, changed, unchanged/recurring and not-observed records, with baseline/current values, evidence links and JSON export. Scope, configuration, partial captures and failed checks remain visible. Not observed does **not** mean resolved.
+
+Existing runs are indexed locally when these views or APIs are read; original artifacts remain intact. New captures record capture timestamps; legacy artifacts explicitly use their run-start timestamp. Comparisons use recorded occurrence snapshots, so a later severity review does not rewrite what an earlier run reported. See [contracts and limits](docs/EVIDENCE-WORKBENCH.md).
 
 ## AI integration
 
@@ -194,7 +206,7 @@ Runtime catalog reads use generated JSON; PyYAML is only needed for migration/de
 
 ### Verification status
 
-The 0.4 validation baseline contains **221 Python tests and 12 JavaScript tests**, a production build, rendering smoke checks and a real offline URO execution through the local HTTP API.
+The historical 0.4 baseline and the current 0.5 checks are documented in [the validation record](docs/VALIDATION.md). The 0.5 suite adds evidence parsing, migration, persistence, concurrency, review and comparison coverage.
 
 The adapter matrix uses executable fixtures across all 151 entries: 141 exercise execution contracts and ten assert their explicit restrictions. Those fixtures do not establish compatibility with every external tool version. CAI tests use local model fixtures; the three SDK tests skip when the optional SDK is absent. The URO test skips if that binary is unavailable beside the selected Python interpreter.
 
@@ -216,7 +228,7 @@ AI-tricky continues the Offsecs-u-AI prototype. Existing `OFFSECS_U_AI_*` and `R
 
 - Dedicated account, cluster, callback and notification contracts for restricted catalog entries.
 - Real-binary compatibility coverage across supported tool versions and platforms.
-- Durable finding IDs, review state, deduplication, run diffs and controlled replay.
+- Controlled replay and recovery of selected failed workflow branches.
 - Request-bound follow-up proposal execution and controlled multi-identity testing.
 - Burp/burpaderp and Strix integration through their own policy and evidence contracts.
 - Interactive browser QA and refinement of the desktop-first workflow studio.

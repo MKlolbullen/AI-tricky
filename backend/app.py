@@ -26,6 +26,7 @@ from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
 from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
+from . import verification
 
 
 class TargetInput(BaseModel):
@@ -341,6 +342,14 @@ def create_app(data_dir=None, assessor=None):
                 'scope': result['scope'], 'proposal_id': proposal_id, 'plan_id': plan_id,
                 'dispatch_allowed': False}
 
+    @app.get('/api/verification/profiles')
+    def verification_profiles():
+        return verification.profiles()
+
+    @app.get('/api/agent/proposals/{plan_id}/{proposal_id}/verification-findings')
+    def verification_findings(plan_id: str, proposal_id: str):
+        return proposal_executions.eligible_findings(plan_id, proposal_id)
+
     @app.post('/api/targets', status_code=201)
     async def add_target(body: TargetInput):
         target=parse_target(body.value)
@@ -423,6 +432,21 @@ def create_app(data_dir=None, assessor=None):
         get_run(rid)
         return store.nodes(rid)
 
+    @app.get('/api/runs/{rid}/verification')
+    def run_verification(rid: str):
+        get_run(rid)
+        try:
+            return verification.read_result(store, rid)
+        except KeyError:
+            raise HTTPException(404, 'This run has no controlled verification profile.')
+
+    @app.get('/api/findings/{fid}/verification')
+    def finding_verification(fid: str):
+        finding(fid)
+        with store.connect() as c:
+            ids = [r['run_id'] for r in c.execute('SELECT run_id FROM verification_runs WHERE finding_id=? ORDER BY created DESC LIMIT 50', (fid,))]
+        return [verification.read_result(store, rid) for rid in ids]
+
     @app.get('/api/artifacts/{aid}')
     async def artifact(aid: str):
         try:
@@ -435,7 +459,10 @@ def create_app(data_dir=None, assessor=None):
         store.status(rid, 'running' if ctl.gate.is_set() else 'paused')
         store.event(rid, 'run.started', {'engine': config['engine'], 'scope': config['targets']})
 
-        async def fetch(url, *, node_id=None):
+        async def fetch(url, *, node_id=None, verification_step=None):
+            request = None
+            if verification_step is not None:
+                request = verification.request_spec(config, node_id, verification_step, url)
             while True:
                 await ctl.gate.wait()
                 async with ctl.lock:
@@ -454,11 +481,15 @@ def create_app(data_dir=None, assessor=None):
                         return {'error': 'Run request budget exhausted.'}
                     ctl.requests += 1
                     number = ctl.requests
-                    store.event(rid, 'http.admitted', {'url': url, 'request_number': number, 'node_id': node_id})
+                    store.event(rid, 'http.admitted', {'url': url, 'request_number': number, 'node_id': node_id,
+                                                    **({'verification_role': request['role']} if request else {})})
                     break
             try:
                 async with ctl.network_slots:
-                    response = await asyncio.to_thread(fetch_scoped, url, target_scope, allowed=lambda:not ctl.cancelled and ctl.gate.is_set() and (node_id is None or node_id in ctl.active_nodes))
+                    response = await asyncio.to_thread(fetch_scoped, url, target_scope, allowed=lambda:not ctl.cancelled and ctl.gate.is_set() and (node_id is None or node_id in ctl.active_nodes),
+                                                       **({'controlled_headers': request['headers']} if request else {}))
+                if request:
+                    response['verification_request'] = request
                 aid = store.artifact(rid, f'http-{number}.json', response, node_id=node_id)
                 store.event(rid, 'http.response', {'url': url, 'status': response['status'], 'artifact_id': aid, 'connected_ip': response['connected_ip'], 'node_id': node_id})
                 # Bound the amount of untrusted target text sent to the local model.

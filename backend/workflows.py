@@ -168,6 +168,9 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze):
                 elif entry.get('state') == 'open' and entry['port'] in (80, 443, 8080, 8443):
                     urls.append(web_url(entry['host'], entry['port']))
             rows = []
+            if config.get('verification') and nid == config['verification']['node_id']:
+                from .verification import execute_pair
+                return await execute_pair(rid, nid, config, urls, fetch, store)
             for url in dict.fromkeys(urls):
                 rows.append({'url': url, **await fetch(url, node_id=nid)})
             return rows
@@ -251,4 +254,6 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze):
     failed = sum(s == 'failed' for s in states.values())
     records = sum(len(v) for v in outputs.values())
     errors = sum('error' in row or row.get('state') in ('blocked', 'budget_exhausted') for rows in outputs.values() for row in rows)
-    return {'report': f'Workflow finished: {sum(s == "completed" for s in states.values())}/{len(order)} nodes completed, {failed} failed. {errors} output records contain errors or blocked operations; inspect node artifacts for coverage. No vulnerabilities are automatically confirmed.', 'engine': 'native-dag', 'evidence_status': 'OBSERVATION', 'failed_nodes': failed, 'records': records, 'node_states': states}
+    verification = next((row['verification'] for rows in outputs.values() for row in rows if 'verification' in row), None)
+    return {'report': f'Workflow finished: {sum(s == "completed" for s in states.values())}/{len(order)} nodes completed, {failed} failed. {errors} output records contain errors or blocked operations; inspect node artifacts for coverage. No vulnerabilities are automatically confirmed.', 'engine': 'native-dag', 'evidence_status': 'OBSERVATION', 'failed_nodes': failed, 'records': records, 'node_states': states,
+            **({'verification': verification} if verification else {})}

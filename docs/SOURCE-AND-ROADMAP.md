@@ -32,7 +32,7 @@ The complete source catalog is now available: 151 contracts and 57 converted wor
 
 - Expand real-binary compatibility tests and add account/callback/notification contracts for restricted entries. Keep arbitrary shell commands outside model tools.
 - Expand the 0.5 findings workbench with additional format-specific parsers and controlled verification/replay.
-- Evaluate proposal quality in controlled labs and add reviewed verification/replay profiles with explicit request and identity bindings.
+- Expand controlled-lab evaluation and add further reviewed verification/replay profiles with explicit request and identity bindings.
 - Add authenticated identity profiles and controlled multi-identity evidence comparison for BOLA/IDOR reviews.
 - Connect Burp/burpaderp and Strix through their integration contracts; these are not connected by this increment.
 - Complete interactive browser QA on a machine that can reach the loopback application. The browser available during this session could not connect to the workspace server.
@@ -50,3 +50,7 @@ Recorded observations now support persisted follow-up proposals through rules or
 ## Proposal execution update — 0.7
 
 Explicit operator approval now binds an exact saved proposal workflow, original entered scope, budgets, binaries and registered input contents. Reviews expire, invalidate on runtime restart or changed bindings, and are consumed atomically with run creation. Retries return the same run. Existing pause/resume/cancel and artifact/accounting paths are reused, with durable approval and source-run provenance. See [execution contracts and limits](PROPOSAL-EXECUTION.md). Proposal quality evaluation and additional verification/replay profiles remain future work.
+
+## Controlled verification update — 0.8
+
+Native HTTP proposals support repeat-GET stability and fixed-Origin CORS response-policy checks. Both requests and their two-operation cost are bound into the execution review, then captured and compared through the existing runner. Paired evidence and versioned results appear in Runs and optionally a supported finding's workbench. Explicit operator review remains separate; incomplete, interrupted or altered evidence is inconclusive. See [profiles and limits](CONTROLLED-VERIFICATION.md). Authenticated identity profiles and broader replay remain future work.

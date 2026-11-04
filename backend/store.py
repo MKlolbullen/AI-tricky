@@ -27,6 +27,8 @@ class Store:
             CREATE TABLE IF NOT EXISTS run_nodes(run_id TEXT NOT NULL, node_id TEXT NOT NULL, status TEXT NOT NULL, updated TEXT NOT NULL, result TEXT, PRIMARY KEY(run_id,node_id));
             CREATE INDEX IF NOT EXISTS events_by_run ON events(run_id,seq);
             CREATE TABLE IF NOT EXISTS inputs(id TEXT PRIMARY KEY,name TEXT NOT NULL,kind TEXT NOT NULL,path TEXT NOT NULL,sha256 TEXT,created TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS verification_runs(run_id TEXT PRIMARY KEY,execution_id TEXT NOT NULL,finding_id TEXT,profile_id TEXT NOT NULL,created TEXT NOT NULL);
+            CREATE INDEX IF NOT EXISTS verification_by_finding ON verification_runs(finding_id,created);
             ''')
             if 'node_id' not in {r['name'] for r in c.execute('PRAGMA table_info(artifacts)')}:
                 c.execute('ALTER TABLE artifacts ADD COLUMN node_id TEXT')

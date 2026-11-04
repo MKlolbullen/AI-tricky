@@ -1,4 +1,13 @@
-# 0.7 verification — 2026-11-04
+# 0.8 verification — 2026-11-04
+
+- Python: **351 passed, 1 skipped** locally, including **30 controlled-verification cases**. Tests cover exact paired requests, native budgets, retained captures, stability differences, CORS origin/wildcard/header-case interpretation, duplicate headers, truncation, redirects/denial, failed baselines, cancellation between requests, profile upgrades, capture tampering, strict finding links and independent operator reviews. The URO smoke test skipped locally.
+- Backend CI: **344 passed, 8 skipped**. URO is installed in CI; the eight optional CAI SDK fixture cases skip in that job and passed in the full local suite through both SDK interpreters.
+- JavaScript: **12 passed**; production build, existing Sites packaging checks and catalog drift check (**151 tools / 57 workflows**) passed.
+- Chromium: **12 passed in GitHub CI**. New cases restore a paired profile with approval unset, inspect both exact requests before dispatch, observe exactly two loopback requests, inspect/export captures and show linked results without changing finding status or revision.
+- Built-UI fixture server/profile endpoint smoke passed; read-only profile inspection sent no fixture target requests. The interactive session browser still cannot access the workspace loopback service, so manual visual QA remains open.
+- Only loopback targets and local executable/model fixtures were used. CORS results are narrow response-header observations; no browser exploit, authenticated data-access proof, external engagement or remote-provider assessment is claimed.
+
+## Historical 0.7 verification — 2026-11-04
 
 - Python: **321 passed, 1 skipped** locally, including **27 proposal-execution cases**. Coverage includes exact snapshots, explicit approval, strict options, scope/evidence/parser/catalog staleness, expiry, revocation, runtime restart, concurrent retries, transactional rollback, binary/template content changes, copied-input rechecks, capacity handling, pause/resume/cancel and a client disconnect during consume/start. The URO smoke test skipped locally.
 - Backend CI: **314 passed, 8 skipped**. URO is installed in CI; the eight optional CAI SDK fixture cases skip in the regular job and passed in the full local suite, including both selected SDK interpreters.

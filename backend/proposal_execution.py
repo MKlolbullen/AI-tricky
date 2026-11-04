@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from typing import Annotated
+from typing import Literal
 
 from .catalog import registered_path
 from .catalog_execution import preflight
@@ -14,6 +15,7 @@ from .proposals import StalePlan, action_graph
 from .scope import ScopeError, network_hosts, parse_target
 from .store import now
 from .workflows import validate_workflow
+from . import verification
 
 SCHEMA = 'ai-tricky.proposal-execution/v1'
 REVIEW_SECONDS = 900
@@ -27,6 +29,8 @@ class ExecutionOptions(BaseModel):
     max_hosts: int = Field(default=64, ge=1, le=256)
     max_seconds: int = Field(default=120, ge=1, le=3600)
     input_refs: dict[str, Annotated[str, StringConstraints(pattern=r'^[A-Za-z0-9_-]{1,64}$')]] = Field(default_factory=dict, max_length=1)
+    verification_profile: Literal['repeat_get', 'cors_origin'] | None = None
+    finding_id: str | None = Field(default=None, min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
 
 
 class SnapshotAction(BaseModel):
@@ -107,6 +111,19 @@ class ProposalExecutions:
         return {'cli_binaries': ready['cli_binaries'], 'input_snapshots': ready['input_snapshots'],
                 'proposal_input_pins': pins}
 
+    def eligible_findings(self, plan_id, proposal_id):
+        _, proposal = self._proposal(plan_id, proposal_id)
+        ids = proposal['observation_ids']
+        with self.store.connect() as c:
+            rows = c.execute('''SELECT DISTINCT f.id,f.title,f.status FROM findings f
+                                JOIN finding_occurrences o ON o.finding_id=f.id
+                                WHERE o.observation_id IN (''' + ','.join('?' for _ in ids) + ')', ids).fetchall()
+        return [dict(row) for row in rows]
+
+    def _check_finding(self, plan_id, proposal_id, finding_id):
+        if finding_id and finding_id not in {f['id'] for f in self.eligible_findings(plan_id, proposal_id)}:
+            raise ExecutionError('Link only a finding supported by this proposal\'s cited observations.', 422)
+
     def prepare(self, plan_id, proposal_id, options):
         plan, proposal = self._proposal(plan_id, proposal_id)
         action = proposal['action']
@@ -118,7 +135,17 @@ class ProposalExecutions:
         if refs:
             next(n for n in graph['nodes'] if n['id'] == 'followup-test')['data']['inputRefs'] = refs
         validate_workflow(graph, live=True)
-        config = {k: v for k, v in options.items() if k != 'input_refs'}
+        config = {k: v for k, v in options.items() if k not in ('input_refs', 'verification_profile', 'finding_id')}
+        profile_id, finding_id = options.get('verification_profile'), options.get('finding_id')
+        if profile_id:
+            if action['adapter_id'] != 'native_http':
+                raise ExecutionError('Controlled verification is available only for a bound native HTTP proposal.', 422)
+            if config['max_requests'] < 2:
+                raise ExecutionError('This verification profile requires a budget of at least two native operations.', 422)
+            self._check_finding(plan_id, proposal_id, finding_id)
+            config['verification'] = verification.contract(profile_id, action['target'], finding_id=finding_id)
+        elif finding_id:
+            raise ExecutionError('Select a controlled verification profile to link a finding.', 422)
         if not action['cost']['cli_invocations'] and config['allow_cli']:
             raise ExecutionError('This native proposal does not require CLI permission.', 422)
         config.update(target_ids=self._scope_ids(plan['scope']), targets=plan['scope'], goal=plan['goal'],
@@ -162,6 +189,12 @@ class ProposalExecutions:
         if plan['context_hash'] != snapshot['context_hash'] or proposal['action'] != snapshot['action']:
             raise ExecutionError('Proposal bindings changed. Prepare a new review.')
         config = snapshot['config']
+        if config.get('verification'):
+            try:
+                verification.check_contract(config['verification'])
+            except ValueError as exc:
+                raise ExecutionError(str(exc)) from None
+            self._check_finding(record['plan_id'], record['proposal_id'], config['verification'].get('finding_id'))
         if self._scope_ids(plan['scope']) != config['target_ids'] or plan['scope'] != config['targets']:
             raise ExecutionError('The entered scope changed. Prepare a new review.')
         bindings = self._bindings(config)
@@ -226,6 +259,10 @@ class ProposalExecutions:
                 provenance['snapshot_hash'] = record['snapshot_hash']
                 config = {**snapshot['config'], 'proposal_execution': provenance}
                 run = self.store.new_run(config, connection=c)
+                if config.get('verification'):
+                    binding = config['verification']
+                    c.execute('INSERT INTO verification_runs VALUES(?,?,?,?,?)',
+                              (run['id'], eid, binding.get('finding_id'), binding['profile_id'], now()))
                 c.execute("UPDATE proposal_executions SET status='dispatched',run_id=?,updated=? WHERE id=?", (run['id'], now(), eid))
                 self._event(c, eid, 'approved', {'snapshot_hash': expected_hash, 'actor': 'local operator'})
                 self._event(c, eid, 'dispatched', {'run_id': run['id']})

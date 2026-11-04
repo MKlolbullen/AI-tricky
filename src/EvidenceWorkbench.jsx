@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {api, downloadJSON} from './api.mjs';
+import {FindingVerifications} from './VerificationResults';
 
 const statuses = ['candidate', 'triaged', 'verified', 'rejected', 'resolved'];
 const severities = ['info', 'low', 'medium', 'high', 'critical'];
@@ -134,7 +135,7 @@ export function FindingsWorkbench({runs}) {
         {!finding.occurrences.some(o => o.active) && <div className="comparison-notice"><p>This finding is retained from historical parser output. Its superseded occurrences are excluded from current run comparisons.</p></div>}
         <dl><dt>Finding ID</dt><dd>{finding.id}</dd><dt>Source</dt><dd>{finding.source}</dd><dt>First seen</dt><dd>{timestamp(finding.first_seen)}</dd><dt>Last seen</dt><dd>{timestamp(finding.last_seen)}</dd></dl>
         <FindingReview key={finding.id + ':' + finding.revision} finding={finding} onSaved={() => setRefresh(v => v + 1)}/>
-        <h4>Evidence occurrences</h4>{finding.occurrences.map(o => <article className="evidence-occurrence" key={o.observation_id}><strong>Run {o.run_id.slice(0, 8)}</strong><small>{timestamp(o.observed_at)} · {o.node_id || 'Assessment'} · Parser {(o.parser_versions || []).join(', ')}{o.active ? '' : ' · superseded'}</small><p>Observed severity: {o.snapshot.severity}</p>
+        <FindingVerifications findingId={finding.id} onCapture={id => setCapture({id})}/><h4>Evidence occurrences</h4>{finding.occurrences.map(o => <article className="evidence-occurrence" key={o.observation_id}><strong>Run {o.run_id.slice(0, 8)}</strong><small>{timestamp(o.observed_at)} · {o.node_id || 'Assessment'} · Parser {(o.parser_versions || []).join(', ')}{o.active ? '' : ' · superseded'}</small><p>Observed severity: {o.snapshot.severity}</p>
           {o.snapshot.next_test && <p>Suggested test: {o.snapshot.next_test}</p>}
           <div className="evidence-actions">{o.evidence_ids.map(id => <button key={id} className="secondary" onClick={() => setCapture({id})}>Capture {id.slice(0, 8)}</button>)}</div></article>)}
         <h4>Review history</h4>{!finding.reviews.length && <p>No operator reviews yet.</p>}{finding.reviews.map(r => <article className="evidence-occurrence" key={r.id}><strong>{r.previous.status} → {r.decision.status}</strong><small>{timestamp(r.created)} · Revision {r.revision}</small><p>Severity {r.previous.severity} → {r.decision.severity} · Confidence {r.previous.confidence} → {r.decision.confidence}</p><p>{r.note}</p>{r.evidence_id && <button className="secondary" onClick={() => setCapture({id: r.evidence_id})}>Review evidence</button>}</article>)}</> : <p>{selectedId ? 'Loading finding…' : 'Select a finding to review its evidence and history.'}</p>}</aside>

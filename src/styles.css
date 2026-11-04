@@ -92,3 +92,14 @@
 .proposal-card .scope-chips{margin:15px 0}.proposal-card .primary{margin-top:18px}
 .proposal-requirements{font-size:12px;line-height:1.7;color:#d3bc95;margin-top:18px;padding:12px;background:#29251e;border-left:3px solid #b68c4f}
 @media(max-width:700px){.proposal-card dl{grid-template-columns:1fr;gap:7px}.proposal-card dd{margin-bottom:12px}}
+
+.proposal-execution { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+.proposal-execution section { padding: 14px 0 0; }
+.execution-options { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin: 12px 0; }
+.execution-options .http-toggle { grid-column: 1 / -1; }
+.execution-snapshot { background: #0c1521; border: 1px solid #264155; border-radius: 9px; padding: 16px; margin-top: 14px; }
+.execution-snapshot h4, .execution-hash { overflow-wrap: anywhere; }
+.execution-hash { display: block; margin: 10px 0; font-size: 11px; color: #90bdc9; }
+.execution-snapshot pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; font-size: 11px; }
+.execution-snapshot details { margin: 12px 0; }
+@media (max-width: 640px) { .execution-options { grid-template-columns: 1fr; } }

@@ -1,4 +1,4 @@
-# Evidence-guided planning — 0.6
+# Evidence-guided planning — 0.7
 
 Open **Local workspace → Agent desk → Evidence follow-ups**. Choose a recorded run, select 1–24 current observations, enter an objective and choose the maximum proposed risk. The default rules planner calls no model. The optional CAI planner uses the configured endpoint with no target tools attached. Its mode and model use are recorded explicitly; model errors never silently fall back to rules.
 
@@ -20,7 +20,7 @@ Plans and proposal IDs persist in SQLite, along with the source scope, selected 
 
 “Current” means the saved evidence and adapter bindings still match. It does not mean the target is unchanged or that the old evidence was collected recently. In-progress/failed source runs retain explicit coverage limits.
 
-Loading a proposed workflow is a canvas operation. Its source contains the exact proposed input, and the original scope is selected in run setup. Existing workflow controls still govern manual execution. Users can edit the canvas after loading; proposal IDs on nodes are provenance labels, not authorization. Request-bound proposal approval/dispatch is a separate next increment and is not implemented here.
+Loading a proposed workflow is a canvas operation. Its source contains the exact proposed input, and the original scope is selected in run setup. Existing workflow controls still govern manual execution. Users can edit the canvas after loading; proposal IDs on nodes are provenance labels, not authorization. A separate **Review execution** flow now binds the canonical proposal, scope, budgets, inputs and executable pins before explicit single-use operator approval. See [execution contracts and limits](PROPOSAL-EXECUTION.md).
 
 ## Model data and limits
 
@@ -39,4 +39,4 @@ All endpoints retain the existing local API boundary checks.
 | GET | `/api/agent/proposals/{id}` | Returns the recorded plan and current binding status |
 | GET | `/api/agent/proposals/{plan}/{proposal}/workflow` | Rechecks bindings and returns a server-built workflow for canvas loading |
 
-No proposal execution endpoint exists. Planning and workflow loading send no target requests, change no finding review state and consume no native/CLI run budget. Model inference is separate and uses the existing bounded CAI adapter.
+Planning, workflow loading and execution-review preparation send no target requests, change no finding review state and consume no native/CLI run budget. Dispatch requires a separate explicit operator approval of a saved execution snapshot. Model inference is separate and uses the existing bounded CAI adapter.

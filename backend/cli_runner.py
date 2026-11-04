@@ -62,6 +62,38 @@ def snapshot_folder(source,destination=None):
     return destination or source
 
 
+def input_fingerprint(source, kind):
+    """Bound registered/copy input contents, including relative folder paths."""
+    source = Path(source)
+    if source.is_symlink():raise ScopeError('Approved inputs cannot contain symlinks.')
+    if kind == 'folder' and not source.is_dir() or kind == 'file' and not source.is_file():
+        raise ScopeError('Approved input type changed before execution.')
+    paths = [source]
+    if kind == 'folder':
+        paths = []
+        for path in source.rglob('*'):
+            paths.append(path)
+            if len(paths) > 20000:raise ScopeError('Approved folder exceeds 20,000 entries.')
+        paths.sort()
+    if kind == 'folder':snapshot_folder(source)
+    total = 0; count = 0; manifest = []
+    for path in paths:
+        if path.is_symlink():raise ScopeError('Approved inputs cannot contain symlinks.')
+        relative = path.relative_to(source).as_posix() if kind == 'folder' else '.'
+        if path.is_dir():
+            manifest.append([relative, 'directory']);continue
+        if not path.is_file():raise ScopeError('Approved input is not a regular file.')
+        count += 1; fingerprint = hashlib.sha256()
+        if count > 10000:raise ScopeError('Approved input exceeds 10,000 files.')
+        with path.open('rb') as handle:
+            for chunk in iter(lambda:handle.read(65536), b''):
+                total += len(chunk)
+                if total > (20_000_000 if kind == 'folder' else 10_000_000):raise ScopeError('Approved input exceeds its content limit.')
+                fingerprint.update(chunk)
+        manifest.append([relative, 'file', fingerprint.hexdigest()])
+    return hashlib.sha256(json.dumps(manifest, separators=(',', ':')).encode()).hexdigest()
+
+
 def prepare_context(streams,data,work,store,config,tool,run_id=None):
     context={'artifact_dir':str(work),'artifact_file':str(work/'output.txt')}
     streams={k:list(dict.fromkeys(v)) for k,v in streams.items()}
@@ -90,6 +122,11 @@ def prepare_context(streams,data,work,store,config,tool,run_id=None):
             if typ in ('folder','templates'):path=snapshot_folder(source,work/('source' if typ=='folder' else 'templates'))
             else:
                 path=work/(typ+'.input');shutil.copyfile(source,path)
+            if config.get('proposal_execution'):
+                pin=config.get('proposal_input_pins',{}).get(values[0][6:])
+                kind='folder' if typ in ('folder','templates') else 'file'
+                if not pin or pin['kind']!=kind or input_fingerprint(path,kind)!=pin['sha256']:
+                    raise ScopeError('Approved input contents changed before execution. Prepare a new proposal review.')
             context[typ if typ in ('folder','templates') else 'sbom_file' if typ=='sbom' else 'wordlist_file' if typ=='wordlist' else typ if typ.endswith('_file') else typ+'_file']=str(path)
             streams[typ]=[str(path)]
         elif typ in ('wordlist','sbom','targets','url','domain','query','paths_file','resolvers'):

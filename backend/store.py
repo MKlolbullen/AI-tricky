@@ -53,11 +53,16 @@ class Store:
             c.execute('INSERT OR IGNORE INTO targets VALUES(?,?,?)', (str(uuid.uuid4()), url, now()))
         return next(t for t in self.targets() if t['url'] == url)
 
-    def new_run(self, config):
+    def new_run(self, config, *, connection=None):
         rid = str(uuid.uuid4())
-        with self.connect() as c:
-            c.execute('INSERT INTO runs VALUES(?,?,?,?,?,?)', (rid, 'queued', now(), now(), json.dumps(config), None))
-        return self.run(rid)
+        created = now()
+        values = (rid, 'queued', created, created, json.dumps(config), None)
+        if connection is not None:
+            connection.execute('INSERT INTO runs VALUES(?,?,?,?,?,?)', values)
+        else:
+            with self.connect() as c:
+                c.execute('INSERT INTO runs VALUES(?,?,?,?,?,?)', values)
+        return {'id': rid, 'status': 'queued', 'created': created, 'updated': created, 'config': config, 'result': None}
 
     def run(self, rid):
         with self.connect() as c:

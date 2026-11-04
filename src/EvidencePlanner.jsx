@@ -1,8 +1,9 @@
 import React, {useEffect, useState} from 'react';
 import {api, downloadJSON} from './api.mjs';
 import {EvidenceViewer} from './EvidenceWorkbench';
+import ProposalExecution from './ProposalExecution';
 
-export default function EvidencePlanner({runtime, runs, onPlan}) {
+export default function EvidencePlanner({runtime, runs, onPlan, onRun}) {
   const [runId, setRunId] = useState(''), [goal, setGoal] = useState('Identify the next useful evidence collection step and explain what it would establish.');
   const [page, setPage] = useState({items: [], total: 0}), [offset, setOffset] = useState(0), [q, setQ] = useState('');
   const [selected, setSelected] = useState({}), [useModel, setUseModel] = useState(false), [maxRisk, setMaxRisk] = useState('low');
@@ -70,7 +71,7 @@ export default function EvidencePlanner({runtime, runs, onPlan}) {
       <label className="field-label">Follow-up objective<textarea disabled={busy} required maxLength={4000} rows={3} value={goal} onChange={e => setGoal(e.target.value)}/></label>
       <label className="http-toggle"><input type="checkbox" checked={useModel} disabled={busy || !runtime?.sdk_ready} onChange={e => setUseModel(e.target.checked)}/>
         <span><strong>Use the configured CAI model for follow-ups</strong><small>{runtime?.remote_model_enabled ? 'Selected URLs and normalized metadata go to the configured remote provider.' : 'Uses the configured local model endpoint.'} Raw bodies and registered files are excluded. Off uses explicitly labelled rules.</small></span></label>
-      <p className="proposal-boundary">Planning sends no target traffic. Loading a proposal opens the canvas; execution still needs scope selection, bindings and preflight.</p>
+      <p className="proposal-boundary">Planning sends no target traffic. Load a proposal on the canvas, or review its exact execution snapshot and approve it once.</p>
       <button className="primary" disabled={busy || !runId || !count || !goal.trim() || useModel && !runtime?.sdk_ready}>{busy ? 'Preparing follow-ups…' : 'Propose follow-up tests'}</button>
     </form>
     <div className="evidence-filters"><label className="field-label">Recorded evidence-guided plans<select disabled={busy} value={plan?.id || ''} onChange={e => restore(e.target.value)}>
@@ -93,6 +94,7 @@ export default function EvidencePlanner({runtime, runs, onPlan}) {
         <div className="evidence-actions">{proposal.artifact_ids.map(id => <button className="secondary" key={id} onClick={() => setCapture({id})}>Supporting capture {id.slice(0, 8)}</button>)}</div>
         {!!proposal.requirements.length && <div className="proposal-requirements"><strong>Before execution</strong><ul>{proposal.requirements.map(reason => <li key={reason}>{reason}</li>)}</ul></div>}
         <button className="primary" disabled={busy || !plan.current} onClick={() => load(proposal)}>Load proposed workflow</button>
+        <ProposalExecution plan={plan} proposal={proposal} onRun={onRun}/>
       </article>)}
       <details className="comparison-row"><summary>Planning coverage and limits</summary><ul>{plan.coverage_limits.map((limit, i) => <li key={i}>{limit}</li>)}</ul></details>
     </section>}

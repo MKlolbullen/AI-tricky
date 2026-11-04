@@ -209,6 +209,8 @@ class EvidenceIndex:
                 artifact = c.execute('SELECT id,name FROM artifacts WHERE id=?', (aid,)).fetchone()
                 if artifact and artifact['name'].startswith(('http-', 'cli-')):
                     verification_evidence.append(dict(artifact))
+        from .verification import attached_evidence
+        verification_evidence += attached_evidence(self.store, fid)
         return {**dict(row), 'observed_after_review': bool(reviews and row['last_seen'] > reviews[-1]['created']),
                 'verification_evidence': verification_evidence,
                 'occurrences': [{**dict(r), 'evidence_ids': json.loads(r['evidence_ids']),
@@ -224,6 +226,7 @@ class EvidenceIndex:
             raise ValueError('A review note is required.')
         finding = self.finding(fid)
         allowed = {aid for o in finding['occurrences'] for aid in o['evidence_ids']}
+        allowed.update(a['id'] for a in finding['verification_evidence'])
         if evidence_id and evidence_id not in allowed:
             raise ValueError('Select evidence attached to this finding.')
         if status == 'verified':

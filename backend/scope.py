@@ -155,7 +155,12 @@ class PinnedHTTPS(http.client.HTTPSConnection):
             raise
 
 
-def fetch_scoped(url: str, targets: list[Target], max_bytes: int = 131072, allowed=None) -> dict:
+def fetch_scoped(url: str, targets: list[Target], max_bytes: int = 131072, allowed=None, *, controlled_headers=None) -> dict:
+    from .verification import TEST_ORIGIN, COMPARE_HEADERS
+    import hashlib
+    # Deliberately narrow: model/client input cannot become an arbitrary header surface.
+    if controlled_headers is not None and controlled_headers not in ({}, {'Origin': TEST_ORIGIN}):
+        raise ScopeError('Unsupported controlled HTTP headers.')
     target = authorize(url,targets)
     address = resolve_target(target.host,target.port)
     if allowed is not None and not allowed():
@@ -167,10 +172,15 @@ def fetch_scoped(url: str, targets: list[Target], max_bytes: int = 131072, allow
     if target.port != (443 if target.scheme=='https' else 80):
         host += f':{target.port}'
     try:
-        conn.request('GET',path,headers={'Host':host,'User-Agent':'AI-tricky/0.4.0','Accept-Encoding':'identity'})
+        conn.request('GET',path,headers={'Host':host,'User-Agent':'AI-tricky/0.8.0','Accept-Encoding':'identity', **(controlled_headers or {})})
         response = conn.getresponse()
         body = response.read(max_bytes+1)
-        headers = {k.lower():v for k,v in response.getheaders() if k.lower() in ('content-type','server','location','content-security-policy','strict-transport-security','x-content-type-options')}
-        return {'url':url,'status':response.status,'headers':headers,'body':body[:max_bytes].decode('utf-8',errors='replace'),'truncated':len(body)>max_bytes,'connected_ip':address}
+        selected = [(k.lower(), v.strip(' \t')) for k,v in response.getheaders() if k.lower() in (*COMPARE_HEADERS, 'location')]
+        headers = {k:v[:2000] for k,v in selected}
+        return {'url':url,'status':response.status,'headers':headers,'body':body[:max_bytes].decode('utf-8',errors='replace'),
+                'body_sha256':hashlib.sha256(body[:max_bytes]).hexdigest(),'body_bytes':len(body[:max_bytes]),
+                'ambiguous_headers':sorted({k for k,v in selected if sum(name==k for name,value in selected)>1}),
+                'truncated_headers':sorted({k for k,v in selected if len(v)>2000}),
+                'truncated':len(body)>max_bytes,'connected_ip':address}
     finally:
         conn.close()

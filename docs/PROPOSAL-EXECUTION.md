@@ -1,4 +1,4 @@
-# Proposal execution — 0.7
+# Proposal execution — 0.8
 
 In **Agent desk → Evidence follow-ups**, open **Review execution** on a proposed test. Choose budgets and any required reviewed templates folder, then prepare a saved execution review. Preparation performs local validation and preflight; it sends no target requests and starts no binary. The snapshot is not an execution grant until the local operator explicitly approves and dispatches it.
 
@@ -7,6 +7,8 @@ In **Agent desk → Evidence follow-ups**, open **Review execution** on a propos
 The server rebuilds the workflow from the saved, current proposal. Clients may supply only native-operation, CLI-launch, host and deadline limits, explicit CLI enablement, and the reviewed templates folder needed by the Nuclei profile. Clients cannot change the target, original scope, adapter, flags, commands, graph, credentials, evidence references or goal through this endpoint. Original scope entries must still be registered entered targets. These 13 profiles declare no provider credential variables, so proposal executions pass no provider credentials to CLI tools.
 
 The snapshot binds plan/proposal IDs, source run, evidence context hash, action, exact source input, registered target IDs, scope, typed graph, limits, binary paths and SHA-256 hashes, registered input metadata and content fingerprints. Folder fingerprints include relative paths and file contents, with the existing 20 MB / 10,000-file bound and a 20,000-entry cap. File inputs are bounded to 10 MB. A separate runtime identifier prevents a saved review from becoming valid in a new API process.
+
+For native HTTP proposals, an optional server-owned verification profile binds two exact GET requests and an optional supported finding link. Its method/header contract and profile version are checked before dispatch, and its two admissions use the native budget. Profile selection cannot introduce arbitrary request fields. See [controlled verification](CONTROLLED-VERIFICATION.md).
 
 Before dispatch the server rechecks evidence, parser/profile/catalog bindings, registered scope, executable pins, input contents and preflight. Copied CLI inputs are fingerprinted again before process launch, covering changes after dispatch validation. The existing runner also verifies the executable before launch. These checks do not isolate a third-party executable from the operating system or constrain its internal network traffic.
 

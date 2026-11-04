@@ -24,6 +24,9 @@ def seed(store, fixture_url):
         c.execute('INSERT INTO runs VALUES(?,?,?,?,?,?)', ('qa-execution', 'completed', now(), now(), json.dumps(fixture_config), None))
     store.artifact('qa-execution', 'http-1.json', {'url': fixture_url + '/approved', 'status': 200,
                                                'body': 'Recorded loopback fixture', 'headers': {}})
+    store.artifact('qa-execution', 'cli-1-nuclei.json', {'tool_id': 'nuclei', 'exit_code': 0,
+        'stdout': json.dumps({'template-id': 'qa-verification-candidate', 'matched-at': fixture_url + '/approved',
+                              'info': {'name': 'Verification fixture candidate', 'severity': 'medium'}})})
     config = {'targets': ['https://example.invalid/'], 'engine': 'inventory', 'allow_http': True,
               'goal': 'Automated browser QA fixtures; no target requests', 'max_requests': 256,
               'max_cli_invocations': 64, 'ports': [443], 'max_hosts': 1}
@@ -51,8 +54,15 @@ def seed(store, fixture_url):
 
 if __name__ == '__main__':
     class FixtureHandler(BaseHTTPRequestHandler):
+        calls = []
         def do_GET(self):
-            self.send_response(200); self.send_header('Content-Type', 'text/plain'); self.end_headers()
+            self.calls.append({'path': self.path, 'origin': self.headers.get('Origin'),
+                               'cookie': bool(self.headers.get('Cookie')), 'authorization': bool(self.headers.get('Authorization'))})
+            self.send_response(200); self.send_header('Content-Type', 'text/plain')
+            if self.headers.get('Origin'):
+                self.send_header('Access-Control-Allow-Origin', self.headers['Origin'])
+                self.send_header('Access-Control-Allow-Credentials', 'true')
+            self.end_headers()
             self.wfile.write(b'Approved loopback browser execution fixture')
         def log_message(self, *args):
             pass
@@ -70,8 +80,10 @@ if __name__ == '__main__':
                 for table in tables:
                     c.execute('DELETE FROM "' + table + '"')
             seed(store, fixture_url)
+            FixtureHandler.calls.clear()
             return {'reset': True}
         app.router.routes.insert(0, APIRoute('/api/_qa/reset', reset_fixture, methods=['POST']))
+        app.router.routes.insert(0, APIRoute('/api/_qa/target-calls', lambda: FixtureHandler.calls, methods=['GET']))
         try:
             uvicorn.run(app, host='127.0.0.1', port=8787, access_log=False)
         finally:

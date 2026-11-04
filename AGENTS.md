@@ -34,3 +34,6 @@ The next authorized increment is evidence-guided proposals. Model planning must 
 
 ## Proposal execution — 2026-11-04
 The user authorized the next increment: explicit execution approval bound to a canonical proposal, original entered scope, budgets, executable hashes and input contents. Prepare reviews without target traffic. Persist approvals and run provenance, consume each review once, reject changed/stale/expired bindings and invalidate pending reviews at runtime restart. Reuse the existing run controls and accounting. Manual canvas runs remain independent and must not claim recorded proposal approval.
+
+## Controlled verification — 2026-11-04
+The next authorized increment compares a baseline and reviewed variant under the same proposal approval and scope. Use versioned server-owned GET profiles, exact request bindings, bounded captures and explicit native cost. Preserve both captures, partial/interrupted results and comparison provenance. Profile observations must not automatically change finding review state; only supported findings may receive linked verification evidence. Keep generic replay and authenticated identity profiles separate.

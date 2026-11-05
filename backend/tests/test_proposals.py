@@ -216,6 +216,31 @@ def test_api_rejects_invalid_inputs_and_model_output_without_saving(tmp_path):
         assert client.get('/api/agent/proposals?run_id=missing').status_code == 404
 
 
+def test_evidence_model_planning_provider_gating(tmp_path, monkeypatch):
+    # Evidence follow-ups route model inference through the same provider gate as
+    # Agent desk: a remote provider resolves only with a stored key AND remote
+    # model use enabled, and the refusal fires before any SDK/model work.
+    _, _, rid, oid, _, _ = setup(tmp_path)
+    body = {'run_id': rid, 'observation_ids': [oid], 'goal': 'Review', 'use_model': True}
+    monkeypatch.delenv('CAI_ALLOW_REMOTE_MODEL', raising=False)
+    monkeypatch.delenv('OPENAI_API_KEY', raising=False)
+    with TestClient(create_app(tmp_path)) as client:
+        # Remote provider with no stored key is refused.
+        assert client.post('/api/agent/proposals', json={**body, 'provider': 'openai'}).status_code == 409
+        client.post('/api/credentials', json={'updates': {'OPENAI_API_KEY': 'sk-test'}})
+        # Key present but remote model use disabled is still refused.
+        r = client.post('/api/agent/proposals', json={**body, 'provider': 'openai'})
+        assert r.status_code == 409 and 'remote model use' in r.json()['detail']
+        # Unknown provider is rejected.
+        assert client.post('/api/agent/proposals', json={**body, 'provider': 'nope'}).status_code == 422
+        # Deterministic planning never needs a provider and still saves.
+        assert client.post('/api/agent/proposals', json={**body, 'use_model': False}).status_code == 201
+    monkeypatch.setenv('CAI_ALLOW_REMOTE_MODEL', '1')
+    with TestClient(create_app(tmp_path)) as client:
+        # Remote enabled + key present but no model name is rejected before any call.
+        assert client.post('/api/agent/proposals', json={**body, 'provider': 'openai'}).status_code == 422
+
+
 def test_saved_workflow_loading_sends_no_target_traffic_and_blocks_stale_plans(tmp_path, target_server):
     base, handler = target_server
     with TestClient(create_app(tmp_path)) as client:

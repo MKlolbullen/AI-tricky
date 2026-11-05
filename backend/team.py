@@ -178,7 +178,7 @@ def synthesis_prompt(goal, members):
 
 async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=None,
                    member_max_turns=8, timeout=180, concurrency=3, synthesize=None,
-                   adaptive=False, evidence=None, asset_entities=None):
+                   adaptive=False, evidence=None, asset_entities=None, max_workers=None):
     """Dispatch one scoped run across the selected roles and aggregate reports.
 
     `assess` is the adapter's assess callable; `fetch`/`probe` are the run's own
@@ -200,7 +200,12 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
         selected, selection_reasons = select_roles(evidence, asset_entities)
     else:
         selected = list(DEFAULT_ROLES)
-    semaphore = asyncio.Semaphore(max(1, min(int(concurrency), MAX_ROLES)))
+    # Dedicated ceiling on how many members assess concurrently — each member's
+    # assess() call is its own isolated interpreter when a worker runtime is
+    # configured, so this bounds concurrent SDK worker processes independently of
+    # the run's HTTP parallelism. Never exceeds the number of selected roles.
+    worker_ceiling = max(1, min(int(max_workers or concurrency), len(selected)))
+    semaphore = asyncio.Semaphore(worker_ceiling)
 
     async def member(key):
         spec = ROLES[key]
@@ -213,7 +218,8 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
                                       max_turns=member_max_turns, timeout=timeout)
                 return {'role': key, 'name': spec['name'], 'status': 'ok',
                         'report': str(result.get('report', '')),
-                        'model': result.get('model'), 'engine': result.get('engine')}
+                        'model': result.get('model'), 'engine': result.get('engine'),
+                        'sdk_execution': result.get('sdk_execution', 'in-process')}
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001 - surface as a coverage gap, no secrets
@@ -240,6 +246,9 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
     elif synthesize is not None:
         coverage_limits = coverage_limits + ['Lead synthesis skipped: no role completed to synthesise.']
     adapted = selection_reasons is not None
+    isolated = sum(m.get('sdk_execution') == 'isolated-interpreter' for m in completed)
+    isolation = {'worker_ceiling': worker_ceiling, 'isolated': isolated,
+                 'in_process': len(completed) - isolated}
     summary = (f'Deterministic team leader {"adaptively selected" if adapted else "dispatched"} '
                f'{len(selected)} of {MAX_ROLES} analyst role(s); '
                f'{len(completed)} completed, {len(members) - len(completed)} did not. '
@@ -254,6 +263,7 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
         'roles_requested': selected,
         'role_selection': selection_reasons,
         'members': members,
+        'isolation': isolation,
         'coverage_limits': coverage_limits,
         'synthesis': synthesis,
     }

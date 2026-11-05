@@ -88,6 +88,54 @@ def test_run_team_adaptive_narrows_roles_and_records_skips():
     assert [m['role'] for m in explicit['members']] == ['logic'] and explicit['adaptive'] is False
 
 
+# -- per-member worker isolation ----------------------------------------------
+def test_run_team_bounds_concurrent_workers_and_reports_execution_mode():
+    import threading
+    live, peak, lock = 0, 0, threading.Lock()
+
+    async def fetch(url):
+        return {'status': 200}
+
+    async def probe(target, ports):
+        return {'results': []}
+
+    async def assess(targets, goal, f, **kw):
+        nonlocal live, peak
+        with lock:
+            live += 1
+            peak = max(peak, live)
+        await asyncio.sleep(0.02)  # hold the slot so concurrency is observable
+        with lock:
+            live -= 1
+        # Mimic the isolated-interpreter worker's execution-mode report.
+        return {'report': 'ok', 'evidence_status': 'CANDIDATE', 'sdk_execution': 'isolated-interpreter'}
+
+    result = asyncio.run(run_team(['http://x/'], 'Assess', fetch, probe, assess, max_workers=2))
+    # Never more than the worker ceiling ran at once, across all five roles.
+    assert peak <= 2 and result['isolation']['worker_ceiling'] == 2
+    # Each member reports its execution mode; the aggregate counts the isolated ones.
+    assert all(m['sdk_execution'] == 'isolated-interpreter' for m in result['members'])
+    assert result['isolation']['isolated'] == 5 and result['isolation']['in_process'] == 0
+    # The ceiling never exceeds the number of roles.
+    capped = asyncio.run(run_team(['http://x/'], 'g', fetch, probe, assess, roles=['surface'], max_workers=8))
+    assert capped['isolation']['worker_ceiling'] == 1
+
+
+def test_run_team_defaults_execution_mode_to_in_process():
+    async def fetch(url):
+        return {'status': 200}
+
+    async def probe(target, ports):
+        return {'results': []}
+
+    async def assess(targets, goal, f, **kw):
+        return {'report': 'ok', 'evidence_status': 'CANDIDATE'}  # no sdk_execution -> in-process
+
+    result = asyncio.run(run_team(['http://x/'], 'g', fetch, probe, assess, roles=['surface', 'transport']))
+    assert all(m['sdk_execution'] == 'in-process' for m in result['members'])
+    assert result['isolation']['isolated'] == 0 and result['isolation']['in_process'] == 2
+
+
 # -- leader fan-out over a shared fetch ---------------------------------------
 def test_run_team_shares_tools_and_aggregates():
     fetch_calls, seen = [], []

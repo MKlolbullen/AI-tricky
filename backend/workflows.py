@@ -201,15 +201,20 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
             # auto-confirmed.
             from .intelligence import validate_analysis
             from . import team as team_leader
+            # Bound concurrent members: each review runs its own isolated interpreter
+            # when a worker runtime is configured, so this caps concurrent SDK workers.
+            worker_ceiling = max(1, min(int(by_id[nid]['data'].get('max_workers') or 3), team_leader.MAX_ROLES))
+            node_sem = asyncio.Semaphore(worker_ceiling)
             async def member(key):
                 spec = team_leader.ROLES[key]
-                try:
-                    out = await analyze(values, role_instructions=spec['focus'])
-                    analysis = validate_analysis(out['report'], values)
-                    return {'role': key, 'name': spec['name'], 'status': 'ok',
-                            'summary': analysis['summary'], 'analysis': analysis}
-                except (ScopeError, RuntimeError) as exc:
-                    return {'role': key, 'name': spec['name'], 'status': 'failed', 'reason': str(exc)[:300]}
+                async with node_sem:
+                    try:
+                        out = await analyze(values, role_instructions=spec['focus'])
+                        analysis = validate_analysis(out['report'], values)
+                        return {'role': key, 'name': spec['name'], 'status': 'ok', 'summary': analysis['summary'],
+                                'analysis': analysis, 'sdk_execution': out.get('sdk_execution', 'in-process')}
+                    except (ScopeError, RuntimeError) as exc:
+                        return {'role': key, 'name': spec['name'], 'status': 'failed', 'reason': str(exc)[:300]}
             # Opt-in deterministic adaptive selection: narrow the roles to those the
             # captured evidence (these observations + the scoped asset graph) warrants.
             selection_reasons = None
@@ -224,10 +229,13 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
             coverage = team_leader._selection_coverage(selection_reasons) + \
                 [f'{m["name"]} role did not complete: {m["reason"]}' for m in members if m['status'] != 'ok']
             adapted = selection_reasons is not None
+            isolated = sum(m.get('sdk_execution') == 'isolated-interpreter' for m in completed)
+            isolation = {'worker_ceiling': worker_ceiling, 'isolated': isolated, 'in_process': len(completed) - isolated}
             summary = (f'CAI team evidence review: {len(completed)}/{len(members)} '
                        f'{"adaptively selected " if adapted else ""}roles completed. Candidates only; nothing auto-confirmed.')
             return [{'report': summary, 'team': True, 'adaptive': adapted, 'members': members,
-                     'role_selection': selection_reasons, 'coverage_limits': coverage, 'evidence_status': 'CANDIDATE'}]
+                     'role_selection': selection_reasons, 'isolation': isolation,
+                     'coverage_limits': coverage, 'evidence_status': 'CANDIDATE'}]
         open_ports = sum(v.get('state') == 'open' for v in values)
         responses = sum('status' in v and 'url' in v for v in values)
         errors = sum('error' in v or v.get('state') in ('blocked', 'budget_exhausted') for v in values)

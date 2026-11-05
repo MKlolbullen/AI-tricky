@@ -144,6 +144,12 @@ MODEL_PROVIDERS: dict[str, dict] = {
     for p in PROVIDERS if p.get('category') == 'model'
 }
 
+# Model-category variable names. These must never be CLI-selectable or injected
+# into tools, even if a catalog adapter were to declare one in its `secrets`.
+MODEL_VARS: frozenset[str] = frozenset(
+    v['name'] for p in PROVIDERS if p.get('category') == 'model' for v in p['variables']
+)
+
 VARS: list[str] = [v['name'] for p in PROVIDERS for v in p['variables']]
 VAR_SET: set[str] = set(VARS)
 MAX_VALUE_LEN = 4096
@@ -167,6 +173,9 @@ class CredentialVault:
         # Set when an existing file could not be read/parsed, so we refuse to
         # overwrite (and silently lose) credentials we failed to load.
         self._load_error: str | None = None
+        # Valid stored keys this build's registry does not know (e.g. written by
+        # a newer version). Preserved on write so a rollback can't drop them.
+        self._unknown: dict[str, str] = {}
         self._store: dict[str, str] = self._load()
 
     # -- persistence ----------------------------------------------------------
@@ -187,10 +196,14 @@ class CredentialVault:
             self._load_error = 'credentials file is not a JSON object'
             return {}
         out: dict[str, str] = {}
+        self._unknown = {}
         for k, v in data.items():
-            if (k in VAR_SET and isinstance(v, str) and v
-                    and '\x00' not in v and len(v) <= MAX_VALUE_LEN):
+            if not (isinstance(v, str) and v and '\x00' not in v and len(v) <= MAX_VALUE_LEN):
+                continue
+            if k in VAR_SET:
                 out[k] = v
+            else:
+                self._unknown[k] = v
         return out
 
     @staticmethod
@@ -205,7 +218,9 @@ class CredentialVault:
             raise OSError(f'Refusing to store credentials: {path} is group/world accessible (mode {oct(mode)}).')
 
     def _write(self, store: dict[str, str]) -> None:
-        payload = json.dumps(store, indent=2, sort_keys=True)
+        # Merge in keys this build's registry doesn't know so a rollback or an
+        # older version cannot drop a newer provider's stored credential.
+        payload = json.dumps({**self._unknown, **store}, indent=2, sort_keys=True)
         tmp = self.path.with_name(self.path.name + '.tmp')
         try:
             # Create owner-only from the outset so there is no readable window.

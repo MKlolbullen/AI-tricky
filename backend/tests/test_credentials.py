@@ -182,3 +182,25 @@ def test_model_planning_provider_gating(clean_env, tmp_path, monkeypatch):
     with TestClient(create_app(tmp_path)) as c:
         # Remote enabled + key present but no model name is rejected before any call.
         assert c.post('/api/agent/plan', json={'goal': 'x', 'use_model': True, 'provider': 'openai'}).status_code == 422
+
+
+def test_model_key_excluded_from_cli_credentials_even_if_a_tool_declares_it(clean_env, tmp_path, monkeypatch):
+    # A model-category variable must never surface as a selectable CLI credential,
+    # even if a catalog adapter were to declare it in its secrets.
+    from backend.catalog import TOOLS
+    monkeypatch.setitem(TOOLS, 'probe-tool', {'id': 'probe-tool', 'secrets': ['ANTHROPIC_API_KEY']})
+    with TestClient(create_app(tmp_path)) as c:
+        runtime = c.get('/api/runtime').json()['cli_credential_variables']
+    assert all(v['name'] != 'ANTHROPIC_API_KEY' for v in runtime)
+
+
+def test_unknown_keys_are_preserved_across_registry_changes(clean_env, tmp_path):
+    # A credential this build's registry does not know (e.g. written by a newer
+    # version) must survive a write from this build — no rollback data loss.
+    (tmp_path / 'credentials.json').write_text(json.dumps({'FUTURE_PROVIDER_KEY': 'keep-me'}))
+    with TestClient(create_app(tmp_path)) as c:
+        c.post('/api/credentials', json={'updates': {'SHODAN_API_KEY': 'abc'}})
+        names = [v['name'] for p in c.get('/api/credentials').json()['providers'] for v in p['variables']]
+        assert 'FUTURE_PROVIDER_KEY' not in names  # unknown keys are never reported
+    data = json.loads((tmp_path / 'credentials.json').read_text())
+    assert data.get('FUTURE_PROVIDER_KEY') == 'keep-me' and data.get('SHODAN_API_KEY') == 'abc'

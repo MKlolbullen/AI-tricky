@@ -27,7 +27,7 @@ from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
 from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
-from .credentials import CredentialVault, MODEL_PROVIDERS
+from .credentials import CredentialVault, MODEL_PROVIDERS, MODEL_VARS
 from . import verification
 
 
@@ -257,7 +257,7 @@ def create_app(data_dir=None, assessor=None):
                 'workflow_adapters': REGISTRY,
                 'workflow_execution': 'Native DAG, CAI evidence review and 151 migrated catalog contracts; CLI execution requires explicit run enablement and preflight',
                 'catalog_tools':len(TOOLS),'catalog_workflows':len(MINI_CATALOG['workflows']),
-                'cli_credential_variables':[{'name':key,'configured':bool(vault.effective(key))} for key in sorted({key for t in TOOLS.values() for key in t.get('secrets',[])})],
+                'cli_credential_variables':[{'name':key,'configured':bool(vault.effective(key))} for key in sorted({key for t in TOOLS.values() for key in t.get('secrets',[])}) if key not in MODEL_VARS],
                 'model_providers':model_provider_status()}
 
     @app.get('/api/credentials')
@@ -692,7 +692,7 @@ def create_app(data_dir=None, assessor=None):
                 raise HTTPException(409, 'CAI SDK is not installed at the supported version. See local setup instructions.')
             model_base_url(os.environ.get('CAI_MODEL_BASE_URL', 'http://127.0.0.1:11434/v1'), os.environ.get('CAI_ALLOW_REMOTE_MODEL') == '1')
         config = {**body.model_dump(), 'targets': list(dict.fromkeys(known[tid]['url'] for tid in body.target_ids))}
-        allowed_keys={key for tool in TOOLS.values() for key in tool.get('secrets',[])}
+        allowed_keys={key for tool in TOOLS.values() for key in tool.get('secrets',[]) if key not in MODEL_VARS}
         if any(key not in allowed_keys for key in body.cli_credential_keys):raise HTTPException(422,'Select only catalog-declared credential variable names.')
         if body.engine in ('inventory','workflow') and body.allow_http:
             entered=[parse_target(t) for t in config['targets']]

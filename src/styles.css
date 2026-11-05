@@ -157,3 +157,6 @@
 .team-member small{color:#8aa6cb;font:11px var(--mono)}
 .assist-plan li.assist-added{color:#6fd3a6}
 .assist-removed{color:#e08a8a;font-size:12px;margin:6px 0}
+.team-synthesis{border:1px solid #3a4e86;border-left:3px solid #7aa2ff;border-radius:8px;background:#121a30;padding:12px 16px;margin:12px 0}
+.team-synthesis .section-intro{align-items:center}
+.team-synthesis pre{white-space:pre-wrap;overflow-wrap:anywhere}

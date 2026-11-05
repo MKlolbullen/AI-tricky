@@ -115,7 +115,7 @@ def web_url(host, port):
     return f"{'https' if port in (443, 8443) else 'http'}://{host}:{port}/"
 
 
-async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze):
+async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset_graph=None):
     graph = config['workflow']
     order, incoming = validate_workflow(graph, live=True)
     by_id = {n['id']: n for n in graph['nodes']}
@@ -180,6 +180,20 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze):
             from .intelligence import validate_analysis
             analysis = validate_analysis(result['report'], values)
             return [{'report': analysis['summary'], 'analysis': analysis, 'evidence_status': 'CANDIDATE'}]
+        if kind == 'native_asset_graph':
+            # Read-only: the current asset graph scoped to the entered targets.
+            # No target traffic and no scope expansion — observed data for review.
+            # scope_subgraph runs index_pending() + synchronous SQLite reads, so
+            # keep it off the event loop to avoid blocking other runs/requests.
+            sub = (await asyncio.to_thread(asset_graph.scope_subgraph, config['targets'])
+                   if asset_graph else {'entities': [], 'edges': []})
+            counts = {}
+            for e in sub['entities']:
+                counts[e['kind']] = counts.get(e['kind'], 0) + 1
+            breakdown = ', '.join(f'{v} {k}' for k, v in sorted(counts.items())) or 'no entities'
+            summary = (f'Asset graph for the entered scope: {len(sub["entities"])} entities, {len(sub["edges"])} relationships '
+                       f'({breakdown}). Observed data and third-party claims, not confirmed findings.')
+            return [{'report': summary, 'asset_graph': sub, 'evidence_status': 'OBSERVATION'}]
         if kind == 'native_team':
             # Evidence-only multi-role review. Each role analyses the same captured
             # evidence with no target tools; results are aggregated per role and a

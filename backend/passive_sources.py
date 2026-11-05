@@ -165,6 +165,175 @@ def _netlas_parse(qt, q, resp):
     return out
 
 
+# -- FOFA ---------------------------------------------------------------------
+def _fofa_build(qt, q, creds):
+    field = 'ip' if qt == 'ip' else 'domain'
+    qb64 = base64.b64encode(f'{field}="{q}"'.encode()).decode()
+    return {'url': (f'https://fofa.info/api/v1/search/all?email={creds["FOFA_EMAIL"]}&key={creds["FOFA_KEY"]}'
+                    f'&qbase64={qb64}&fields=ip,port,domain,server&size=100'), 'headers': {}}
+
+
+def _fofa_parse(qt, q, resp):
+    out = []
+    if not isinstance(resp, dict) or resp.get('error'):
+        return out
+    dom = _host(q) if qt == 'domain' else None
+    for row in resp.get('results', []) if isinstance(resp.get('results'), list) else []:
+        if not isinstance(row, list) or len(row) < 4:
+            continue
+        ip, port, domain, server = _host(row[0]), row[1], _host(row[2]), row[3]
+        if ip:
+            out.append(E('ip', ip, ip=ip))
+        try:
+            port = int(port)
+        except (TypeError, ValueError):
+            port = None
+        if ip and port and 1 <= port <= 65535:
+            sid = f'{ip}:{port}/tcp'
+            out.append(E('service', sid, host=ip, port=port, transport='tcp', state='open'))
+            out.append(X('exposes', ['ip', ip], ['service', sid]))
+            tech = _tech(server)
+            if tech:
+                out.append(E('technology', tech.lower(), name=tech))
+                out.append(X('runs', ['ip', ip], ['technology', tech.lower()]))
+        if domain:
+            out.append(E('host', domain, host=domain))
+            if dom and domain != dom and domain.endswith('.' + dom):
+                out.append(X('subdomain_of', ['host', domain], ['host', dom]))
+            if ip:
+                out.append(X('resolves_to', ['host', domain], ['ip', ip]))
+    return out
+
+
+# -- BeVigil ------------------------------------------------------------------
+def _bevigil_build(qt, q, creds):
+    return {'url': f'https://osint.bevigil.com/api/{q}/subdomains/', 'headers': {'X-Access-Token': creds['BEVIGIL_API_KEY']}}
+
+
+def _bevigil_parse(qt, q, resp):
+    out = []
+    dom = _host(q)
+    for sub in (resp.get('subdomains', []) if isinstance(resp, dict) else []):
+        s = _host(sub)
+        if s:
+            out.append(E('host', s, host=s))
+            if dom and s != dom and s.endswith('.' + dom):
+                out.append(X('subdomain_of', ['host', s], ['host', dom]))
+    return out
+
+
+# -- Hunter.io ----------------------------------------------------------------
+def _hunter_build(qt, q, creds):
+    return {'url': f'https://api.hunter.io/v2/domain-search?domain={q}&api_key={creds["HUNTER_API_KEY"]}&limit=50', 'headers': {}}
+
+
+def _hunter_parse(qt, q, resp):
+    out = []
+    dom = _host(q)
+    data = resp.get('data') if isinstance(resp, dict) else None
+    if not isinstance(data, dict):
+        return out
+    if dom:
+        out.append(E('host', dom, host=dom))
+    pattern = data.get('pattern')
+    if isinstance(pattern, str) and pattern.strip():
+        pid = f'pattern:{pattern.strip()[:120]}'
+        out.append(E('contact', pid, pattern=pattern.strip()[:120], contact_kind='email_pattern'))
+        if dom:
+            out.append(X('has_contact', ['host', dom], ['contact', pid]))
+    for em in (data.get('emails', []) if isinstance(data.get('emails'), list) else [])[:100]:
+        value = em.get('value') if isinstance(em, dict) else None
+        if isinstance(value, str) and '@' in value:
+            cid = value.strip().lower()[:200]
+            out.append(E('contact', cid, email=cid, contact_kind='email'))
+            if dom:
+                out.append(X('has_contact', ['host', dom], ['contact', cid]))
+    return out
+
+
+# -- ZoomEye ------------------------------------------------------------------
+def _zoomeye_build(qt, q, creds):
+    headers = {'API-KEY': creds['ZOOMEYE_API_KEY']}
+    if qt == 'ip':
+        return {'url': f'https://api.zoomeye.org/host/search?query=ip:%22{q}%22&page=1', 'headers': headers}
+    return {'url': f'https://api.zoomeye.org/domain/search?q={q}&type=1&page=1', 'headers': headers}
+
+
+def _zoomeye_parse(qt, q, resp):
+    out = []
+    if not isinstance(resp, dict):
+        return out
+    if qt == 'ip':
+        for m in (resp.get('matches', []) if isinstance(resp.get('matches'), list) else []):
+            mip = _host(m.get('ip')) if isinstance(m, dict) else None
+            if not mip:
+                continue
+            out.append(E('ip', mip, ip=mip))
+            pi = m.get('portinfo') if isinstance(m.get('portinfo'), dict) else {}
+            try:
+                port = int(pi.get('port'))
+            except (TypeError, ValueError):
+                port = None
+            if port and 1 <= port <= 65535:
+                sid = f'{mip}:{port}/tcp'
+                out.append(E('service', sid, host=mip, port=port, transport='tcp', state='open'))
+                out.append(X('exposes', ['ip', mip], ['service', sid]))
+                tech = _tech(pi.get('app') or pi.get('service'))
+                if tech:
+                    out.append(E('technology', tech.lower(), name=tech))
+                    out.append(X('runs', ['ip', mip], ['technology', tech.lower()]))
+    else:
+        dom = _host(q)
+        for item in (resp.get('list', []) if isinstance(resp.get('list'), list) else []):
+            sub = _host(item.get('name')) if isinstance(item, dict) else None
+            if not sub:
+                continue
+            out.append(E('host', sub, host=sub))
+            if dom and sub != dom and sub.endswith('.' + dom):
+                out.append(X('subdomain_of', ['host', sub], ['host', dom]))
+            for ipv in (item.get('ip', []) if isinstance(item.get('ip'), list) else []):
+                cip = _host(ipv)
+                if cip:
+                    out.append(E('ip', cip, ip=cip))
+                    out.append(X('resolves_to', ['host', sub], ['ip', cip]))
+    return out
+
+
+# -- Intelligence X (two-step phonebook search) -------------------------------
+async def _intelx_collect(http, qt, q, creds):
+    headers = {'x-key': creds['INTELX_API_KEY']}
+    start = await http({'method': 'POST', 'url': 'https://2.intelx.io/phonebook/search', 'headers': headers,
+                        'json': {'term': q, 'maxresults': 100, 'media': 0, 'target': 0, 'timeout': 5}})
+    sid = start.get('id') if isinstance(start, dict) else None
+    if not isinstance(sid, str) or not sid:
+        return {'selectors': []}
+    result = await http({'method': 'GET', 'headers': headers,
+                         'url': f'https://2.intelx.io/phonebook/search/result?id={sid}&limit=100&offset=0'})
+    return result if isinstance(result, dict) else {'selectors': []}
+
+
+def _intelx_parse(qt, q, resp):
+    out = []
+    dom = _host(q)
+    for sel in (resp.get('selectors', []) if isinstance(resp, dict) else []):
+        value = sel.get('selectorvalue') if isinstance(sel, dict) else None
+        if not isinstance(value, str) or not value.strip():
+            continue
+        v = value.strip()
+        if '@' in v:
+            cid = v.lower()[:200]
+            out.append(E('contact', cid, email=cid, contact_kind='email'))
+            if dom:
+                out.append(X('has_contact', ['host', dom], ['contact', cid]))
+        else:
+            s = _host(v)
+            if s:
+                out.append(E('host', s, host=s))
+                if dom and s != dom and s.endswith('.' + dom):
+                    out.append(X('subdomain_of', ['host', s], ['host', dom]))
+    return out
+
+
 ADAPTERS = {
     'shodan': {'name': 'Shodan', 'vars': ['SHODAN_API_KEY'], 'hosts': {'api.shodan.io'},
                'supports': ('ip', 'domain'), 'build': _shodan_build, 'parse': _shodan_parse},
@@ -174,6 +343,16 @@ ADAPTERS = {
                    'supports': ('domain',), 'build': _vt_build, 'parse': _vt_parse},
     'netlas': {'name': 'Netlas', 'vars': ['NETLAS_API_KEY'], 'hosts': {'app.netlas.io'},
                'supports': ('domain',), 'build': _netlas_build, 'parse': _netlas_parse},
+    'fofa': {'name': 'FOFA', 'vars': ['FOFA_EMAIL', 'FOFA_KEY'], 'hosts': {'fofa.info'},
+             'supports': ('ip', 'domain'), 'build': _fofa_build, 'parse': _fofa_parse},
+    'bevigil': {'name': 'BeVigil', 'vars': ['BEVIGIL_API_KEY'], 'hosts': {'osint.bevigil.com'},
+                'supports': ('domain',), 'build': _bevigil_build, 'parse': _bevigil_parse},
+    'hunter': {'name': 'Hunter.io', 'vars': ['HUNTER_API_KEY'], 'hosts': {'api.hunter.io'},
+               'supports': ('domain',), 'build': _hunter_build, 'parse': _hunter_parse},
+    'zoomeye': {'name': 'ZoomEye', 'vars': ['ZOOMEYE_API_KEY'], 'hosts': {'api.zoomeye.org'},
+                'supports': ('ip', 'domain'), 'build': _zoomeye_build, 'parse': _zoomeye_parse},
+    'intelx': {'name': 'Intelligence X', 'vars': ['INTELX_API_KEY'], 'hosts': {'2.intelx.io'},
+               'supports': ('domain',), 'collect': _intelx_collect, 'parse': _intelx_parse},
 }
 
 ALLOWED_HOSTS = frozenset(host for a in ADAPTERS.values() for host in a['hosts'])

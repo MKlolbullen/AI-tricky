@@ -97,5 +97,79 @@ def test_runtime_lists_passive_providers(tmp_path):
     with TestClient(create_app(tmp_path)) as c:
         passive = c.get('/api/runtime').json()['passive_providers']
     ids = {p['id'] for p in passive['providers']}
-    assert {'shodan', 'censys', 'virustotal', 'netlas'} <= ids
+    assert {'shodan', 'censys', 'virustotal', 'netlas', 'fofa', 'bevigil', 'hunter', 'zoomeye', 'intelx'} <= ids
     assert passive['enabled'] in (True, False) and all(p['configured'] is False for p in passive['providers'])
+
+
+# -- additional providers (FOFA, BeVigil, Hunter.io, ZoomEye, IntelX) ---------
+def test_fofa_mapper_builds_ip_service_tech_and_host():
+    recs = parse_response('fofa', 'domain', 'example.com',
+                          {'error': False, 'results': [['1.2.3.4', '443', 'www.example.com', 'nginx']]})
+    ents = {(r['kind'], r['canonical']) for r in recs if r['t'] == 'e'}
+    assert {('ip', '1.2.3.4'), ('service', '1.2.3.4:443/tcp'), ('technology', 'nginx'), ('host', 'www.example.com')} <= ents
+    assert {r['rel'] for r in recs if r['t'] == 'x'} >= {'exposes', 'runs', 'subdomain_of', 'resolves_to'}
+
+
+def test_bevigil_mapper_builds_subdomains():
+    recs = parse_response('bevigil', 'domain', 'example.com', {'subdomains': ['m.example.com', 'api.example.com']})
+    ents = {(r['kind'], r['canonical']) for r in recs if r['t'] == 'e'}
+    assert ('host', 'm.example.com') in ents and ('host', 'api.example.com') in ents
+
+
+def test_hunter_mapper_builds_contacts_and_pattern():
+    recs = parse_response('hunter', 'domain', 'example.com',
+                          {'data': {'domain': 'example.com', 'pattern': '{first}', 'emails': [{'value': 'Jane@Example.com'}]}})
+    ents = {(r['kind'], r['canonical']) for r in recs if r['t'] == 'e'}
+    assert ('contact', 'jane@example.com') in ents and ('contact', 'pattern:{first}') in ents
+    assert any(r['rel'] == 'has_contact' for r in recs if r['t'] == 'x')
+
+
+def test_zoomeye_ip_mapper_builds_service_and_tech():
+    recs = parse_response('zoomeye', 'ip', '1.2.3.4', {'matches': [{'ip': '1.2.3.4', 'portinfo': {'port': 22, 'app': 'OpenSSH'}}]})
+    ents = {(r['kind'], r['canonical']) for r in recs if r['t'] == 'e'}
+    assert ('service', '1.2.3.4:22/tcp') in ents and ('technology', 'openssh') in ents
+
+
+def test_intelx_collect_runs_two_steps_and_parse_builds_hosts_and_contacts():
+    import asyncio
+    calls = []
+    async def http(req):
+        calls.append(req)
+        if (req.get('method') or 'GET').upper() == 'POST':
+            return {'id': 'abc-123'}
+        return {'selectors': [{'selectorvalue': 'api.example.com', 'selectortype': 1},
+                              {'selectorvalue': 'jane@example.com', 'selectortype': 2}]}
+    resp = asyncio.run(ADAPTERS['intelx']['collect'](http, 'domain', 'example.com', {'INTELX_API_KEY': 'k'}))
+    assert calls[0]['method'] == 'POST' and 'phonebook/search' in calls[0]['url']
+    assert calls[1]['url'].startswith('https://2.intelx.io/phonebook/search/result?id=abc-123')
+    recs = parse_response('intelx', 'domain', 'example.com', resp)
+    ents = {(r['kind'], r['canonical']) for r in recs if r['t'] == 'e'}
+    assert ('host', 'api.example.com') in ents and ('contact', 'jane@example.com') in ents
+
+
+def test_enrich_hunter_adds_sourced_contacts_to_the_graph(tmp_path):
+    async def http(req):
+        return {'data': {'domain': 'example.com', 'pattern': '{f}{last}', 'emails': [{'value': 'jane@example.com'}]}}
+    with TestClient(create_app(tmp_path, passive_http=http)) as c:
+        c.post('/api/targets', json={'value': 'example.com'})
+        c.post('/api/credentials', json={'updates': {'HUNTER_API_KEY': 'k'}})
+        r = c.post('/api/assets/enrich', json={'target': 'example.com', 'providers': ['hunter']})
+        assert r.status_code == 201, r.text
+        graph = c.get('/api/assets/graph?run_id=' + r.json()['run_id']).json()
+        canon = {(e['kind'], e['canonical']) for e in graph['entities']}
+        assert ('contact', 'jane@example.com') in canon
+        assert any(e['rel'] == 'has_contact' and e['source'] == 'hunter' for e in graph['edges'])
+
+
+def test_enrich_intelx_two_step_flow_end_to_end(tmp_path):
+    async def http(req):
+        if (req.get('method') or 'GET').upper() == 'POST':
+            return {'id': 'id-9'}
+        return {'selectors': [{'selectorvalue': 'vpn.example.com', 'selectortype': 1}]}
+    with TestClient(create_app(tmp_path, passive_http=http)) as c:
+        c.post('/api/targets', json={'value': 'example.com'})
+        c.post('/api/credentials', json={'updates': {'INTELX_API_KEY': 'k'}})
+        r = c.post('/api/assets/enrich', json={'target': 'example.com', 'providers': ['intelx']})
+        assert r.status_code == 201, r.text
+        graph = c.get('/api/assets/graph?run_id=' + r.json()['run_id']).json()
+        assert ('host', 'vpn.example.com') in {(e['kind'], e['canonical']) for e in graph['entities']}

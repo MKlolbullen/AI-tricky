@@ -14,9 +14,9 @@ def passive_enabled():
 
 
 async def default_passive_http(req):
-    """Perform one provider GET. Enforces HTTPS, the provider allowlist and the
-    opt-in gate; target scope is irrelevant here — these are provider endpoints,
-    never the assessment target."""
+    """Perform one provider request (GET or POST). Enforces HTTPS, the provider
+    allowlist and the opt-in gate; target scope is irrelevant here — these are
+    provider endpoints, never the assessment target."""
     import httpx
     parts = urlsplit(req['url'])
     if parts.scheme != 'https' or parts.hostname not in ALLOWED_HOSTS:
@@ -24,7 +24,8 @@ async def default_passive_http(req):
     if not passive_enabled():
         raise RuntimeError('Passive outbound is disabled.')
     async with httpx.AsyncClient(trust_env=False, timeout=20, follow_redirects=False) as client:
-        response = await client.get(req['url'], headers=req.get('headers') or {})
+        method = (req.get('method') or 'GET').upper()
+        response = await client.request(method, req['url'], headers=req.get('headers') or {}, json=req.get('json'))
         response.raise_for_status()
         return response.json()
 
@@ -47,8 +48,13 @@ class PassiveIngestor:
             report = {'provider': pid, 'name': adapter['name'], 'queries': 0, 'status': 'ok'}
             for qt in query_types(pid, target_kind):
                 try:
-                    req = adapter['build'](qt, target, credentials)
-                    response = await http(req)
+                    # A provider may define `collect` to orchestrate a multi-step
+                    # flow (still through the gated, allowlisted `http`); simple
+                    # providers just issue the single request `build` describes.
+                    if 'collect' in adapter:
+                        response = await adapter['collect'](http, qt, target, credentials)
+                    else:
+                        response = await http(adapter['build'](qt, target, credentials))
                     # Store only provider/query/response — never the request URL,
                     # which may carry the key for providers that authenticate by
                     # query parameter.

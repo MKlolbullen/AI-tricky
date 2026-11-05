@@ -57,6 +57,7 @@ class RunInput(BaseModel):
     cli_credential_keys: list[str] = Field(default_factory=list,max_length=30)
     roles: list[Annotated[str, StringConstraints(min_length=1, max_length=40)]] = Field(default_factory=list, max_length=12)
     member_max_turns: int = Field(default=8, ge=1, le=24)
+    synthesize: bool = False
     provider: str | None = Field(default=None, max_length=40)
     model: str | None = Field(default=None, max_length=120)
 
@@ -709,11 +710,20 @@ def create_app(data_dir=None, assessor=None):
                     # Members share this run's fetch/probe, so they draw on one
                     # budget ledger, scope and credential snapshot. The resolved
                     # model lives on the control object only, never persisted.
+                    async def synthesize(prompt):
+                        # The optional lead synthesizer reviews role reports only;
+                        # it gets no target access and never confirms a finding.
+                        async def disabled(url):
+                            return {'error': 'Team synthesis has no target access.'}
+                        if assessor is not None:
+                            return await assess([], prompt, disabled)
+                        return await assess([], prompt, disabled, evidence_only=True, model=ctl.model)
                     result=await team_leader.run_team(config['targets'],config['goal'],fetch,probe,assess,
                                                        roles=config.get('roles'),model=ctl.model,
                                                        member_max_turns=config.get('member_max_turns',8),
                                                        timeout=min(config.get('max_seconds',240),180),
-                                                       concurrency=config.get('parallelism',4))
+                                                       concurrency=config.get('parallelism',4),
+                                                       synthesize=synthesize if config.get('synthesize') else None)
                 elif assessor is None:
                     result=await assess(config['targets'],config['goal'],fetch,network_tool=probe)
                 else:

@@ -162,3 +162,87 @@ def test_team_engine_requires_the_model_sdk_on_the_real_path(tmp_path, target_se
         tid = c.post('/api/targets', json={'value': base}).json()['id']
         r = c.post('/api/runs', json={'engine': 'team', 'target_ids': [tid], 'allow_http': True})
         assert r.status_code == 409 and 'CAI SDK' in r.json()['detail']
+
+
+# -- optional lead synthesizer ------------------------------------------------
+def test_run_team_synthesizes_role_reports_when_enabled():
+    async def fetch(url):
+        return {'status': 200}
+
+    async def probe(target, ports):
+        return {'results': []}
+
+    async def assess(targets, goal, f, *, network_tool=None, role_instructions=None, model=None, max_turns=8, timeout=180):
+        await f('http://scope.local/')
+        return {'report': 'role report', 'evidence_status': 'CANDIDATE'}
+
+    seen = {}
+    async def synthesize(prompt):
+        seen['prompt'] = prompt
+        return {'report': 'Unified lead synthesis across roles.', 'model': 'synth'}
+
+    result = asyncio.run(run_team(['http://scope.local/'], 'Assess', fetch, probe, assess,
+                                  roles=['surface', 'transport'], synthesize=synthesize))
+    syn = result['synthesis']
+    assert syn and syn['label'] == 'CAI MODEL SYNTHESIS · CANDIDATES' and syn['model_called'] is True
+    assert syn['confirmed'] is False and syn['report'] == 'Unified lead synthesis across roles.'
+    # The synthesizer sees the role reports and nothing else (no target access).
+    assert 'role_reports' in seen['prompt'] and 'role report' in seen['prompt']
+
+
+def test_run_team_synthesis_failure_is_a_coverage_gap():
+    async def fetch(url):
+        return {'status': 200}
+
+    async def probe(target, ports):
+        return {'results': []}
+
+    async def assess(targets, goal, f, **kw):
+        return {'report': 'ok', 'evidence_status': 'CANDIDATE'}
+
+    async def synthesize(prompt):
+        raise RuntimeError('synth provider down')
+
+    result = asyncio.run(run_team(['http://x/'], 'g', fetch, probe, assess, roles=['surface'], synthesize=synthesize))
+    assert result['synthesis'] is None
+    assert any('Lead synthesis did not complete' in c for c in result['coverage_limits'])
+
+
+def test_run_team_synthesis_skipped_when_no_member_completed():
+    async def fetch(url):
+        return {'status': 200}
+
+    async def probe(target, ports):
+        return {'results': []}
+
+    async def assess(targets, goal, f, **kw):
+        raise RuntimeError('all roles down')
+
+    called = {'n': 0}
+    async def synthesize(prompt):
+        called['n'] += 1
+        return {'report': 'should not run'}
+
+    result = asyncio.run(run_team(['http://x/'], 'g', fetch, probe, assess, roles=['surface'], synthesize=synthesize))
+    assert result['synthesis'] is None and called['n'] == 0
+    assert any('Lead synthesis skipped' in c for c in result['coverage_limits'])
+
+
+def test_team_run_includes_labelled_synthesis_when_requested(tmp_path, target_server):
+    base, _ = target_server
+    async def model(targets, goal, fetch, *, network_tool=None, role_instructions=None, model=None, max_turns=8, timeout=180, evidence_only=False):
+        if not targets:  # the synthesizer pass: no scope, disabled fetch
+            return {'report': 'Unified lead synthesis across roles.', 'model': 'synth'}
+        await fetch(base + '/')
+        return {'report': 'member candidate report', 'model': 'fixture', 'engine': 'cai/x', 'evidence_status': 'CANDIDATE'}
+    with TestClient(create_app(tmp_path, assessor=model)) as c:
+        tid = c.post('/api/targets', json={'value': base}).json()['id']
+        r = c.post('/api/runs', json={'engine': 'team', 'target_ids': [tid], 'allow_http': True,
+                                      'roles': ['surface', 'transport'], 'synthesize': True, 'max_requests': 50})
+        assert r.status_code == 201, r.text
+        done = wait_done(c, r.json()['id'])
+        assert done['status'] == 'completed', done
+        syn = done['result']['synthesis']
+        assert syn and syn['confirmed'] is False and 'synthesis' in syn['report'].lower()
+        # The deterministic members are still present and distinct from the synthesis.
+        assert all(m['status'] == 'ok' for m in done['result']['members'])

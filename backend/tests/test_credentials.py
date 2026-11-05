@@ -132,3 +132,75 @@ def test_environment_fallback_and_store_precedence(monkeypatch, tmp_path):
     vault.set_many({'GITHUB_TOKEN': ''})
     assert vault.effective('GITHUB_TOKEN') == 'env-token'
     assert _var(vault.status(), 'GITHUB_TOKEN')['source'] == 'environment'
+
+
+def test_categories_fofa_and_model_providers(clean_env, tmp_path):
+    with TestClient(create_app(tmp_path)) as c:
+        providers = c.get('/api/credentials').json()['providers']
+    by_id = {p['id']: p for p in providers}
+    fofa = by_id['fofa']
+    assert fofa['category'] == 'passive'
+    assert [v['name'] for v in fofa['variables']] == ['FOFA_EMAIL', 'FOFA_KEY']
+    for pid in ('anthropic', 'openai', 'xai', 'gemini', 'venice'):
+        p = by_id[pid]
+        assert p['category'] == 'model' and p['purpose']
+        assert all(v['consumed_by'] == [] for v in p['variables'])
+
+
+def test_model_key_stores_without_tool_binding(clean_env, tmp_path):
+    with TestClient(create_app(tmp_path)) as c:
+        body = c.post('/api/credentials', json={'updates': {'ANTHROPIC_API_KEY': 'sk-ant-xyz'}}).json()
+        var = _var(body['providers'], 'ANTHROPIC_API_KEY')
+        assert var['configured'] and var['source'] == 'stored' and var['consumed_by'] == []
+        # Model keys are never exposed as selectable CLI credential variables.
+        runtime = c.get('/api/runtime').json()['cli_credential_variables']
+        assert all(v['name'] != 'ANTHROPIC_API_KEY' for v in runtime)
+
+
+def test_runtime_lists_model_providers(clean_env, tmp_path):
+    with TestClient(create_app(tmp_path)) as c:
+        mps = c.get('/api/runtime').json()['model_providers']
+    ids = [m['id'] for m in mps]
+    assert ids[0] == 'local' and {'anthropic', 'openai', 'xai', 'gemini', 'venice'} <= set(ids)
+    assert all(m['configured'] is False for m in mps if m['is_remote'])
+
+
+def test_model_planning_provider_gating(clean_env, tmp_path, monkeypatch):
+    monkeypatch.delenv('CAI_ALLOW_REMOTE_MODEL', raising=False)
+    with TestClient(create_app(tmp_path)) as c:
+        # Remote provider with no stored key is refused.
+        assert c.post('/api/agent/plan', json={'goal': 'x', 'use_model': True, 'provider': 'openai'}).status_code == 409
+        c.post('/api/credentials', json={'updates': {'OPENAI_API_KEY': 'sk-test'}})
+        # Key present but remote model use disabled is still refused.
+        r = c.post('/api/agent/plan', json={'goal': 'x', 'use_model': True, 'provider': 'openai'})
+        assert r.status_code == 409 and 'remote model use' in r.json()['detail']
+        # Unknown provider is rejected.
+        assert c.post('/api/agent/plan', json={'goal': 'x', 'use_model': True, 'provider': 'nope'}).status_code == 422
+        # Deterministic planning never needs a provider.
+        assert c.post('/api/agent/plan', json={'goal': 'x', 'use_model': False}).json()['planner'] == 'local-rules'
+    monkeypatch.setenv('CAI_ALLOW_REMOTE_MODEL', '1')
+    with TestClient(create_app(tmp_path)) as c:
+        # Remote enabled + key present but no model name is rejected before any call.
+        assert c.post('/api/agent/plan', json={'goal': 'x', 'use_model': True, 'provider': 'openai'}).status_code == 422
+
+
+def test_model_key_excluded_from_cli_credentials_even_if_a_tool_declares_it(clean_env, tmp_path, monkeypatch):
+    # A model-category variable must never surface as a selectable CLI credential,
+    # even if a catalog adapter were to declare it in its secrets.
+    from backend.catalog import TOOLS
+    monkeypatch.setitem(TOOLS, 'probe-tool', {'id': 'probe-tool', 'secrets': ['ANTHROPIC_API_KEY']})
+    with TestClient(create_app(tmp_path)) as c:
+        runtime = c.get('/api/runtime').json()['cli_credential_variables']
+    assert all(v['name'] != 'ANTHROPIC_API_KEY' for v in runtime)
+
+
+def test_unknown_keys_are_preserved_across_registry_changes(clean_env, tmp_path):
+    # A credential this build's registry does not know (e.g. written by a newer
+    # version) must survive a write from this build — no rollback data loss.
+    (tmp_path / 'credentials.json').write_text(json.dumps({'FUTURE_PROVIDER_KEY': 'keep-me'}))
+    with TestClient(create_app(tmp_path)) as c:
+        c.post('/api/credentials', json={'updates': {'SHODAN_API_KEY': 'abc'}})
+        names = [v['name'] for p in c.get('/api/credentials').json()['providers'] for v in p['variables']]
+        assert 'FUTURE_PROVIDER_KEY' not in names  # unknown keys are never reported
+    data = json.loads((tmp_path / 'credentials.json').read_text())
+    assert data.get('FUTURE_PROVIDER_KEY') == 'keep-me' and data.get('SHODAN_API_KEY') == 'abc'

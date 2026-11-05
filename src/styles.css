@@ -141,3 +141,9 @@
 .credential-usage{display:block;margin-top:9px;font-size:10px;line-height:1.6;color:#6e8aad}
 .credential-card>.primary{margin-top:auto;font-size:12px}
 @media(max-width:760px){.credentials-grid{grid-template-columns:1fr}}
+.credential-group{font-size:13px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;color:#9db4d6;margin:30px 0 2px;display:flex;align-items:baseline;gap:10px}
+.credential-group:first-of-type{margin-top:10px}
+.credential-group span{font-family:Inter,Arial,sans-serif;text-transform:none;letter-spacing:0;font-size:12px;color:#7d97bb}
+.model-select{display:flex;flex-direction:column;gap:14px;margin:4px 0 22px;padding:15px;border:1px solid #29435e;border-radius:6px;background:#0b1a2b}
+.model-select select,.model-select input{width:100%}
+.model-note{font-size:11px;line-height:1.6;color:#8aa6cb}

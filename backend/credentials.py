@@ -19,9 +19,13 @@ import os
 import stat
 from pathlib import Path
 
-# Curated passive data sources. `variables` are the environment-variable names
-# the catalog's tools read. `consumed` is computed at runtime from the tool
-# catalog, so a variable no installed adapter declares is still storable here.
+# Curated credential providers in two categories. `category` is 'passive' (data
+# sources recon tools read, via the env-var names in `variables`) or 'model'
+# (LLM providers for agents and template planning). `consumed` is computed at
+# runtime from the tool catalog, so a variable no installed adapter declares is
+# still storable here. Model keys are never injected into CLI tools, and storing
+# one does not by itself enable remote inference — that stays an opt-in model
+# configuration.
 PROVIDERS: list[dict] = [
     {
         'id': 'shodan', 'name': 'Shodan',
@@ -80,7 +84,71 @@ PROVIDERS: list[dict] = [
         'description': 'Token for GitHub code/subdomain reconnaissance (read-only scope recommended).',
         'variables': [{'name': 'GITHUB_TOKEN', 'label': 'Personal access token'}],
     },
+    {
+        'id': 'fofa', 'name': 'FOFA', 'category': 'passive',
+        'docs': 'https://fofa.info/api',
+        'description': 'Cyberspace asset search for hosts, services and certificates.',
+        'variables': [
+            {'name': 'FOFA_EMAIL', 'label': 'Account email'},
+            {'name': 'FOFA_KEY', 'label': 'API key'},
+        ],
+    },
+    # Model providers — for agents and template planning, not CLI-tool secrets.
+    # `endpoint` is the provider's OpenAI-compatible base URL, used only when the
+    # provider is selected for inference and remote model use is enabled.
+    {
+        'id': 'anthropic', 'name': 'Anthropic', 'category': 'model',
+        'purpose': 'Agents & template planning',
+        'endpoint': 'https://api.anthropic.com/v1/',
+        'docs': 'https://console.anthropic.com/settings/keys',
+        'description': 'Claude models for agent reasoning and workflow planning.',
+        'variables': [{'name': 'ANTHROPIC_API_KEY', 'label': 'API key'}],
+    },
+    {
+        'id': 'openai', 'name': 'OpenAI', 'category': 'model',
+        'purpose': 'Agents & template planning',
+        'endpoint': 'https://api.openai.com/v1',
+        'docs': 'https://platform.openai.com/api-keys',
+        'description': 'GPT models for agent reasoning and workflow planning.',
+        'variables': [{'name': 'OPENAI_API_KEY', 'label': 'API key'}],
+    },
+    {
+        'id': 'xai', 'name': 'xAI (Grok)', 'category': 'model',
+        'purpose': 'Agents & template planning',
+        'endpoint': 'https://api.x.ai/v1',
+        'docs': 'https://console.x.ai/',
+        'description': 'Grok models for agent reasoning and workflow planning.',
+        'variables': [{'name': 'XAI_API_KEY', 'label': 'API key'}],
+    },
+    {
+        'id': 'gemini', 'name': 'Google Gemini', 'category': 'model',
+        'purpose': 'Agents & template planning',
+        'endpoint': 'https://generativelanguage.googleapis.com/v1beta/openai/',
+        'docs': 'https://aistudio.google.com/app/apikey',
+        'description': 'Gemini models for agent reasoning and workflow planning.',
+        'variables': [{'name': 'GEMINI_API_KEY', 'label': 'API key'}],
+    },
+    {
+        'id': 'venice', 'name': 'Venice.ai', 'category': 'model',
+        'purpose': 'Agents & template planning',
+        'endpoint': 'https://api.venice.ai/api/v1',
+        'docs': 'https://venice.ai/settings/api',
+        'description': 'Venice.ai models for agent reasoning and workflow planning.',
+        'variables': [{'name': 'VENICE_API_KEY', 'label': 'API key'}],
+    },
 ]
+
+# Model providers keyed by id, for endpoint/key resolution.
+MODEL_PROVIDERS: dict[str, dict] = {
+    p['id']: {'name': p['name'], 'endpoint': p['endpoint'], 'key': p['variables'][0]['name']}
+    for p in PROVIDERS if p.get('category') == 'model'
+}
+
+# Model-category variable names. These must never be CLI-selectable or injected
+# into tools, even if a catalog adapter were to declare one in its `secrets`.
+MODEL_VARS: frozenset[str] = frozenset(
+    v['name'] for p in PROVIDERS if p.get('category') == 'model' for v in p['variables']
+)
 
 VARS: list[str] = [v['name'] for p in PROVIDERS for v in p['variables']]
 VAR_SET: set[str] = set(VARS)
@@ -105,6 +173,9 @@ class CredentialVault:
         # Set when an existing file could not be read/parsed, so we refuse to
         # overwrite (and silently lose) credentials we failed to load.
         self._load_error: str | None = None
+        # Valid stored keys this build's registry does not know (e.g. written by
+        # a newer version). Preserved on write so a rollback can't drop them.
+        self._unknown: dict[str, str] = {}
         self._store: dict[str, str] = self._load()
 
     # -- persistence ----------------------------------------------------------
@@ -125,10 +196,14 @@ class CredentialVault:
             self._load_error = 'credentials file is not a JSON object'
             return {}
         out: dict[str, str] = {}
+        self._unknown = {}
         for k, v in data.items():
-            if (k in VAR_SET and isinstance(v, str) and v
-                    and '\x00' not in v and len(v) <= MAX_VALUE_LEN):
+            if not (isinstance(v, str) and v and '\x00' not in v and len(v) <= MAX_VALUE_LEN):
+                continue
+            if k in VAR_SET:
                 out[k] = v
+            else:
+                self._unknown[k] = v
         return out
 
     @staticmethod
@@ -143,7 +218,9 @@ class CredentialVault:
             raise OSError(f'Refusing to store credentials: {path} is group/world accessible (mode {oct(mode)}).')
 
     def _write(self, store: dict[str, str]) -> None:
-        payload = json.dumps(store, indent=2, sort_keys=True)
+        # Merge in keys this build's registry doesn't know so a rollback or an
+        # older version cannot drop a newer provider's stored credential.
+        payload = json.dumps({**self._unknown, **store}, indent=2, sort_keys=True)
         tmp = self.path.with_name(self.path.name + '.tmp')
         try:
             # Create owner-only from the outset so there is no readable window.
@@ -217,6 +294,8 @@ class CredentialVault:
             providers.append({
                 'id': provider['id'],
                 'name': provider['name'],
+                'category': provider.get('category', 'passive'),
+                'purpose': provider.get('purpose'),
                 'docs': provider['docs'],
                 'description': provider['description'],
                 'variables': variables,

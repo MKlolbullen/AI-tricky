@@ -27,7 +27,7 @@ from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
 from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
-from .credentials import CredentialVault
+from .credentials import CredentialVault, MODEL_PROVIDERS, MODEL_VARS
 from . import verification
 
 
@@ -77,6 +77,8 @@ class PlanInput(BaseModel):
     goal: str = Field(min_length=1, max_length=4000)
     include_analysis: bool = False
     use_model: bool = False
+    provider: str | None = Field(default=None, max_length=40)
+    model: str | None = Field(default=None, max_length=120)
 
 
 class CatalogPlanInput(BaseModel):
@@ -132,6 +134,38 @@ def create_app(data_dir=None, assessor=None):
     def configured_secret_keys():
         # Catalog credential variables that currently resolve to a value.
         return frozenset(key for key in catalog_secret_names if vault.effective(key))
+
+    def resolve_model(provider_id=None, model_name=None):
+        # Resolve the model config for a selected provider. 'local' (or none) uses
+        # the configured local endpoint. A remote provider resolves only when its
+        # key is stored AND remote model use is enabled — the gate that keeps
+        # inference opt-in and platform hosting local.
+        allow_remote = os.environ.get('CAI_ALLOW_REMOTE_MODEL') == '1'
+        if not provider_id or provider_id == 'local':
+            base = model_base_url(os.environ.get('CAI_MODEL_BASE_URL', 'http://127.0.0.1:11434/v1'), allow_remote)
+            return {'provider': 'local', 'base_url': base, 'is_remote': False,
+                    'api_key': os.environ.get('CAI_MODEL_API_KEY') or os.environ.get('CAI_LOCAL_API_KEY', 'local-only'),
+                    'model': model_name or os.environ.get('CAI_MODEL', 'local-model')}
+        mp = MODEL_PROVIDERS.get(provider_id)
+        if not mp:
+            raise HTTPException(422, 'Unknown model provider.')
+        key = vault.effective(mp['key'])
+        if not key:
+            raise HTTPException(409, f"Store the {mp['name']} API key in Credentials before selecting it for planning.")
+        try:
+            base = model_base_url(mp['endpoint'], allow_remote)
+        except ScopeError:
+            raise HTTPException(409, f"Enable remote model use (set CAI_ALLOW_REMOTE_MODEL=1) to use {mp['name']} for planning. Platform hosting stays local.")
+        if not model_name:
+            raise HTTPException(422, f"Enter the {mp['name']} model name to use for planning.")
+        return {'provider': provider_id, 'base_url': base, 'api_key': key, 'is_remote': True, 'model': model_name}
+
+    def model_provider_status():
+        providers = [{'id': 'local', 'name': 'Local endpoint', 'is_remote': False, 'configured': True}]
+        for pid, mp in MODEL_PROVIDERS.items():
+            providers.append({'id': pid, 'name': mp['name'], 'is_remote': True,
+                              'configured': bool(vault.effective(mp['key']))})
+        return providers
     proposal_planner = ProposalPlanner(store, evidence)
     proposal_executions = ProposalExecutions(store, proposal_planner)
     controls = {}
@@ -223,7 +257,8 @@ def create_app(data_dir=None, assessor=None):
                 'workflow_adapters': REGISTRY,
                 'workflow_execution': 'Native DAG, CAI evidence review and 151 migrated catalog contracts; CLI execution requires explicit run enablement and preflight',
                 'catalog_tools':len(TOOLS),'catalog_workflows':len(MINI_CATALOG['workflows']),
-                'cli_credential_variables':[{'name':key,'configured':bool(vault.effective(key))} for key in sorted({key for t in TOOLS.values() for key in t.get('secrets',[])})]}
+                'cli_credential_variables':[{'name':key,'configured':bool(vault.effective(key))} for key in sorted({key for t in TOOLS.values() for key in t.get('secrets',[])}) if key not in MODEL_VARS],
+                'model_providers':model_provider_status()}
 
     @app.get('/api/credentials')
     async def credentials_status():
@@ -313,6 +348,7 @@ def create_app(data_dir=None, assessor=None):
     async def agent_plan(body: PlanInput):
         if not body.use_model:
             return plan_workflow(body.goal, include_analysis=body.include_analysis)
+        resolved_model = resolve_model(body.provider, body.model)
         if assessor is None and cai_adapter.installed_version() != cai_adapter.SUPPORTED_CAI:
             raise HTTPException(409, 'Configure the supported CAI SDK to use model planning, or use the local rules planner.')
         async def disabled(url):
@@ -321,7 +357,7 @@ def create_app(data_dir=None, assessor=None):
                 'Start with native_scope. Use 2–5 unique adapters with matching input/output types. '
                 f'CAI analysis allowed: {body.include_analysis}. No commands or new adapters. Catalog: ' + json.dumps(REGISTRY) + '\nGoal: ' + body.goal)
         try:
-            result = await assess([], goal, disabled, **({'evidence_only': True} if assessor is None else {}))
+            result = await assess([], goal, disabled, **({'evidence_only': True, 'model': resolved_model} if assessor is None else {}))
             return plan_workflow(body.goal, include_analysis=body.include_analysis, model_plan=result['report'])
         except ScopeError:
             raise
@@ -656,7 +692,7 @@ def create_app(data_dir=None, assessor=None):
                 raise HTTPException(409, 'CAI SDK is not installed at the supported version. See local setup instructions.')
             model_base_url(os.environ.get('CAI_MODEL_BASE_URL', 'http://127.0.0.1:11434/v1'), os.environ.get('CAI_ALLOW_REMOTE_MODEL') == '1')
         config = {**body.model_dump(), 'targets': list(dict.fromkeys(known[tid]['url'] for tid in body.target_ids))}
-        allowed_keys={key for tool in TOOLS.values() for key in tool.get('secrets',[])}
+        allowed_keys={key for tool in TOOLS.values() for key in tool.get('secrets',[]) if key not in MODEL_VARS}
         if any(key not in allowed_keys for key in body.cli_credential_keys):raise HTTPException(422,'Select only catalog-declared credential variable names.')
         if body.engine in ('inventory','workflow') and body.allow_http:
             entered=[parse_target(t) for t in config['targets']]

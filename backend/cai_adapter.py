@@ -31,20 +31,24 @@ def local_installed_version():
         return None
 
 
-async def assess(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False):
+async def assess(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False, model=None):
     if os.environ.get('CAI_PYTHON'):
         from .cai_worker_client import assess_worker
         return await assess_worker(targets, goal, request_tool, network_tool=network_tool,
-                                   timeout=timeout, evidence_only=evidence_only)
+                                   timeout=timeout, evidence_only=evidence_only, model=model)
     return await assess_local(targets, goal, request_tool, network_tool=network_tool,
-                              timeout=timeout, evidence_only=evidence_only)
+                              timeout=timeout, evidence_only=evidence_only, model=model)
 
 
-async def assess_local(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False):
+async def assess_local(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False, model=None):
     if local_installed_version() != SUPPORTED_CAI:
         raise RuntimeError('Install the supported optional cai-framework==0.5.10 dependency in this Python environment.')
-    base = model_base_url(os.environ.get('CAI_MODEL_BASE_URL', 'http://127.0.0.1:11434/v1'), os.environ.get('CAI_ALLOW_REMOTE_MODEL') == '1')
-    model_name = os.environ.get('CAI_MODEL', 'local-model')
+    # A selected provider's config (base_url, api_key, model) overrides the env
+    # defaults; the remote gate is enforced when the config is resolved.
+    cfg = model or {}
+    base = model_base_url(cfg.get('base_url') or os.environ.get('CAI_MODEL_BASE_URL', 'http://127.0.0.1:11434/v1'), os.environ.get('CAI_ALLOW_REMOTE_MODEL') == '1')
+    model_name = cfg.get('model') or os.environ.get('CAI_MODEL', 'local-model')
+    model_api_key = cfg.get('api_key') or os.environ.get('CAI_MODEL_API_KEY', os.environ.get('CAI_LOCAL_API_KEY', 'local-only'))
     # Apply before importing the SDK. No remote model client or exporter is used.
     os.environ['OTEL_SDK_DISABLED'] = 'true'
     os.environ['OPENAI_AGENTS_DISABLE_TRACING'] = '1'
@@ -134,7 +138,7 @@ async def assess_local(targets, goal, request_tool, *, network_tool=None, timeou
 
     transport = httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=30)
     async with transport:
-        async with AsyncOpenAI(base_url=base, api_key=os.environ.get('CAI_MODEL_API_KEY', os.environ.get('CAI_LOCAL_API_KEY','local-only')), http_client=transport, max_retries=0) as client:
+        async with AsyncOpenAI(base_url=base, api_key=model_api_key, http_client=transport, max_retries=0) as client:
             agent = Agent(name='AI-tricky scoped CAI analyst', instructions=instructions,
                           model=LoopbackModel(client), tools=[] if evidence_only else [fetch_target, probe_ports] if network_tool else [fetch_target])
             result = await asyncio.wait_for(Runner.run(agent, input=json.dumps({'scope': targets, 'goal': goal}),

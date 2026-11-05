@@ -64,7 +64,7 @@ Every view and tab in the current build (v0.8.0) is shown below. Canvas output i
 | <img src="docs/assets/screenshots/14-local-targets.png" alt="Local workspace Targets tab" width="100%" /><br/><sub>**Targets** — entered scope</sub> | <img src="docs/assets/screenshots/15-local-assets.png" alt="Local workspace Assets tab" width="100%" /><br/><sub>**Assets** — observed inventory</sub> |
 | <img src="docs/assets/screenshots/16-local-observations.png" alt="Local workspace Observations tab" width="100%" /><br/><sub>**Observations**</sub> | <img src="docs/assets/screenshots/17-local-findings.png" alt="Local workspace Findings tab" width="100%" /><br/><sub>**Findings** workbench</sub> |
 | <img src="docs/assets/screenshots/18-local-compare-runs.png" alt="Local workspace Compare runs tab" width="100%" /><br/><sub>**Compare runs**</sub> | <img src="docs/assets/screenshots/19-local-inputs.png" alt="Local workspace Inputs tab" width="100%" /><br/><sub>**Inputs** manager</sub> |
-| <img src="docs/assets/screenshots/24-local-credentials.png" alt="Local workspace Credentials tab" width="100%" /><br/><sub>**Credentials** — passive-source API keys</sub> | <img src="docs/assets/screenshots/20-local-workflows.png" alt="Local workspace Workflows tab" width="100%" /><br/><sub>**Workflows** — saved graphs</sub> |
+| <img src="docs/assets/screenshots/26-local-credentials-providers.png" alt="Local workspace Credentials tab" width="100%" /><br/><sub>**Credentials** — passive sources &amp; model providers</sub> | <img src="docs/assets/screenshots/20-local-workflows.png" alt="Local workspace Workflows tab" width="100%" /><br/><sub>**Workflows** — saved graphs</sub> |
 | <img src="docs/assets/screenshots/21-local-agent-desk.png" alt="Local workspace Agent desk tab" width="100%" /><br/><sub>**Agent desk** — planning &amp; proposals</sub> | <img src="docs/assets/screenshots/22-local-run-setup.png" alt="Local workspace Run setup tab" width="100%" /><br/><sub>**Run setup** — engine, scope &amp; budgets</sub> |
 | <img src="docs/assets/screenshots/23-local-runs.png" alt="Local workspace Runs tab" width="100%" /><br/><sub>**Runs** — local run detail</sub> | |
 
@@ -90,8 +90,8 @@ A useful assessment platform needs more than a canvas that launches commands and
 | Migrated catalog | 151 tool contracts and 57 typed workflows; searchable by source, category, input type and readiness |
 | CLI adapters | 141 application-owned, shell-free adapters with executable preflight, typed files/stdin and scalar fan-out |
 | Registered inputs | Local files/folders, uploaded text inputs, wordlists, SBOMs, resolver lists and reviewed template/signature folders |
-| Passive-source credentials | Enter and store API keys for passive data providers (Shodan, Censys, ProjectDiscovery, SecurityTrails, Netlas, urlscan, VirusTotal, BinaryEdge, GitHub); stored server-side and injected only into tools that declare them |
-| Agent desk | Native/catalog workflow planning plus persisted, evidence-guided follow-up proposals using rules or the optional CAI model |
+| Provider credentials | Store API keys locally: passive data sources (Shodan, Censys, ProjectDiscovery, SecurityTrails, Netlas, urlscan, VirusTotal, BinaryEdge, GitHub, FOFA) injected only into tools that declare them, plus model providers (Anthropic, OpenAI, xAI/Grok, Gemini, Venice.ai) for agents and template planning |
+| Agent desk | Native/catalog workflow planning plus persisted, evidence-guided follow-up proposals using rules or a model; choose the model provider (local endpoint or a configured remote provider) for model-backed planning |
 | Evidence review | Optional CAI analysis of captured HTTP evidence with structured candidates, references and coverage limits |
 | Evidence workbench | Structured observations, persistent candidate IDs, operator review history and run comparisons |
 | Run controls | Pause/resume, cancellation, node deadlines, separate native-operation and CLI-launch budgets |

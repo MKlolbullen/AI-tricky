@@ -160,3 +160,16 @@
 .team-synthesis{border:1px solid #3a4e86;border-left:3px solid #7aa2ff;border-radius:8px;background:#121a30;padding:12px 16px;margin:12px 0}
 .team-synthesis .section-intro{align-items:center}
 .team-synthesis pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.asset-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;min-width:0}
+.asset-entities,.asset-detail{min-width:0}
+.asset-kind{margin-bottom:16px}
+.asset-kind h4{text-transform:uppercase;font:11px var(--mono);letter-spacing:.06em;color:#9db4d6;margin:0 0 7px}
+.asset-kind button{display:block;width:100%;text-align:left;border:1px solid #233852;border-radius:6px;background:#0d1a2b;padding:7px 11px;margin:5px 0;cursor:pointer}
+.asset-kind button.selected{border-color:#02d0e5;background:#10263a}
+.asset-kind button code{overflow-wrap:anywhere;color:#cfe3fb}
+.asset-count{display:block;margin-top:10px;color:#7d97bb;font-size:11px}
+.asset-detail{border:1px solid #233852;border-radius:8px;background:#0b1a2b;padding:15px}
+.asset-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}
+.asset-edges,.asset-provenance{list-style:none;padding:0;margin:6px 0}
+.asset-edges li,.asset-provenance li{padding:5px 0;border-bottom:1px solid #1b2c42;font-size:12px;overflow-wrap:anywhere}
+.asset-edges strong{color:#cfe3fb}

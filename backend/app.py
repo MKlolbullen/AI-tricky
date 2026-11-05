@@ -557,6 +557,14 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             raise HTTPException(422, 'Unknown asset kind.')
         return asset_graph.graph(run_id=run_id, kind=kind, q=q[:200], limit=max(1, min(limit, 2000)))
 
+    @app.get('/api/assets/diff')
+    def assets_diff(baseline: str, current: str):
+        if baseline == current:
+            raise HTTPException(422, 'Select two different runs to compare.')
+        get_run(baseline)
+        get_run(current)
+        return asset_graph.diff(baseline, current)
+
     @app.get('/api/assets/{asset_id}')
     def asset_entity(asset_id: str):
         try:

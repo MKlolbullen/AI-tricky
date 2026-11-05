@@ -86,6 +86,15 @@ class PlanInput(BaseModel):
     model: str | None = Field(default=None, max_length=120)
 
 
+class AssistInput(BaseModel):
+    goal: str = Field(min_length=1, max_length=4000)
+    current: list[Annotated[str, StringConstraints(min_length=1, max_length=40)]] = Field(default_factory=list, max_length=24)
+    include_analysis: bool = False
+    use_model: bool = False
+    provider: str | None = Field(default=None, max_length=40)
+    model: str | None = Field(default=None, max_length=120)
+
+
 class CatalogPlanInput(BaseModel):
     goal: str = Field(min_length=1,max_length=4000)
     source_type: str = 'domain'
@@ -374,6 +383,37 @@ def create_app(data_dir=None, assessor=None):
         except Exception:
             raise HTTPException(502, 'Model planning failed. Check local provider readiness or use the local rules planner.') from None
 
+    @app.post('/api/agent/assist')
+    async def agent_assist(body: AssistInput):
+        # Iterative canvas assistant. Only native adapter kinds already on the
+        # canvas inform the suggestion; the server — never the model — builds and
+        # type-validates the resulting graph. The model may only pick adapter IDs.
+        current = [k for k in body.current if k in REGISTRY]
+        def finish(built):
+            new_kinds = [n['data']['kind'] for n in built['graph']['nodes']]
+            return {**built, 'current': current,
+                    'added': [k for k in new_kinds if k not in current],
+                    'removed': [k for k in current if k not in new_kinds],
+                    'result_kinds': new_kinds}
+        if not body.use_model:
+            return finish(plan_workflow(body.goal, include_analysis=body.include_analysis))
+        resolved_model = resolve_model(body.provider, body.model)
+        if assessor is None and cai_adapter.installed_version() != cai_adapter.SUPPORTED_CAI:
+            raise HTTPException(409, 'Configure the supported CAI SDK to use the model assistant, or use the deterministic assistant.')
+        async def disabled(url):
+            return {'error': 'Assistance has no target access.'}
+        goal = ('You are editing an existing typed security workflow on a canvas. Current adapters in order: ' + json.dumps(current) +
+                '. Apply the requested change and return ONLY JSON {"adapters":[adapter IDs]} for the full desired ordered sequence. '
+                'Start with native_scope. Use 2–5 unique adapters with matching input/output types. '
+                f'CAI analysis allowed: {body.include_analysis}. No commands or new adapters. Catalog: ' + json.dumps(REGISTRY) + '\nChange: ' + body.goal)
+        try:
+            result = await assess([], goal, disabled, **({'evidence_only': True, 'model': resolved_model} if assessor is None else {}))
+            return finish(plan_workflow(body.goal, include_analysis=body.include_analysis, model_plan=result['report']))
+        except ScopeError:
+            raise
+        except Exception:
+            raise HTTPException(502, 'Model assistance failed. Check provider readiness or use the deterministic assistant.') from None
+
     @app.post('/api/agent/proposals', status_code=201)
     async def propose_followups(body: EvidencePlanInput):
         get_run(body.run_id)
@@ -653,14 +693,15 @@ def create_app(data_dir=None, assessor=None):
         try:
             async with asyncio.timeout(config.get('max_seconds',240)):
                 if config['engine']=='workflow':
-                    async def analyze(values):
+                    async def analyze(values, role_instructions=None):
                         async def disabled(url):
                             return {'error': 'Evidence-only analysis has no target access.'}
                         # Bounded evidence is untrusted input. No target or network tools attached.
                         goal = analysis_goal(config['goal'], values)
+                        extra = {} if role_instructions is None else {'role_instructions': role_instructions}
                         if assessor is not None:
-                            return await assess([], goal, disabled)
-                        return await assess([], goal, disabled, evidence_only=True)
+                            return await assess([], goal, disabled, **extra)
+                        return await assess([], goal, disabled, evidence_only=True, **extra)
                     result=await execute_workflow(rid,config,ctl,store,fetch,probe,analyze)
                 elif config['engine']=='inventory':
                     result=await inventory()
@@ -711,7 +752,7 @@ def create_app(data_dir=None, assessor=None):
                 team_leader.resolve_roles(body.roles)
             except ValueError as exc:
                 raise HTTPException(422, str(exc))
-        needs_model = body.engine in ('cai','team') or (body.engine == 'workflow' and body.allow_http and any(n['data']['kind']=='native_cai' for n in body.workflow['nodes']))
+        needs_model = body.engine in ('cai','team') or (body.engine == 'workflow' and body.allow_http and any(n['data']['kind'] in ('native_cai','native_team') for n in body.workflow['nodes']))
         if assessor is None and needs_model:
             if cai_adapter.installed_version() != cai_adapter.SUPPORTED_CAI:
                 raise HTTPException(409, 'CAI SDK is not installed at the supported version. See local setup instructions.')

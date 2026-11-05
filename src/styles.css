@@ -155,3 +155,5 @@
 .team-member .section-intro{align-items:center}
 .team-member pre{white-space:pre-wrap;overflow-wrap:anywhere}
 .team-member small{color:#8aa6cb;font:11px var(--mono)}
+.assist-plan li.assist-added{color:#6fd3a6}
+.assist-removed{color:#e08a8a;font-size:12px;margin:6px 0}

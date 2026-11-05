@@ -61,7 +61,7 @@ def plan_workflow(goal, *, include_analysis=False, model_plan=None):
             kinds = plan['adapters']
             if not isinstance(kinds, list) or not 2 <= len(kinds) <= 5 or any(not isinstance(k, str) or k not in REGISTRY for k in kinds) or len(set(kinds)) != len(kinds) or kinds[0] != 'native_scope':
                 raise ValueError()
-            if 'native_cai' in kinds and not include_analysis:
+            if ('native_cai' in kinds or 'native_team' in kinds) and not include_analysis:
                 raise ValueError()
         except (KeyError, ValueError, TypeError, AttributeError):
             raise ScopeError('Planner returned an unsupported adapter plan.') from None

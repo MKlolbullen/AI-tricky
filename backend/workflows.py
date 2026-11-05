@@ -180,6 +180,27 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze):
             from .intelligence import validate_analysis
             analysis = validate_analysis(result['report'], values)
             return [{'report': analysis['summary'], 'analysis': analysis, 'evidence_status': 'CANDIDATE'}]
+        if kind == 'native_team':
+            # Evidence-only multi-role review. Each role analyses the same captured
+            # evidence with no target tools; results are aggregated per role and a
+            # role failure becomes a coverage gap, not a node failure. Nothing is
+            # auto-confirmed.
+            from .intelligence import validate_analysis
+            from . import team as team_leader
+            async def member(key):
+                spec = team_leader.ROLES[key]
+                try:
+                    out = await analyze(values, role_instructions=spec['focus'])
+                    analysis = validate_analysis(out['report'], values)
+                    return {'role': key, 'name': spec['name'], 'status': 'ok',
+                            'summary': analysis['summary'], 'analysis': analysis}
+                except (ScopeError, RuntimeError) as exc:
+                    return {'role': key, 'name': spec['name'], 'status': 'failed', 'reason': str(exc)[:300]}
+            members = list(await asyncio.gather(*(member(k) for k in team_leader.DEFAULT_ROLES)))
+            completed = [m for m in members if m['status'] == 'ok']
+            coverage = [f'{m["name"]} role did not complete: {m["reason"]}' for m in members if m['status'] != 'ok']
+            summary = f'CAI team evidence review: {len(completed)}/{len(members)} roles completed. Candidates only; nothing auto-confirmed.'
+            return [{'report': summary, 'team': True, 'members': members, 'coverage_limits': coverage, 'evidence_status': 'CANDIDATE'}]
         open_ports = sum(v.get('state') == 'open' for v in values)
         responses = sum('status' in v and 'url' in v for v in values)
         errors = sum('error' in v or v.get('state') in ('blocked', 'budget_exhausted') for v in values)

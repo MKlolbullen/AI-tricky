@@ -7,6 +7,7 @@ from backend.app import create_app
 from backend.cai_adapter import build_instructions, LIVE_INSTRUCTIONS, EVIDENCE_ONLY_INSTRUCTIONS
 from backend.team import run_team, resolve_roles, ROLES, DEFAULT_ROLES
 from backend.tests.test_local import target_server, wait_done
+from backend.tests.test_workflows import graph, launch
 
 
 # -- role-instruction composition ---------------------------------------------
@@ -116,6 +117,41 @@ def test_team_run_rejects_unknown_role(tmp_path, target_server):
     with TestClient(create_app(tmp_path, assessor=_assessor(base))) as c:
         tid = c.post('/api/targets', json={'value': base}).json()['id']
         assert c.post('/api/runs', json={'engine': 'team', 'target_ids': [tid], 'roles': ['nope']}).status_code == 422
+
+
+def _analysis_assessor():
+    import json
+    async def model(targets, goal, fetch, *, role_instructions=None, **kw):
+        # Evidence-only role review returns a valid, empty-candidate analysis so
+        # validate_analysis accepts it without needing specific artifact ids.
+        return {'report': json.dumps({'summary': f'Role review ({"team-role" if role_instructions else "base"}).',
+                                      'candidates': [], 'coverage_limits': ['Evidence-only; no live verification.']})}
+    return model
+
+
+def test_native_team_node_reviews_evidence_across_all_roles(tmp_path, target_server):
+    # The native_team workflow node runs the five roles over captured evidence
+    # with no target tools, aggregating per-role results in one node output.
+    base, _ = target_server
+    g = graph('native_scope', 'native_tcp', 'native_http', 'native_team', 'native_summary')
+    with TestClient(create_app(tmp_path, assessor=_analysis_assessor())) as c:
+        r = launch(c, base, g)
+        assert r.status_code == 201, r.text
+        rid = r.json()['id']
+        assert wait_done(c, rid)['status'] == 'completed'
+        arts = {a['name']: a['id'] for a in c.get('/api/runs/' + rid + '/artifacts').json()}
+        team = c.get('/api/artifacts/' + arts['node-n3.json']).json()
+        assert team[0]['team'] is True
+        assert [m['role'] for m in team[0]['members']] == ['surface', 'transport', 'authz', 'injection', 'logic']
+        assert all(m['status'] == 'ok' and m['analysis']['confirmed'] is False for m in team[0]['members'])
+
+
+def test_native_team_node_requires_the_model_sdk_on_the_real_path(tmp_path, target_server):
+    base, _ = target_server
+    g = graph('native_scope', 'native_http', 'native_team')
+    with TestClient(create_app(tmp_path)) as c:
+        r = launch(c, base, g)
+        assert r.status_code == 409 and 'CAI SDK' in r.json()['detail']
 
 
 def test_team_engine_requires_the_model_sdk_on_the_real_path(tmp_path, target_server):

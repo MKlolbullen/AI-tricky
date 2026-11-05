@@ -60,6 +60,47 @@ def test_indexing_is_idempotent(tmp_path):
     assert len(first['edges']) == len(second['edges'])
 
 
+def _seed_shodan(store, cve):
+    rid = store.new_run({'engine': 'passive', 'targets': ['1.2.3.4']})['id']
+    store.artifact(rid, 'passive-shodan-ip-0.json',
+                   {'provider': 'shodan', 'query_type': 'ip', 'query': '1.2.3.4',
+                    'response': {'ip_str': '1.2.3.4', 'data': [{'port': 443, 'product': 'nginx', 'vulns': {cve: {}}}]}})
+    AssetGraph(store).index_pending(rid)
+    return rid
+
+
+def test_graph_diff_classifies_new_unchanged_and_not_observed(tmp_path):
+    store = Store(tmp_path)
+    ra = _seed_shodan(store, 'CVE-2021-1')
+    rb = _seed_shodan(store, 'CVE-2021-2')
+    diff = AssetGraph(store).diff(ra, rb)
+    states = {(e['kind'], e['canonical']): e['state'] for e in diff['entities']}
+    assert states[('ip', '1.2.3.4')] == 'unchanged'
+    assert states[('service', '1.2.3.4:443/tcp')] == 'unchanged'
+    assert states[('vulnerability', 'CVE-2021-1')] == 'not_observed'
+    assert states[('vulnerability', 'CVE-2021-2')] == 'new'
+    assert diff['summary']['new'] >= 1 and diff['summary']['not_observed'] >= 1
+    # Edges are classified too (the CVE-A link disappears, CVE-B appears).
+    edge_states = {(e['rel'], e['dst_canonical']): e['state'] for e in diff['edges']}
+    assert edge_states[('reported_vulnerable', 'CVE-2021-1')] == 'not_observed'
+    assert edge_states[('reported_vulnerable', 'CVE-2021-2')] == 'new'
+
+
+def test_asset_diff_api_and_validation(tmp_path):
+    store = Store(tmp_path)
+    ra = _seed_shodan(store, 'CVE-2021-1')
+    rb = _seed_shodan(store, 'CVE-2021-2')
+    with TestClient(create_app(tmp_path)) as c:
+        r = c.get(f'/api/assets/diff?baseline={ra}&current={rb}')
+        assert r.status_code == 200, r.text
+        states = {(e['kind'], e['canonical']): e['state'] for e in r.json()['entities']}
+        assert states[('vulnerability', 'CVE-2021-1')] == 'not_observed'
+        assert states[('vulnerability', 'CVE-2021-2')] == 'new'
+        assert 'absence_means' in r.json()
+        assert c.get(f'/api/assets/diff?baseline={ra}&current={ra}').status_code == 422
+        assert c.get(f'/api/assets/diff?baseline={ra}&current=missing').status_code == 404
+
+
 def test_asset_graph_api_end_to_end(tmp_path, target_server):
     base, _ = target_server
     with TestClient(create_app(tmp_path)) as c:

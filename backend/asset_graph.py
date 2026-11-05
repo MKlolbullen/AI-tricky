@@ -296,3 +296,45 @@ class AssetGraph:
                            'other_kind': e['dst_kind'] if e['src_id'] == asset_id else e['src_kind'],
                            'other_canonical': e['dst_canonical'] if e['src_id'] == asset_id else e['src_canonical']} for e in neighbours],
                 'provenance': [dict(p) for p in provenance]}
+
+    def diff(self, baseline_id, current_id):
+        """Compare the entities and edges attributable (by provenance) to two
+        runs. 'new' is present in current but not baseline; 'not_observed' is
+        present in baseline but not current; 'unchanged' is in both. Absence is
+        'not observed', never removal or resolution."""
+        self.index_pending(baseline_id)
+        self.index_pending(current_id)
+        with self.store.connect() as c:
+            def refs(rid):
+                return {r['ref_id'] for r in c.execute('SELECT DISTINCT ref_id FROM asset_provenance WHERE run_id=?', (rid,))}
+            base, cur = refs(baseline_id), refs(current_id)
+            all_refs = base | cur
+            ent_rows, edge_rows = {}, {}
+            if all_refs:
+                marks = ','.join('?' * len(all_refs))
+                args = list(all_refs)
+                for r in c.execute(f'SELECT id,kind,canonical FROM assets WHERE id IN ({marks})', args):
+                    ent_rows[r['id']] = r
+                for r in c.execute(f'''SELECT e.id,e.rel,e.source,s.kind AS src_kind,s.canonical AS src_canonical,
+                                       d.kind AS dst_kind,d.canonical AS dst_canonical FROM asset_edges e
+                                       JOIN assets s ON s.id=e.src_id JOIN assets d ON d.id=e.dst_id
+                                       WHERE e.id IN ({marks})''', args):
+                    edge_rows[r['id']] = r
+
+        def state(ref):
+            return 'new' if ref not in base else 'not_observed' if ref not in cur else 'unchanged'
+
+        entities = sorted(({'kind': r['kind'], 'canonical': r['canonical'], 'state': state(rid)}
+                           for rid, r in ent_rows.items()), key=lambda e: (e['kind'], e['canonical']))
+        edges = sorted(({'rel': r['rel'], 'source': r['source'], 'src_kind': r['src_kind'], 'src_canonical': r['src_canonical'],
+                         'dst_kind': r['dst_kind'], 'dst_canonical': r['dst_canonical'], 'state': state(rid)}
+                        for rid, r in edge_rows.items()), key=lambda e: (e['rel'], e['src_canonical'], e['dst_canonical']))
+        rows = entities + edges
+        warnings = []
+        baseline_run, current_run = self.store.run(baseline_id), self.store.run(current_id)
+        if sorted(baseline_run['config'].get('targets', [])) != sorted(current_run['config'].get('targets', [])):
+            warnings.append('The entered scope differs between these runs.')
+        return {'baseline_id': baseline_id, 'current_id': current_id, 'entities': entities, 'edges': edges,
+                'summary': {s: sum(x['state'] == s for x in rows) for s in ('new', 'not_observed', 'unchanged')},
+                'absence_means': 'Not observed in the selected run; this does not establish removal or resolution.',
+                'warnings': warnings}

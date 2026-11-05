@@ -183,3 +183,11 @@
 .claim-tag{display:inline-block;margin-left:8px;padding:1px 7px;border:1px solid #ddb46b;border-radius:3px;font:9px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:#ddb46b;vertical-align:middle}
 .asset-sources{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 .source-badge{padding:2px 8px;border:1px solid #2f6f6f;border-radius:10px;font:10px var(--mono);color:#63c7d8;background:#0c1f24}
+.diff-summary{display:flex;gap:14px;margin:8px 0;font-size:12px}
+.diff-summary span{padding:2px 9px;border-radius:10px;border:1px solid #2b405a}
+.diff-list{list-style:none;padding:0;margin:8px 0;font-size:12px}
+.diff-list li{padding:4px 0;border-bottom:1px solid #1b2c42;overflow-wrap:anywhere}
+.diff-list code{margin-right:6px}
+.state-new{color:#6fd3a6;border-color:#2f6f52}
+.state-gone{color:#e08a8a;border-color:#6f3434}
+.state-same{color:#8aa6cb}

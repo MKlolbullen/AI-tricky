@@ -11,6 +11,7 @@ export default function AssetGraphView({runs = [], runtime, targets = [], onEnri
   const [error, setError] = useState(''), [loading, setLoading] = useState(false), [refresh, setRefresh] = useState(0);
   const [enrichTarget, setEnrichTarget] = useState(''), [enrichProviders, setEnrichProviders] = useState([]);
   const [enriching, setEnriching] = useState(false), [enrichSummary, setEnrichSummary] = useState(null);
+  const [diffBase, setDiffBase] = useState(''), [diffCur, setDiffCur] = useState(''), [diffRes, setDiffRes] = useState(null), [diffBusy, setDiffBusy] = useState(false);
   const passive = runtime?.passive_providers;
   const scopeTargets = targets.filter(t => t.kind === 'domain' || t.kind === 'ip');
   useEffect(() => {
@@ -36,7 +37,14 @@ export default function AssetGraphView({runs = [], runtime, targets = [], onEnri
       setEnrichSummary(result.summary); setRunId(result.run_id); setRefresh(v => v + 1); onEnriched?.();
     } catch (e) {setError(e.message);} finally {setEnriching(false);}
   };
+  const runDiff = async () => {
+    setDiffBusy(true); setError(''); setDiffRes(null);
+    try {setDiffRes(await api('/assets/diff?' + new URLSearchParams({baseline: diffBase, current: diffCur})));}
+    catch (e) {setError(e.message);} finally {setDiffBusy(false);}
+  };
   const byKind = KINDS.map(k => [k, graph.entities.filter(e => e.kind === k)]).filter(([, xs]) => xs.length);
+  const diffChanges = diffRes ? [...diffRes.entities.filter(e => e.state !== 'unchanged').map(e => ({...e, label: `${e.kind} ${e.canonical}`})),
+                                 ...diffRes.edges.filter(e => e.state !== 'unchanged').map(e => ({...e, label: `${e.rel} ${e.src_canonical} → ${e.dst_canonical} · ${e.source}`}))] : [];
   return <section className="evidence-workbench asset-graph">
     <div className="section-intro"><div><h3>Asset graph</h3><p>Hosts, IPs, services, technologies, files and — from passive sources — netblocks, certificates, vulnerabilities and contacts, with their relationships and provenance. Observed facts and third-party claims (each sourced), never confirmed findings. Absence is “not observed”.</p></div></div>
     <details className="enrich-panel"><summary>Enrich from passive sources</summary>
@@ -46,7 +54,18 @@ export default function AssetGraphView({runs = [], runtime, targets = [], onEnri
         <fieldset className="enrich-providers"><legend>Providers</legend>{(passive?.providers || []).map(pr => <label className="http-toggle" key={pr.id}><input type="checkbox" disabled={!pr.configured} checked={enrichProviders.includes(pr.id)} onChange={() => toggleProvider(pr.id)}/><span>{pr.name}{pr.configured ? '' : ' · add key in Credentials'}</span></label>)}</fieldset>
         <button className="primary" disabled={enriching || !enrichTarget || !enrichProviders.length || !passive?.enabled}>{enriching ? 'Querying providers…' : 'Enrich asset graph'}</button>
       </form>
-      {enrichSummary && <ul className="enrich-summary">{enrichSummary.map(s => <li key={s.provider}><strong>{s.name}</strong> · {s.status === 'ok' ? `${s.queries} query(ies)` : `failed: ${s.reason}`}</li>)}</ul>}
+      {enrichSummary && <ul className="enrich-summary">{enrichSummary.map(s => <li key={s.provider}><strong>{s.name}</strong> · {s.status === 'ok' ? `${s.queries} query(ies)${s.source ? ' · ' + s.source : ''}` : `failed: ${s.reason}`}</li>)}</ul>}
+    </details>
+    <details className="enrich-panel"><summary>Compare two enrichment runs</summary>
+      <p className="enrich-note">What the asset graph gained or stopped observing between two runs. Absence is “not observed”, never removal or resolution.</p>
+      <div className="evidence-filters">
+        <label className="field-label">Baseline run<select value={diffBase} onChange={e => setDiffBase(e.target.value)}><option value="">Select a run</option>{runs.map(r => <option key={r.id} value={r.id}>{r.id.slice(0, 8)} · {r.config?.engine || r.status}</option>)}</select></label>
+        <label className="field-label">Current run<select value={diffCur} onChange={e => setDiffCur(e.target.value)}><option value="">Select a run</option>{runs.map(r => <option key={r.id} value={r.id}>{r.id.slice(0, 8)} · {r.config?.engine || r.status}</option>)}</select></label>
+        <button className="primary" disabled={diffBusy || !diffBase || !diffCur || diffBase === diffCur} onClick={runDiff}>{diffBusy ? 'Comparing…' : 'Compare'}</button>
+      </div>
+      {diffRes && <div className="asset-diff"><div className="diff-summary"><span className="state-new">{diffRes.summary.new} new</span><span className="state-gone">{diffRes.summary.not_observed} not observed</span><span className="state-same">{diffRes.summary.unchanged} unchanged</span></div>
+        {diffRes.warnings.map((w, i) => <p className="comparison-notice" key={i}>{w}</p>)}
+        <ul className="diff-list">{diffChanges.length ? diffChanges.map((e, i) => <li key={i} className={e.state === 'new' ? 'state-new' : 'state-gone'}><code>{e.state === 'new' ? '+' : '−'}</code> {e.label}</li>) : <li>No differences between these runs.</li>}</ul></div>}
     </details>
     <div className="evidence-filters">
       <label className="field-label">Source run<select value={runId} onChange={e => {setRunId(e.target.value); setSel(null); setDetail(null);}}><option value="">All runs</option>{runs.map(r => <option key={r.id} value={r.id}>{r.id.slice(0, 8)} · {r.config?.engine || r.status}</option>)}</select></label>

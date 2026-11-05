@@ -35,7 +35,8 @@ async def main():
         return await rpc('probe_ports', {'target': target, 'ports': ports})
     result = await assess_local(request['targets'], request['goal'], fetch,
                                network_tool=probe if request['network_enabled'] else None,
-                               timeout=request['timeout'], evidence_only=request['evidence_only'])
+                               timeout=request['timeout'], evidence_only=request['evidence_only'],
+                               role_instructions=request.get('role_instructions'), max_turns=request.get('max_turns', 12))
     emit({'type': 'result', 'result': result})
 
 

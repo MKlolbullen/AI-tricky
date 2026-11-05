@@ -18,7 +18,8 @@ async def send_frame(writer, value):
     await writer.drain()
 
 
-async def assess_worker(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False, model=None):
+async def assess_worker(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False, model=None,
+                        role_instructions=None, max_turns=12):
     from .cli_runner import stop_process
     cfg = model or {}
     base = model_base_url(cfg.get('base_url') or os.environ.get('CAI_MODEL_BASE_URL', 'http://127.0.0.1:11434/v1'),
@@ -45,7 +46,8 @@ async def assess_worker(targets, goal, request_tool, *, network_tool=None, timeo
                        stderr=asyncio.subprocess.DEVNULL, env=env, limit=MAX_FRAME,
                        start_new_session=os.name == 'posix')
             await send_frame(proc.stdin, {'targets': targets, 'goal': goal, 'timeout': timeout,
-                                         'evidence_only': evidence_only, 'network_enabled': network_tool is not None})
+                                         'evidence_only': evidence_only, 'network_enabled': network_tool is not None,
+                                         'role_instructions': role_instructions, 'max_turns': max_turns})
             for _ in range(64):
                 raw = await proc.stdout.readline()
                 if not raw or len(raw) > MAX_FRAME:

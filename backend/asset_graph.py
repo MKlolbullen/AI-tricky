@@ -18,15 +18,31 @@ from urllib.parse import urlsplit
 from .observations import canonical_asset, digest, encoded
 from .store import now
 
-GRAPH_VERSION = '1'
-ENTITY_KINDS = frozenset({'host', 'ip', 'service', 'technology', 'file'})
-EDGE_RELS = frozenset({'subdomain_of', 'resolves_to', 'exposes', 'runs', 'serves'})
+GRAPH_VERSION = '2'
+ENTITY_KINDS = frozenset({'host', 'ip', 'service', 'technology', 'file',
+                          'netblock', 'certificate', 'vulnerability', 'contact'})
+EDGE_RELS = frozenset({'subdomain_of', 'resolves_to', 'exposes', 'runs', 'serves',
+                       'member_of', 'covers', 'reported_vulnerable', 'has_contact'})
 _DEFAULT_PORT = {'http': 80, 'https': 443}
 
 
 def _host(value):
     """Canonical hostname/IP for a bare host value, or None."""
     return canonical_asset(value) if isinstance(value, str) and '://' not in value else None
+
+
+def source_of(artifact_name):
+    """Map a provenance artifact name to its evidence source label."""
+    if not isinstance(artifact_name, str):
+        return 'unknown'
+    if artifact_name.startswith('passive-'):
+        parts = artifact_name.split('-')
+        return parts[1] if len(parts) > 1 else 'passive'
+    if artifact_name.startswith('http-'):
+        return 'scoped-http'
+    if artifact_name == 'tcp-inventory.json':
+        return 'native-tcp'
+    return 'capture'
 
 
 def _parent_host(host):
@@ -110,7 +126,7 @@ class AssetGraph:
                              (artifact['id'], GRAPH_VERSION)).fetchone():
                     continue
                 name = artifact['name']
-                eligible = name == 'tcp-inventory.json' or (name.startswith('http-') and name.endswith('.json'))
+                eligible = name == 'tcp-inventory.json' or (name.startswith(('http-', 'passive-')) and name.endswith('.json'))
                 content = json.loads(c.execute('SELECT content FROM artifacts WHERE id=?', (artifact['id'],)).fetchone()['content']) if eligible else None
                 refs = set()
                 ctx = {'c': c, 'run_id': artifact['run_id'], 'artifact_id': artifact['id'],
@@ -118,7 +134,9 @@ class AssetGraph:
                 try:
                     if name == 'tcp-inventory.json' and isinstance(content, list):
                         self._extract_tcp(ctx, content)
-                    elif eligible and isinstance(content, dict):
+                    elif name.startswith('passive-') and isinstance(content, dict):
+                        self._apply_passive(ctx, content)
+                    elif name.startswith('http-') and isinstance(content, dict):
                         self._extract_http(ctx, content)
                 finally:
                     for ref in refs:
@@ -199,6 +217,33 @@ class AssetGraph:
                 iid = self._entity(ctx, 'ip', ip, {'ip': ip})
                 self._edge(ctx, 'resolves_to', hid, iid, source)
 
+    def _apply_passive(self, ctx, content):
+        """Apply a provider's parsed records (third-party claims) with its source.
+        Entities are created before edges so an edge never overwrites richer
+        entity data with a minimal endpoint. Every edge carries source=provider."""
+        from .passive_sources import parse_response, ADAPTERS
+        provider = content.get('provider')
+        if provider not in ADAPTERS:
+            return
+        records = parse_response(provider, content.get('query_type'), content.get('query'), content.get('response'))
+        for rec in records:
+            if rec.get('t') != 'e':
+                continue
+            kind, canonical = rec.get('kind'), rec.get('canonical')
+            if kind in ENTITY_KINDS and isinstance(canonical, str) and canonical:
+                self._entity(ctx, kind, canonical[:512], rec.get('data') if isinstance(rec.get('data'), dict) else {})
+        for rec in records:
+            if rec.get('t') != 'x':
+                continue
+            rel, s, d = rec.get('rel'), rec.get('src'), rec.get('dst')
+            if rel not in EDGE_RELS or not (isinstance(s, (list, tuple)) and len(s) == 2 and isinstance(d, (list, tuple)) and len(d) == 2):
+                continue
+            if s[0] not in ENTITY_KINDS or d[0] not in ENTITY_KINDS or not (isinstance(s[1], str) and s[1]) or not (isinstance(d[1], str) and d[1]):
+                continue
+            sid = self._entity(ctx, s[0], s[1][:512], {})
+            did = self._entity(ctx, d[0], d[1][:512], {})
+            self._edge(ctx, rel, sid, did, provider)
+
     # -- reads ----------------------------------------------------------------
     def graph(self, *, run_id=None, kind=None, q='', limit=500):
         self.index_pending(run_id)
@@ -238,9 +283,13 @@ class AssetGraph:
                                       d.kind AS dst_kind, d.canonical AS dst_canonical
                                       FROM asset_edges e JOIN assets s ON s.id=e.src_id JOIN assets d ON d.id=e.dst_id
                                       WHERE e.src_id=? OR e.dst_id=?''', (asset_id, asset_id)).fetchall()
-            provenance = c.execute('''SELECT artifact_id,run_id,observed_at FROM asset_provenance
-                                      WHERE ref_id=? ORDER BY observed_at DESC''', (asset_id,)).fetchall()
+            provenance = c.execute('''SELECT p.artifact_id,p.run_id,p.observed_at,a.name AS artifact_name
+                                      FROM asset_provenance p LEFT JOIN artifacts a ON a.id=p.artifact_id
+                                      WHERE p.ref_id=? ORDER BY p.observed_at DESC''', (asset_id,)).fetchall()
+        sources = sorted({source_of(p['artifact_name']) for p in provenance} |
+                         {e['source'] for e in neighbours if e['src_id'] == asset_id})
         return {'id': row['id'], 'kind': row['kind'], 'canonical': row['canonical'], 'data': json.loads(row['data']),
+                'sources': sources,
                 'first_seen': row['first_seen'], 'last_seen': row['last_seen'],
                 'edges': [{'id': e['id'], 'rel': e['rel'], 'direction': 'out' if e['src_id'] == asset_id else 'in',
                            'source': e['source'], 'other_id': e['dst_id'] if e['src_id'] == asset_id else e['src_id'],

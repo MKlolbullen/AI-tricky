@@ -159,4 +159,5 @@ async def assess_local(targets, goal, request_tool, *, network_tool=None, timeou
                           model=LoopbackModel(client), tools=[] if evidence_only else [fetch_target, probe_ports] if network_tool else [fetch_target])
             result = await asyncio.wait_for(Runner.run(agent, input=json.dumps({'scope': targets, 'goal': goal}),
                                                       max_turns=max(1, min(int(max_turns), 24)), run_config=RunConfig(tracing_disabled=True)), timeout=timeout)
-            return {'report': str(result.final_output), 'evidence_status': 'CANDIDATE', 'model': model_name, 'engine': f'cai-framework/{SUPPORTED_CAI}'}
+            return {'report': str(result.final_output), 'evidence_status': 'CANDIDATE', 'model': model_name,
+                    'engine': f'cai-framework/{SUPPORTED_CAI}', 'sdk_execution': 'in-process'}

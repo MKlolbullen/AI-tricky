@@ -61,6 +61,7 @@ class RunInput(BaseModel):
     cli_credential_keys: list[str] = Field(default_factory=list,max_length=30)
     roles: list[Annotated[str, StringConstraints(min_length=1, max_length=40)]] = Field(default_factory=list, max_length=12)
     member_max_turns: int = Field(default=8, ge=1, le=24)
+    member_workers: int = Field(default=3, ge=1, le=8)
     synthesize: bool = False
     adaptive: bool = False
     provider: str | None = Field(default=None, max_length=40)
@@ -812,7 +813,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                                                        concurrency=config.get('parallelism',4),
                                                        synthesize=synthesize if config.get('synthesize') else None,
                                                        adaptive=team_adaptive, evidence=team_evidence,
-                                                       asset_entities=team_assets)
+                                                       asset_entities=team_assets, max_workers=config.get('member_workers'))
                 elif assessor is None:
                     result=await assess(config['targets'],config['goal'],fetch,network_tool=probe)
                 else:

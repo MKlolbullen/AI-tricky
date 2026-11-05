@@ -780,7 +780,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                         if assessor is not None:
                             return await assess([], goal, disabled, **extra)
                         return await assess([], goal, disabled, evidence_only=True, **extra)
-                    result=await execute_workflow(rid,config,ctl,store,fetch,probe,analyze)
+                    result=await execute_workflow(rid,config,ctl,store,fetch,probe,analyze,asset_graph=asset_graph)
                 elif config['engine']=='inventory':
                     result=await inventory()
                 elif config['engine']=='team':

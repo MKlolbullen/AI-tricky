@@ -4,6 +4,7 @@ from backend.app import create_app
 from backend.asset_graph import AssetGraph
 from backend.store import Store
 from backend.tests.test_local import target_server, wait_done
+from backend.tests.test_workflows import graph
 
 
 def _seed(store):
@@ -99,6 +100,32 @@ def test_asset_diff_api_and_validation(tmp_path):
         assert 'absence_means' in r.json()
         assert c.get(f'/api/assets/diff?baseline={ra}&current={ra}').status_code == 422
         assert c.get(f'/api/assets/diff?baseline={ra}&current=missing').status_code == 404
+
+
+def test_native_asset_graph_node_emits_the_scoped_subgraph(tmp_path):
+    # Seed the asset graph with passive subdomains of example.com, then run a
+    # workflow whose native_asset_graph node reads it back for the entered scope.
+    store = Store(tmp_path)
+    rid = store.new_run({'engine': 'passive', 'targets': ['example.com']})['id']
+    store.artifact(rid, 'passive-virustotal-domain-0.json',
+                   {'provider': 'virustotal', 'query_type': 'domain', 'query': 'example.com',
+                    'response': {'data': [{'id': 'api.example.com'}, {'id': 'dev.example.com'}]}})
+    AssetGraph(store).index_pending(rid)
+    g = graph('native_scope', 'native_asset_graph')
+    with TestClient(create_app(tmp_path)) as c:
+        tid = c.post('/api/targets', json={'value': 'example.com'}).json()['id']
+        r = c.post('/api/runs', json={'engine': 'workflow', 'workflow': g, 'target_ids': [tid], 'allow_http': True})
+        assert r.status_code == 201, r.text
+        wrid = r.json()['id']
+        assert wait_done(c, wrid)['status'] == 'completed'
+        arts = {a['name']: a['id'] for a in c.get('/api/runs/' + wrid + '/artifacts').json()}
+        node = c.get('/api/artifacts/' + arts['node-n1.json']).json()
+        sub = node[0]['asset_graph']
+        canon = {(e['kind'], e['canonical']) for e in sub['entities']}
+        assert ('host', 'api.example.com') in canon and ('host', 'example.com') in canon
+        assert node[0]['evidence_status'] == 'OBSERVATION'
+        # The node reads the graph only; it emits no targets for live probing.
+        assert node[0]['report'].startswith('Asset graph for the entered scope')
 
 
 def test_asset_graph_api_end_to_end(tmp_path, target_server):

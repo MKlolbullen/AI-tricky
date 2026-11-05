@@ -338,3 +338,37 @@ class AssetGraph:
                 'summary': {s: sum(x['state'] == s for x in rows) for s in ('new', 'not_observed', 'unchanged')},
                 'absence_means': 'Not observed in the selected run; this does not establish removal or resolution.',
                 'warnings': warnings}
+
+    def scope_subgraph(self, targets, max_entities=2000):
+        """The asset graph reachable (within two hops) from the entered hosts —
+        the hosts themselves, their subdomains, and the services/ips/technologies/
+        vulnerabilities/etc. attached to them. Read-only observed data; it never
+        expands scope or emits anything for live probing."""
+        self.index_pending()
+        entered = {h for h in (canonical_asset(t) for t in targets) if h}
+        with self.store.connect() as c:
+            host_ids = [r['id'] for r in c.execute("SELECT id,canonical FROM assets WHERE kind='host'")
+                        if r['canonical'] in entered or any(r['canonical'].endswith('.' + e) for e in entered)]
+            seen, frontier = set(host_ids), set(host_ids)
+            for _ in range(2):
+                if not frontier or len(seen) >= max_entities:
+                    break
+                marks = ','.join('?' * len(frontier))
+                args = list(frontier) + list(frontier)
+                neighbours = c.execute(f'SELECT src_id,dst_id FROM asset_edges WHERE src_id IN ({marks}) OR dst_id IN ({marks})', args).fetchall()
+                new = {nid for e in neighbours for nid in (e['src_id'], e['dst_id']) if nid not in seen}
+                seen |= new
+                frontier = new
+            seen = set(list(seen)[:max_entities])
+            if not seen:
+                return {'entities': [], 'edges': []}
+            marks = ','.join('?' * len(seen))
+            ids = list(seen)
+            entities = [{'kind': r['kind'], 'canonical': r['canonical'], 'data': json.loads(r['data'])}
+                        for r in c.execute(f'SELECT kind,canonical,data FROM assets WHERE id IN ({marks})', ids)]
+            edges = [{'rel': r['rel'], 'source': r['source'], 'src': r['src'], 'dst': r['dst']}
+                     for r in c.execute(f'''SELECT e.rel,e.source,s.canonical AS src,d.canonical AS dst FROM asset_edges e
+                                            JOIN assets s ON s.id=e.src_id JOIN assets d ON d.id=e.dst_id
+                                            WHERE e.src_id IN ({marks}) AND e.dst_id IN ({marks})''', ids + ids)]
+        return {'entities': sorted(entities, key=lambda e: (e['kind'], e['canonical'])),
+                'edges': sorted(edges, key=lambda e: (e['rel'], e['src']))}

@@ -147,3 +147,11 @@
 .model-select{display:flex;flex-direction:column;gap:14px;margin:4px 0 22px;padding:15px;border:1px solid #29435e;border-radius:6px;background:#0b1a2b}
 .model-select select,.model-select input{width:100%}
 .model-note{font-size:11px;line-height:1.6;color:#8aa6cb}
+.team-setup{display:flex;flex-direction:column;gap:14px;margin:4px 0}
+.team-roles{border:1px solid #29435e;border-radius:6px;background:#0b1a2b;padding:12px 16px;margin:0}
+.team-roles legend{font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:#9db4d6;padding:0 6px}
+.team-report{margin:18px 0}
+.team-member{border:1px solid #2b405a;border-radius:8px;background:#101c2e;padding:12px 16px;margin:10px 0}
+.team-member .section-intro{align-items:center}
+.team-member pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.team-member small{color:#8aa6cb;font:11px var(--mono)}

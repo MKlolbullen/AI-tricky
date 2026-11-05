@@ -28,6 +28,7 @@ from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
 from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
 from .credentials import CredentialVault, MODEL_PROVIDERS, MODEL_VARS
+from . import team as team_leader
 from . import verification
 
 
@@ -45,7 +46,7 @@ class RunInput(BaseModel):
     goal: str = Field(default='Assess the supplied web targets and report evidence-backed security candidates.', min_length=1, max_length=4000)
     allow_http: bool = False
     max_requests: int = Field(default=256, ge=1, le=2048)
-    engine: Literal['cai','inventory','workflow'] = 'cai'
+    engine: Literal['cai','inventory','workflow','team'] = 'cai'
     workflow: dict | None = None
     parallelism: int = Field(default=4, ge=1, le=16)
     max_hosts: int = Field(default=64, ge=1, le=256)
@@ -54,6 +55,10 @@ class RunInput(BaseModel):
     max_cli_invocations: int = Field(default=64, ge=1, le=256)
     max_seconds: int = Field(default=240, ge=1, le=3600)
     cli_credential_keys: list[str] = Field(default_factory=list,max_length=30)
+    roles: list[Annotated[str, StringConstraints(min_length=1, max_length=40)]] = Field(default_factory=list, max_length=12)
+    member_max_turns: int = Field(default=8, ge=1, le=24)
+    provider: str | None = Field(default=None, max_length=40)
+    model: str | None = Field(default=None, max_length=120)
 
 
 class InputRegistration(BaseModel):
@@ -120,6 +125,9 @@ class RunControl:
         self.processes = {}
         self.cli_invocations = 0
         self.credentials = {}
+        # Resolved model config (base_url, api_key, model) for a team run. Lives
+        # only on the control object, never in the persisted run.
+        self.model = None
         self.task = None
 
 
@@ -656,6 +664,15 @@ def create_app(data_dir=None, assessor=None):
                     result=await execute_workflow(rid,config,ctl,store,fetch,probe,analyze)
                 elif config['engine']=='inventory':
                     result=await inventory()
+                elif config['engine']=='team':
+                    # Members share this run's fetch/probe, so they draw on one
+                    # budget ledger, scope and credential snapshot. The resolved
+                    # model lives on the control object only, never persisted.
+                    result=await team_leader.run_team(config['targets'],config['goal'],fetch,probe,assess,
+                                                       roles=config.get('roles'),model=ctl.model,
+                                                       member_max_turns=config.get('member_max_turns',8),
+                                                       timeout=min(config.get('max_seconds',240),180),
+                                                       concurrency=config.get('parallelism',4))
                 elif assessor is None:
                     result=await assess(config['targets'],config['goal'],fetch,network_tool=probe)
                 else:
@@ -689,7 +706,12 @@ def create_app(data_dir=None, assessor=None):
         if not body.target_ids and body.engine!='workflow':raise HTTPException(422,'Select at least one entered target.')
         if body.engine == 'workflow':
             validate_workflow(body.workflow, live=True)
-        needs_model = body.engine == 'cai' or (body.engine == 'workflow' and body.allow_http and any(n['data']['kind']=='native_cai' for n in body.workflow['nodes']))
+        if body.engine == 'team':
+            try:
+                team_leader.resolve_roles(body.roles)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc))
+        needs_model = body.engine in ('cai','team') or (body.engine == 'workflow' and body.allow_http and any(n['data']['kind']=='native_cai' for n in body.workflow['nodes']))
         if assessor is None and needs_model:
             if cai_adapter.installed_version() != cai_adapter.SUPPORTED_CAI:
                 raise HTTPException(409, 'CAI SDK is not installed at the supported version. See local setup instructions.')
@@ -697,7 +719,7 @@ def create_app(data_dir=None, assessor=None):
         config = {**body.model_dump(), 'targets': list(dict.fromkeys(known[tid]['url'] for tid in body.target_ids))}
         allowed_keys={key for tool in TOOLS.values() for key in tool.get('secrets',[]) if key not in MODEL_VARS}
         if any(key not in allowed_keys for key in body.cli_credential_keys):raise HTTPException(422,'Select only catalog-declared credential variable names.')
-        if body.engine in ('inventory','workflow') and body.allow_http:
+        if body.engine in ('inventory','workflow','team') and body.allow_http:
             entered=[parse_target(t) for t in config['targets']]
             for target in entered:
                 if target.kind!='url':
@@ -720,16 +742,21 @@ def create_app(data_dir=None, assessor=None):
                 ready=await asyncio.to_thread(catalog_preflight,body.workflow,config,store,credentials=configured_secret_keys())
                 if not ready['ready']:raise HTTPException(422,{'message':'Catalog preflight failed.','issues':ready['issues']})
                 config.update(cli_binaries=ready['cli_binaries'],input_snapshots=ready['input_snapshots'])
+            # Resolve the selected model for a team run in the request path so the
+            # provider gate (409/422) applies before the run is created. The
+            # resolved config (with its key) is passed to the control object only.
+            resolved_model = resolve_model(body.provider, body.model) if (body.engine=='team' and assessor is None) else None
             run = store.new_run(config)
-            start_run(run)
+            start_run(run, model=resolved_model)
         return run
 
     def check_run_capacity():
         if sum(not c.task.done() for c in controls.values() if c.task) >= 2:
             raise HTTPException(409, 'Two local runs are already active.')
 
-    def start_run(run):
+    def start_run(run, model=None):
         ctl = RunControl()
+        ctl.model = model
         # Snapshot the selected credentials once, server-side, for the whole run
         # so a concurrent settings change cannot alter an in-flight run. The
         # snapshot lives only on the control object, never in the persisted run.

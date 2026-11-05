@@ -166,11 +166,11 @@ def _netlas_parse(qt, q, resp):
 
 
 # -- FOFA ---------------------------------------------------------------------
-def _fofa_build(qt, q, creds):
+def _fofa_build(qt, q, creds, page=1):
     field = 'ip' if qt == 'ip' else 'domain'
     qb64 = base64.b64encode(f'{field}="{q}"'.encode()).decode()
     return {'url': (f'https://fofa.info/api/v1/search/all?email={creds["FOFA_EMAIL"]}&key={creds["FOFA_KEY"]}'
-                    f'&qbase64={qb64}&fields=ip,port,domain,server&size=100'), 'headers': {}}
+                    f'&qbase64={qb64}&fields=ip,port,domain,server&size=100&page={page}'), 'headers': {}}
 
 
 def _fofa_parse(qt, q, resp):
@@ -252,11 +252,11 @@ def _hunter_parse(qt, q, resp):
 
 
 # -- ZoomEye ------------------------------------------------------------------
-def _zoomeye_build(qt, q, creds):
+def _zoomeye_build(qt, q, creds, page=1):
     headers = {'API-KEY': creds['ZOOMEYE_API_KEY']}
     if qt == 'ip':
-        return {'url': f'https://api.zoomeye.org/host/search?query=ip:%22{q}%22&page=1', 'headers': headers}
-    return {'url': f'https://api.zoomeye.org/domain/search?q={q}&type=1&page=1', 'headers': headers}
+        return {'url': f'https://api.zoomeye.org/host/search?query=ip:%22{q}%22&page={page}', 'headers': headers}
+    return {'url': f'https://api.zoomeye.org/domain/search?q={q}&type=1&page={page}', 'headers': headers}
 
 
 def _zoomeye_parse(qt, q, resp):
@@ -344,13 +344,13 @@ ADAPTERS = {
     'netlas': {'name': 'Netlas', 'vars': ['NETLAS_API_KEY'], 'hosts': {'app.netlas.io'},
                'supports': ('domain',), 'build': _netlas_build, 'parse': _netlas_parse},
     'fofa': {'name': 'FOFA', 'vars': ['FOFA_EMAIL', 'FOFA_KEY'], 'hosts': {'fofa.info'},
-             'supports': ('ip', 'domain'), 'build': _fofa_build, 'parse': _fofa_parse},
+             'supports': ('ip', 'domain'), 'pages': True, 'build': _fofa_build, 'parse': _fofa_parse},
     'bevigil': {'name': 'BeVigil', 'vars': ['BEVIGIL_API_KEY'], 'hosts': {'osint.bevigil.com'},
                 'supports': ('domain',), 'build': _bevigil_build, 'parse': _bevigil_parse},
     'hunter': {'name': 'Hunter.io', 'vars': ['HUNTER_API_KEY'], 'hosts': {'api.hunter.io'},
                'supports': ('domain',), 'build': _hunter_build, 'parse': _hunter_parse},
     'zoomeye': {'name': 'ZoomEye', 'vars': ['ZOOMEYE_API_KEY'], 'hosts': {'api.zoomeye.org'},
-                'supports': ('ip', 'domain'), 'build': _zoomeye_build, 'parse': _zoomeye_parse},
+                'supports': ('ip', 'domain'), 'pages': True, 'build': _zoomeye_build, 'parse': _zoomeye_parse},
     'intelx': {'name': 'Intelligence X', 'vars': ['INTELX_API_KEY'], 'hosts': {'2.intelx.io'},
                'supports': ('domain',), 'collect': _intelx_collect, 'parse': _intelx_parse},
 }

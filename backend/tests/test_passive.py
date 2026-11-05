@@ -161,6 +161,61 @@ def test_enrich_hunter_adds_sourced_contacts_to_the_graph(tmp_path):
         assert any(e['rel'] == 'has_contact' and e['source'] == 'hunter' for e in graph['edges'])
 
 
+def test_fofa_pagination_stops_at_the_first_empty_page(tmp_path):
+    seen = []
+    async def http(req):
+        seen.append(req['url'])
+        if 'page=1' in req['url']:
+            return {'error': False, 'results': [['1.2.3.4', '443', 'www.example.com', 'nginx']]}
+        return {'error': False, 'results': []}
+    with TestClient(create_app(tmp_path, passive_http=http)) as c:
+        c.post('/api/targets', json={'value': 'example.com'})
+        c.post('/api/credentials', json={'updates': {'FOFA_EMAIL': 'e@x', 'FOFA_KEY': 'k'}})
+        r = c.post('/api/assets/enrich', json={'target': 'example.com', 'providers': ['fofa']})
+        assert r.status_code == 201, r.text
+        assert sum('fofa.info' in u for u in seen) == 2       # page 1 (results) + page 2 (empty) -> stop
+        assert r.json()['summary'][0]['queries'] == 2 and r.json()['summary'][0]['source'] == 'live'
+
+
+def test_enrich_caches_provider_responses_within_ttl(tmp_path):
+    calls = {'n': 0}
+    async def http(req):
+        calls['n'] += 1
+        return {'data': [{'id': 'api.example.com'}]}
+    with TestClient(create_app(tmp_path, passive_http=http)) as c:
+        c.post('/api/targets', json={'value': 'example.com'})
+        c.post('/api/credentials', json={'updates': {'VIRUSTOTAL_API_KEY': 'k'}})
+        a = c.post('/api/assets/enrich', json={'target': 'example.com', 'providers': ['virustotal']})
+        b = c.post('/api/assets/enrich', json={'target': 'example.com', 'providers': ['virustotal']})
+        assert a.json()['summary'][0]['source'] == 'live' and b.json()['summary'][0]['source'] == 'cache'
+        assert calls['n'] == 1  # the second enrichment was served from cache, saving provider quota
+
+
+def test_enrich_records_rate_limit_as_a_coverage_gap(tmp_path):
+    async def http(req):
+        raise RuntimeError('Provider rate limit reached (HTTP 429); try again later.')
+    with TestClient(create_app(tmp_path, passive_http=http)) as c:
+        c.post('/api/targets', json={'value': 'example.com'})
+        c.post('/api/credentials', json={'updates': {'VIRUSTOTAL_API_KEY': 'k'}})
+        r = c.post('/api/assets/enrich', json={'target': 'example.com', 'providers': ['virustotal']})
+        assert r.status_code == 201
+        gap = r.json()['summary'][0]
+        assert gap['status'] == 'failed' and '429' in gap['reason']
+
+
+def test_default_passive_http_enforces_allowlist_and_gate(monkeypatch):
+    import asyncio
+    from backend.passive_ingest import default_passive_http
+    # A non-allowlisted host is blocked before any request, even when enabled.
+    monkeypatch.setenv('AI_TRICKY_ALLOW_PASSIVE', '1')
+    with pytest.raises(RuntimeError):
+        asyncio.run(default_passive_http({'url': 'https://evil.example.com/x'}))
+    # An allowlisted host is still blocked while passive outbound is disabled.
+    monkeypatch.delenv('AI_TRICKY_ALLOW_PASSIVE', raising=False)
+    with pytest.raises(RuntimeError):
+        asyncio.run(default_passive_http({'url': 'https://api.shodan.io/x'}))
+
+
 def test_enrich_intelx_two_step_flow_end_to_end(tmp_path):
     async def http(req):
         if (req.get('method') or 'GET').upper() == 'POST':

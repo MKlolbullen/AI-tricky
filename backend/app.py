@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -26,11 +27,17 @@ from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
 from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
+from .credentials import CredentialVault
 from . import verification
 
 
 class TargetInput(BaseModel):
     value: str = Field(min_length=1, max_length=2048)
+
+
+class CredentialUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    updates: dict[str, str | None] = Field(default_factory=dict, max_length=30)
 
 
 class RunInput(BaseModel):
@@ -108,12 +115,23 @@ class RunControl:
         self.active_nodes = set()
         self.processes = {}
         self.cli_invocations = 0
+        self.credentials = {}
         self.task = None
 
 
 def create_app(data_dir=None, assessor=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
     evidence = EvidenceIndex(store)
+    vault = CredentialVault(store.root)
+    credential_consumers = {}
+    for _tid, _tool in TOOLS.items():
+        for _key in _tool.get('secrets', []):
+            credential_consumers.setdefault(_key, []).append(_tid)
+    catalog_secret_names = frozenset(credential_consumers)
+
+    def configured_secret_keys():
+        # Catalog credential variables that currently resolve to a value.
+        return frozenset(key for key in catalog_secret_names if vault.effective(key))
     proposal_planner = ProposalPlanner(store, evidence)
     proposal_executions = ProposalExecutions(store, proposal_planner)
     controls = {}
@@ -167,6 +185,13 @@ def create_app(data_dir=None, assessor=None):
         response.headers['Cache-Control'] = 'no-store'
         return response
 
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, exc):
+        # Never echo submitted values back in 422 bodies; a credential update
+        # body carries secrets, and the default handler returns `input`.
+        safe = [{k: v for k, v in err.items() if k not in ('input', 'ctx')} for err in exc.errors()]
+        return JSONResponse({'detail': safe}, status_code=422)
+
     @app.exception_handler(ScopeError)
     async def bad_scope(request, exc):
         return JSONResponse({'detail': str(exc)}, 422)
@@ -198,7 +223,21 @@ def create_app(data_dir=None, assessor=None):
                 'workflow_adapters': REGISTRY,
                 'workflow_execution': 'Native DAG, CAI evidence review and 151 migrated catalog contracts; CLI execution requires explicit run enablement and preflight',
                 'catalog_tools':len(TOOLS),'catalog_workflows':len(MINI_CATALOG['workflows']),
-                'cli_credential_variables':[{'name':key,'configured':bool(os.environ.get(key))} for key in sorted({key for t in TOOLS.values() for key in t.get('secrets',[])})]}
+                'cli_credential_variables':[{'name':key,'configured':bool(vault.effective(key))} for key in sorted({key for t in TOOLS.values() for key in t.get('secrets',[])})]}
+
+    @app.get('/api/credentials')
+    async def credentials_status():
+        return {'providers': vault.status(credential_consumers)}
+
+    @app.post('/api/credentials')
+    async def credentials_update(body: CredentialUpdate):
+        try:
+            vault.set_many(body.updates)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+        return {'providers': vault.status(credential_consumers)}
+    # Clearing a key is a POST with an empty value, so the JSON-write guard and
+    # the shared client helper (GET/POST only) both apply uniformly.
 
     @app.get('/api/workflows')
     async def workflows():
@@ -630,7 +669,7 @@ def create_app(data_dir=None, assessor=None):
     async def preflight_run(body: RunInput):
         config=prepare_config(body)
         if body.engine!='workflow':return {'ready':True,'issues':[]}
-        result=catalog_preflight(body.workflow,config,store,check_binaries=body.allow_http)
+        result=catalog_preflight(body.workflow,config,store,check_binaries=body.allow_http,credentials=configured_secret_keys())
         return {k:v for k,v in result.items() if k not in ('cli_binaries','input_snapshots')}
 
     @app.post('/api/runs', status_code=201)
@@ -639,7 +678,7 @@ def create_app(data_dir=None, assessor=None):
             check_run_capacity()
             config=await asyncio.to_thread(prepare_config,body)
             if body.engine=='workflow' and body.allow_http:
-                ready=await asyncio.to_thread(catalog_preflight,body.workflow,config,store)
+                ready=await asyncio.to_thread(catalog_preflight,body.workflow,config,store,credentials=configured_secret_keys())
                 if not ready['ready']:raise HTTPException(422,{'message':'Catalog preflight failed.','issues':ready['issues']})
                 config.update(cli_binaries=ready['cli_binaries'],input_snapshots=ready['input_snapshots'])
             run = store.new_run(config)
@@ -652,6 +691,12 @@ def create_app(data_dir=None, assessor=None):
 
     def start_run(run):
         ctl = RunControl()
+        # Snapshot the selected credentials once, server-side, for the whole run
+        # so a concurrent settings change cannot alter an in-flight run. The
+        # snapshot lives only on the control object, never in the persisted run.
+        ctl.credentials = {key: vault.effective(key)
+                           for key in run['config'].get('cli_credential_keys', [])
+                           if vault.effective(key)}
         controls[run['id']] = ctl
         ctl.task = asyncio.create_task(execute(run['id'], run['config'], ctl))
 

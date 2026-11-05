@@ -252,9 +252,12 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store):
     # Credentials from the model/runtime environment are never inherited by tools.
     env={k:os.environ[k] for k in ('PATH','SystemRoot','WINDIR','PATHEXT','LANG','LC_ALL') if k in os.environ}
     env.update({'NO_COLOR':'1','DO_NOT_TRACK':'1','GIT_TERMINAL_PROMPT':'0','GIT_CONFIG_NOSYSTEM':'1'})
+    # Per-run credential snapshot (taken at run start, server-side only) — never
+    # the live process environment, so keys cannot bleed across runs or apps.
+    run_credentials=getattr(ctl,'credentials',None) or {}
     secret_values=[]
     for key in config.get('cli_credential_keys',[]):
-        if key in tool.get('secrets',[]) and os.environ.get(key):env[key]=os.environ[key];secret_values.append(os.environ[key])
+        if key in tool.get('secrets',[]) and run_credentials.get(key):env[key]=run_credentials[key];secret_values.append(run_credentials[key])
     def redact(value):
         for secret in secret_values:
             if len(secret)>=4:value=value.replace(secret,'[REDACTED]')

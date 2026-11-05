@@ -28,6 +28,7 @@ from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
 from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
 from .credentials import CredentialVault, MODEL_PROVIDERS, MODEL_VARS
+from .asset_graph import AssetGraph, ENTITY_KINDS
 from . import team as team_leader
 from . import verification
 
@@ -144,6 +145,7 @@ class RunControl:
 def create_app(data_dir=None, assessor=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
     evidence = EvidenceIndex(store)
+    asset_graph = AssetGraph(store)
     vault = CredentialVault(store.root)
     credential_consumers = {}
     for _tid, _tool in TOOLS.items():
@@ -494,6 +496,21 @@ def create_app(data_dir=None, assessor=None):
                     d=e['data']; key=f"tcp://{d['host']}:{d['port']}"
                     records[key]={'url':key,'status':'open','source':'native TCP inventory','run_id':r['id']}
         return list(records.values())
+
+    @app.get('/api/assets/graph')
+    def assets_graph(run_id: str | None = None, kind: str | None = None, q: str = '', limit: int = 500):
+        if run_id:
+            get_run(run_id)
+        if kind is not None and kind not in ENTITY_KINDS:
+            raise HTTPException(422, 'Unknown asset kind.')
+        return asset_graph.graph(run_id=run_id, kind=kind, q=q[:200], limit=max(1, min(limit, 2000)))
+
+    @app.get('/api/assets/{asset_id}')
+    def asset_entity(asset_id: str):
+        try:
+            return asset_graph.entity(asset_id)
+        except KeyError:
+            raise HTTPException(404, 'Asset not found.')
 
     @app.get('/api/runs')
     async def list_runs():

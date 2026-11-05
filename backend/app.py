@@ -104,6 +104,8 @@ class EvidencePlanInput(BaseModel):
     goal: str = Field(min_length=1, max_length=4000)
     use_model: bool = False
     max_risk: Literal['passive', 'low', 'medium'] = 'low'
+    provider: str | None = Field(default=None, max_length=40)
+    model: str | None = Field(default=None, max_length=120)
 
 
 class RunControl:
@@ -375,13 +377,14 @@ def create_app(data_dir=None, assessor=None):
                 return await asyncio.to_thread(proposal_planner.save, body.goal, context)
             except StalePlan as exc:
                 raise HTTPException(409, str(exc))
+        resolved_model = resolve_model(body.provider, body.model)
         if assessor is None and await asyncio.to_thread(cai_adapter.installed_version) != cai_adapter.SUPPORTED_CAI:
             raise HTTPException(409, 'Configure the supported CAI SDK to use model proposals, or select the rules planner.')
         async def disabled(url):
             return {'error': 'Evidence-guided planning has no target access.'}
         try:
             result = await assess([], proposal_planner.prompt(body.goal, context), disabled,
-                                  **({'evidence_only': True} if assessor is None else {}))
+                                  **({'evidence_only': True, 'model': resolved_model} if assessor is None else {}))
             return await asyncio.to_thread(proposal_planner.save, body.goal, context, result['report'], result)
         except StalePlan as exc:
             raise HTTPException(409, str(exc))

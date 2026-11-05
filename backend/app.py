@@ -62,6 +62,7 @@ class RunInput(BaseModel):
     roles: list[Annotated[str, StringConstraints(min_length=1, max_length=40)]] = Field(default_factory=list, max_length=12)
     member_max_turns: int = Field(default=8, ge=1, le=24)
     synthesize: bool = False
+    adaptive: bool = False
     provider: str | None = Field(default=None, max_length=40)
     model: str | None = Field(default=None, max_length=120)
 
@@ -795,12 +796,23 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                         if assessor is not None:
                             return await assess([], prompt, disabled)
                         return await assess([], prompt, disabled, evidence_only=True, model=ctl.model)
+                    # Adaptive selection (opt-in, no explicit roles): gather the
+                    # entered scope's existing observations and asset-graph entities
+                    # so the deterministic leader can narrow the roles. No evidence
+                    # (e.g. a first run) falls back to the full set.
+                    team_adaptive = bool(config.get('adaptive') and not config.get('roles'))
+                    team_evidence, team_assets = None, None
+                    if team_adaptive:
+                        team_evidence = await asyncio.to_thread(gather_team_evidence, config['targets'])
+                        team_assets = (await asyncio.to_thread(asset_graph.scope_subgraph, config['targets']))['entities']
                     result=await team_leader.run_team(config['targets'],config['goal'],fetch,probe,assess,
                                                        roles=config.get('roles'),model=ctl.model,
                                                        member_max_turns=config.get('member_max_turns',8),
                                                        timeout=min(config.get('max_seconds',240),180),
                                                        concurrency=config.get('parallelism',4),
-                                                       synthesize=synthesize if config.get('synthesize') else None)
+                                                       synthesize=synthesize if config.get('synthesize') else None,
+                                                       adaptive=team_adaptive, evidence=team_evidence,
+                                                       asset_entities=team_assets)
                 elif assessor is None:
                     result=await assess(config['targets'],config['goal'],fetch,network_tool=probe)
                 else:
@@ -824,6 +836,26 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             message = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
             store.status(rid, 'failed', {'error': message[:500], 'request_count': ctl.requests,'cli_invocation_count':ctl.cli_invocations})
             store.event(rid, 'run.failed', {'error': message[:500]})
+
+    def gather_team_evidence(targets, limit=200):
+        """Existing in-scope observations for adaptive team role selection. Read
+        only; never initiates traffic. Returns observation records for assets in
+        the entered scope (the entered hosts/IPs and their subdomains)."""
+        hosts = set()
+        for value in targets:
+            try:
+                t = parse_target(value)
+            except ScopeError:
+                continue
+            if t.kind in ('url', 'domain', 'ip') and t.host:
+                hosts.add(t.host)
+        if not hosts:
+            return []
+        def in_scope(asset):
+            host = canonical_asset(asset) or str(asset)
+            host = host.split('://', 1)[-1].split('/', 1)[0].split(':', 1)[0]
+            return any(host == h or host.endswith('.' + h) for h in hosts)
+        return [item for item in evidence.observations(limit=limit)['items'] if in_scope(item.get('asset'))]
 
     def prepare_config(body):
         known = {t['id']: t for t in store.targets()}

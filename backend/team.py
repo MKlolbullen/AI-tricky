@@ -68,6 +68,103 @@ def resolve_roles(roles):
     return out
 
 
+# Deterministic adaptive role selection. Each role (except the always-on
+# `surface` baseline) is warranted by one or more evidence signal flags derived
+# from captured observations and asset-graph entities. This is a model-free
+# heuristic — explicitly labelled, never a hidden model fallback — and it never
+# loses coverage silently: a role that is not selected is reported with its
+# reason, and absent/ambiguous evidence selects every role.
+ROLE_SIGNALS: dict[str, frozenset | None] = {
+    'surface': None,  # always selected — baseline surface mapping
+    'transport': frozenset({'response', 'tls'}),
+    'authz': frozenset({'auth'}),
+    'injection': frozenset({'params'}),
+    'logic': frozenset({'server_error', 'config'}),
+}
+_AUTH_HINTS = ('login', 'signin', 'sign-in', 'auth', 'session', 'admin', 'account', 'oauth', 'token', 'sso')
+_CONFIG_HINTS = ('/.git', '/.env', '/config', 'debug', 'phpinfo', '/.svn', 'backup', '.bak', 'swagger', 'actuator', 'wp-config')
+_DYN_EXT = ('.php', '.asp', '.aspx', '.jsp', '.cgi', '.do')
+
+
+def _evidence_items(evidence):
+    """Yield (data, url) for each evidence item — a raw HTTP capture row or a
+    stored observation record ({asset, data}). Defensive: skips non-dicts."""
+    for item in evidence or []:
+        if not isinstance(item, dict):
+            continue
+        data = item.get('data') if isinstance(item.get('data'), dict) else item
+        url = str(item.get('asset') or data.get('url') or item.get('url') or '')
+        yield data, url
+
+
+def evidence_signals(evidence=None, asset_entities=None):
+    """Deterministically derive the set of role-selection signal flags from
+    captured observations / HTTP rows and asset-graph entities. Pure, no I/O."""
+    signals: set[str] = set()
+    for data, url in _evidence_items(evidence):
+        low = url.lower()
+        status = data.get('status', data.get('status_code'))
+        headers = {str(k).lower(): str(v) for k, v in data['headers'].items()} if isinstance(data.get('headers'), dict) else {}
+        if isinstance(status, int) and 100 <= status <= 599:
+            signals.add('response')
+            if status in (401, 403):
+                signals.add('auth')
+            if status >= 500:
+                signals.add('server_error')
+        if low.startswith('https://') or 'strict-transport-security' in headers:
+            signals.add('tls')
+        if 'set-cookie' in headers or 'www-authenticate' in headers or any(h in low for h in _AUTH_HINTS):
+            signals.add('auth')
+        path = low.split('?', 1)[0]
+        if '?' in url or '=' in url or any(path.endswith(ext) for ext in _DYN_EXT):
+            signals.add('params')
+        if any(h in low for h in _CONFIG_HINTS):
+            signals.add('config')
+    for entity in asset_entities or []:
+        if not isinstance(entity, dict):
+            continue
+        kind, canon = entity.get('kind'), str(entity.get('canonical', '')).lower()
+        data = entity.get('data') if isinstance(entity.get('data'), dict) else {}
+        if kind == 'service':
+            signals.add('response')
+            if data.get('port') in (443, 8443) or canon.endswith(':443/tcp') or ':443' in canon:
+                signals.add('tls')
+    return signals
+
+
+def select_roles(evidence=None, asset_entities=None):
+    """Deterministically select which roles the captured evidence warrants.
+
+    Returns `(selected, reasons)`: `selected` is the ordered role keys to run,
+    `reasons` maps every role to why it was selected or skipped. `surface` is
+    always selected; when no signal can be derived (no/ambiguous evidence) every
+    role is selected — selection never silently drops coverage.
+    """
+    signals = evidence_signals(evidence, asset_entities)
+    if not signals:
+        return list(DEFAULT_ROLES), {r: 'selected: no captured evidence to narrow on — running all roles'
+                                     for r in DEFAULT_ROLES}
+    selected, reasons = [], {}
+    for role in DEFAULT_ROLES:
+        want = ROLE_SIGNALS[role]
+        hit = signals & want if want else None
+        if want is None:
+            selected.append(role)
+            reasons[role] = 'selected: baseline surface mapping'
+        elif hit:
+            selected.append(role)
+            reasons[role] = f'selected: {", ".join(sorted(hit))} observed'
+        else:
+            reasons[role] = f'skipped: no {" / ".join(sorted(want))} signal observed'
+    return selected, reasons
+
+
+def _selection_coverage(reasons):
+    """Coverage notes for the roles a selection skipped (explicit, not silent)."""
+    return [f'{ROLES[r]["name"]} role not selected ({why.split(": ", 1)[1]}).'
+            for r, why in (reasons or {}).items() if why.startswith('skipped')]
+
+
 def synthesis_prompt(goal, members):
     """Prompt for the optional lead synthesizer: it reviews the completed per-role
     reports and no target evidence of its own. It never confirms a finding."""
@@ -80,7 +177,8 @@ def synthesis_prompt(goal, members):
 
 
 async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=None,
-                   member_max_turns=8, timeout=180, concurrency=3, synthesize=None):
+                   member_max_turns=8, timeout=180, concurrency=3, synthesize=None,
+                   adaptive=False, evidence=None, asset_entities=None):
     """Dispatch one scoped run across the selected roles and aggregate reports.
 
     `assess` is the adapter's assess callable; `fetch`/`probe` are the run's own
@@ -93,7 +191,15 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
     opt-in narrative, candidates only, that never changes any finding state. A
     synthesis failure becomes a coverage gap, not a team failure.
     """
-    selected = resolve_roles(roles)
+    # Explicit roles always win. Adaptive selection (deterministic, opt-in) only
+    # applies when no roles are named; otherwise the full set runs as before.
+    selection_reasons = None
+    if roles:
+        selected = resolve_roles(roles)
+    elif adaptive:
+        selected, selection_reasons = select_roles(evidence, asset_entities)
+    else:
+        selected = list(DEFAULT_ROLES)
     semaphore = asyncio.Semaphore(max(1, min(int(concurrency), MAX_ROLES)))
 
     async def member(key):
@@ -118,6 +224,8 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
     completed = [m for m in members if m['status'] == 'ok']
     coverage_limits = [f'{m["name"]} role did not complete: {m["reason"]}'
                        for m in members if m['status'] != 'ok']
+    # A role the adaptive selector skipped is an explicit coverage note, not a gap.
+    coverage_limits = _selection_coverage(selection_reasons) + coverage_limits
     synthesis = None
     if synthesize is not None and completed:
         try:
@@ -131,7 +239,9 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
             coverage_limits = coverage_limits + [f'Lead synthesis did not complete: {reason[:200]}']
     elif synthesize is not None:
         coverage_limits = coverage_limits + ['Lead synthesis skipped: no role completed to synthesise.']
-    summary = (f'Deterministic team leader dispatched {len(selected)} analyst role(s); '
+    adapted = selection_reasons is not None
+    summary = (f'Deterministic team leader {"adaptively selected" if adapted else "dispatched"} '
+               f'{len(selected)} of {MAX_ROLES} analyst role(s); '
                f'{len(completed)} completed, {len(members) - len(completed)} did not. '
                'Each report is a per-role candidate assessment, not a confirmed finding.')
     return {
@@ -140,7 +250,9 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
         'evidence_status': 'CANDIDATE',
         'team': True,
         'leader': 'deterministic',
+        'adaptive': adapted,
         'roles_requested': selected,
+        'role_selection': selection_reasons,
         'members': members,
         'coverage_limits': coverage_limits,
         'synthesis': synthesis,

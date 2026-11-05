@@ -210,11 +210,24 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
                             'summary': analysis['summary'], 'analysis': analysis}
                 except (ScopeError, RuntimeError) as exc:
                     return {'role': key, 'name': spec['name'], 'status': 'failed', 'reason': str(exc)[:300]}
-            members = list(await asyncio.gather(*(member(k) for k in team_leader.DEFAULT_ROLES)))
+            # Opt-in deterministic adaptive selection: narrow the roles to those the
+            # captured evidence (these observations + the scoped asset graph) warrants.
+            selection_reasons = None
+            if by_id[nid]['data'].get('adaptive'):
+                entities = ((await asyncio.to_thread(asset_graph.scope_subgraph, config['targets']))['entities']
+                            if asset_graph else [])
+                selected, selection_reasons = team_leader.select_roles(values, entities)
+            else:
+                selected = list(team_leader.DEFAULT_ROLES)
+            members = list(await asyncio.gather(*(member(k) for k in selected)))
             completed = [m for m in members if m['status'] == 'ok']
-            coverage = [f'{m["name"]} role did not complete: {m["reason"]}' for m in members if m['status'] != 'ok']
-            summary = f'CAI team evidence review: {len(completed)}/{len(members)} roles completed. Candidates only; nothing auto-confirmed.'
-            return [{'report': summary, 'team': True, 'members': members, 'coverage_limits': coverage, 'evidence_status': 'CANDIDATE'}]
+            coverage = team_leader._selection_coverage(selection_reasons) + \
+                [f'{m["name"]} role did not complete: {m["reason"]}' for m in members if m['status'] != 'ok']
+            adapted = selection_reasons is not None
+            summary = (f'CAI team evidence review: {len(completed)}/{len(members)} '
+                       f'{"adaptively selected " if adapted else ""}roles completed. Candidates only; nothing auto-confirmed.')
+            return [{'report': summary, 'team': True, 'adaptive': adapted, 'members': members,
+                     'role_selection': selection_reasons, 'coverage_limits': coverage, 'evidence_status': 'CANDIDATE'}]
         open_ports = sum(v.get('state') == 'open' for v in values)
         responses = sum('status' in v and 'url' in v for v in values)
         errors = sum('error' in v or v.get('state') in ('blocked', 'budget_exhausted') for v in values)

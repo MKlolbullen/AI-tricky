@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.cai_adapter import build_instructions, LIVE_INSTRUCTIONS, EVIDENCE_ONLY_INSTRUCTIONS
-from backend.team import run_team, resolve_roles, ROLES, DEFAULT_ROLES
+from backend.team import run_team, resolve_roles, select_roles, evidence_signals, ROLES, DEFAULT_ROLES
 from backend.tests.test_local import target_server, wait_done
 from backend.tests.test_workflows import graph, launch
 
@@ -33,6 +33,59 @@ def test_resolve_roles_defaults_dedupes_and_validates():
     assert resolve_roles(['transport', 'transport', 'surface']) == ['transport', 'surface']
     with pytest.raises(ValueError):
         resolve_roles(['surface', 'nope'])
+
+
+# -- deterministic adaptive role selection ------------------------------------
+def test_select_roles_maps_signals_and_never_drops_coverage_silently():
+    # No evidence at all -> every role runs (conservative fallback).
+    sel, reasons = select_roles([], [])
+    assert sel == DEFAULT_ROLES
+    assert all(reasons[r].startswith('selected') for r in DEFAULT_ROLES)
+    # Rich evidence -> all five warranted, each with its signal reason.
+    rich = [{'asset': 'https://x.example.com/admin/login?id=1',
+             'data': {'status': 401, 'headers': {'strict-transport-security': 'max-age=1'}}},
+            {'asset': 'https://x.example.com/.env', 'data': {'status': 500, 'headers': {}}}]
+    sel, reasons = select_roles(rich, [])
+    assert set(sel) == set(DEFAULT_ROLES)
+    # Thin evidence (a plain 200 over http) -> surface + transport only; the rest
+    # are skipped with an explicit reason, never silently dropped.
+    sel, reasons = select_roles([{'asset': 'http://x.example.com/', 'data': {'status': 200, 'headers': {}}}], [])
+    assert sel == ['surface', 'transport']
+    for role in ('authz', 'injection', 'logic'):
+        assert reasons[role].startswith('skipped:'), reasons[role]
+    assert reasons['surface'] == 'selected: baseline surface mapping'
+    # Asset-graph entities contribute signals too (an https service -> transport).
+    assert 'tls' in evidence_signals([], [{'kind': 'service', 'canonical': 'x:443/tcp', 'data': {'port': 443}}])
+    # Hostile / malformed items are ignored, not crashed on.
+    assert select_roles(['not-a-dict', 42, None], None)[0] == DEFAULT_ROLES
+
+
+def test_run_team_adaptive_narrows_roles_and_records_skips():
+    async def fetch(url):
+        return {'status': 200}
+
+    async def probe(target, ports):
+        return {'results': []}
+
+    async def assess(targets, goal, f, **kw):
+        await f('http://scope.local/')
+        return {'report': 'ok', 'evidence_status': 'CANDIDATE'}
+
+    # Evidence warrants only surface + injection: a discovered endpoint with a
+    # query parameter (no response status, so no transport signal).
+    evidence = [{'asset': 'http://scope.local/search?q=1', 'data': {'discovered': True}}]
+    result = asyncio.run(run_team(['http://scope.local/'], 'Assess', fetch, probe, assess,
+                                  adaptive=True, evidence=evidence))
+    assert result['adaptive'] is True
+    roles_run = [m['role'] for m in result['members']]
+    assert roles_run == ['surface', 'injection']
+    assert result['role_selection']['transport'].startswith('skipped')
+    # Each skipped role has an explicit coverage note.
+    assert any('Transport & headers role not selected' in c for c in result['coverage_limits'])
+    # Explicit roles always override adaptive selection.
+    explicit = asyncio.run(run_team(['http://scope.local/'], 'Assess', fetch, probe, assess,
+                                    roles=['logic'], adaptive=True, evidence=evidence))
+    assert [m['role'] for m in explicit['members']] == ['logic'] and explicit['adaptive'] is False
 
 
 # -- leader fan-out over a shared fetch ---------------------------------------
@@ -112,6 +165,25 @@ def test_team_run_shares_budget_and_reports_members(tmp_path, target_server):
         assert result['request_count'] == 3
 
 
+def test_team_run_adaptive_gathers_scope_evidence_and_narrows(tmp_path, target_server):
+    # A prior inventory run captures in-scope evidence; an adaptive team run then
+    # selects roles from it (and the asset graph) rather than running all five.
+    base, _ = target_server
+    with TestClient(create_app(tmp_path, assessor=_assessor(base))) as c:
+        tid = c.post('/api/targets', json={'value': base}).json()['id']
+        inv = c.post('/api/runs', json={'engine': 'inventory', 'target_ids': [tid], 'allow_http': True, 'max_requests': 6})
+        assert wait_done(c, inv.json()['id'])['status'] == 'completed'
+        r = c.post('/api/runs', json={'engine': 'team', 'target_ids': [tid], 'allow_http': True,
+                                      'adaptive': True, 'max_requests': 50})
+        assert r.status_code == 201, r.text
+        result = wait_done(c, r.json()['id'])['result']
+        assert result['adaptive'] is True and result['role_selection'] is not None
+        roles_run = [m['role'] for m in result['members']]
+        assert roles_run == [r for r, why in result['role_selection'].items() if why.startswith('selected')]
+        assert 'surface' in roles_run
+        assert result['request_count'] == len(roles_run)  # one shared ledger across the selected members
+
+
 def test_team_run_rejects_unknown_role(tmp_path, target_server):
     base, _ = target_server
     with TestClient(create_app(tmp_path, assessor=_assessor(base))) as c:
@@ -144,6 +216,31 @@ def test_native_team_node_reviews_evidence_across_all_roles(tmp_path, target_ser
         assert team[0]['team'] is True
         assert [m['role'] for m in team[0]['members']] == ['surface', 'transport', 'authz', 'injection', 'logic']
         assert all(m['status'] == 'ok' and m['analysis']['confirmed'] is False for m in team[0]['members'])
+
+
+def test_native_team_node_adaptive_selects_roles_from_captured_evidence(tmp_path, target_server):
+    # With the node's `adaptive` flag set, the leader narrows the roles to those
+    # the captured evidence (these observations + the scoped asset graph) warrants,
+    # recording every skipped role as an explicit coverage note.
+    base, _ = target_server
+    g = graph('native_scope', 'native_tcp', 'native_http', 'native_team', 'native_summary')
+    g['nodes'][3]['data']['adaptive'] = True
+    with TestClient(create_app(tmp_path, assessor=_analysis_assessor())) as c:
+        r = launch(c, base, g)
+        assert r.status_code == 201, r.text
+        rid = r.json()['id']
+        assert wait_done(c, rid)['status'] == 'completed'
+        arts = {a['name']: a['id'] for a in c.get('/api/runs/' + rid + '/artifacts').json()}
+        team = c.get('/api/artifacts/' + arts['node-n3.json']).json()[0]
+        assert team['adaptive'] is True and team['role_selection'] is not None
+        roles_run = [m['role'] for m in team['members']]
+        selected = [r for r, why in team['role_selection'].items() if why.startswith('selected')]
+        assert roles_run == selected            # only the selected roles ran
+        assert 'surface' in roles_run           # surface is the always-on baseline
+        # Every skipped role appears as an explicit coverage note (no silent loss).
+        for role, why in team['role_selection'].items():
+            if why.startswith('skipped'):
+                assert any(ROLES[role]['name'] + ' role not selected' in c for c in team['coverage_limits'])
 
 
 def test_native_team_node_requires_the_model_sdk_on_the_real_path(tmp_path, target_server):

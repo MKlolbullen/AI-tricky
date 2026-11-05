@@ -93,6 +93,24 @@ PROVIDERS: list[dict] = [
             {'name': 'FOFA_KEY', 'label': 'API key'},
         ],
     },
+    {
+        'id': 'bevigil', 'name': 'BeVigil', 'category': 'passive',
+        'docs': 'https://bevigil.com/osint-api',
+        'description': 'Mobile-app-derived subdomains, hosts and URLs (OSINT API).',
+        'variables': [{'name': 'BEVIGIL_API_KEY', 'label': 'API key'}],
+    },
+    {
+        'id': 'hunter', 'name': 'Hunter.io', 'category': 'passive',
+        'docs': 'https://hunter.io/api-keys',
+        'description': 'Email addresses and patterns associated with a domain.',
+        'variables': [{'name': 'HUNTER_API_KEY', 'label': 'API key'}],
+    },
+    {
+        'id': 'zoomeye', 'name': 'ZoomEye', 'category': 'passive',
+        'docs': 'https://www.zoomeye.org/profile',
+        'description': 'Cyberspace search for hosts, services, technologies and exposures.',
+        'variables': [{'name': 'ZOOMEYE_API_KEY', 'label': 'API key'}],
+    },
     # Model providers — for agents and template planning, not CLI-tool secrets.
     # `endpoint` is the provider's OpenAI-compatible base URL, used only when the
     # provider is selected for inference and remote model use is enabled.

@@ -173,3 +173,13 @@
 .asset-edges,.asset-provenance{list-style:none;padding:0;margin:6px 0}
 .asset-edges li,.asset-provenance li{padding:5px 0;border-bottom:1px solid #1b2c42;font-size:12px;overflow-wrap:anywhere}
 .asset-edges strong{color:#cfe3fb}
+.enrich-panel{border:1px solid #29435e;border-radius:6px;background:#0b1a2b;padding:0 15px;margin:4px 0 14px}
+.enrich-panel summary{cursor:pointer;padding:12px 0;font-weight:600;color:#cfe3fb}
+.enrich-note{font-size:12px;color:#8aa6cb;line-height:1.6;margin:0 0 10px}
+.enrich-providers{border:1px solid #233852;border-radius:6px;padding:8px 12px;margin:8px 0}
+.enrich-providers legend{font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:#9db4d6;padding:0 6px}
+.enrich-summary{list-style:none;padding:0;margin:10px 0 14px;font-size:12px;color:#b9cde6}
+.enrich-summary li{padding:4px 0}
+.claim-tag{display:inline-block;margin-left:8px;padding:1px 7px;border:1px solid #ddb46b;border-radius:3px;font:9px var(--mono);text-transform:uppercase;letter-spacing:.05em;color:#ddb46b;vertical-align:middle}
+.asset-sources{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.source-badge{padding:2px 8px;border:1px solid #2f6f6f;border-radius:10px;font:10px var(--mono);color:#63c7d8;background:#0c1f24}

@@ -29,6 +29,9 @@ from .proposals import ProposalPlanner, ProposalError, StalePlan
 from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
 from .credentials import CredentialVault, MODEL_PROVIDERS, MODEL_VARS
 from .asset_graph import AssetGraph, ENTITY_KINDS
+from .observations import canonical_asset
+from .passive_sources import ADAPTERS as PASSIVE_ADAPTERS
+from .passive_ingest import PassiveIngestor, default_passive_http, passive_enabled
 from . import team as team_leader
 from . import verification
 
@@ -97,6 +100,12 @@ class AssistInput(BaseModel):
     model: str | None = Field(default=None, max_length=120)
 
 
+class EnrichInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    target: str = Field(min_length=1, max_length=253)
+    providers: list[Annotated[str, StringConstraints(min_length=1, max_length=40)]] = Field(min_length=1, max_length=12)
+
+
 class CatalogPlanInput(BaseModel):
     goal: str = Field(min_length=1,max_length=4000)
     source_type: str = 'domain'
@@ -142,10 +151,11 @@ class RunControl:
         self.task = None
 
 
-def create_app(data_dir=None, assessor=None):
+def create_app(data_dir=None, assessor=None, passive_http=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
     evidence = EvidenceIndex(store)
     asset_graph = AssetGraph(store)
+    passive_ingestor = PassiveIngestor(store, asset_graph)
     vault = CredentialVault(store.root)
     credential_consumers = {}
     for _tid, _tool in TOOLS.items():
@@ -280,7 +290,8 @@ def create_app(data_dir=None, assessor=None):
                 'workflow_execution': 'Native DAG, CAI evidence review and 151 migrated catalog contracts; CLI execution requires explicit run enablement and preflight',
                 'catalog_tools':len(TOOLS),'catalog_workflows':len(MINI_CATALOG['workflows']),
                 'cli_credential_variables':[{'name':key,'configured':bool(vault.effective(key))} for key in sorted({key for t in TOOLS.values() for key in t.get('secrets',[])}) if key not in MODEL_VARS],
-                'model_providers':model_provider_status()}
+                'model_providers':model_provider_status(),
+                'passive_providers':passive_provider_status()}
 
     @app.get('/api/credentials')
     async def credentials_status():
@@ -496,6 +507,47 @@ def create_app(data_dir=None, assessor=None):
                     d=e['data']; key=f"tcp://{d['host']}:{d['port']}"
                     records[key]={'url':key,'status':'open','source':'native TCP inventory','run_id':r['id']}
         return list(records.values())
+
+    def passive_provider_status():
+        providers = []
+        for pid, adapter in PASSIVE_ADAPTERS.items():
+            providers.append({'id': pid, 'name': adapter['name'],
+                              'configured': all(vault.effective(v) for v in adapter['vars'])})
+        return {'enabled': passive_enabled(), 'providers': providers}
+
+    @app.post('/api/assets/enrich', status_code=201)
+    async def enrich_assets(body: EnrichInput):
+        target = canonical_asset(body.target.strip())
+        parsed = None
+        try:
+            parsed = parse_target(body.target.strip())
+        except ScopeError:
+            parsed = None
+        if target is None or parsed is None or parsed.kind not in ('domain', 'ip'):
+            raise HTTPException(422, 'Passive enrichment takes an entered domain or IP.')
+        entered = set()
+        for row in store.targets():
+            host = canonical_asset(parse_target(row['url']).url if parse_target(row['url']).kind != 'url' else urlsplit(row['url']).hostname or '')
+            if host:
+                entered.add(host)
+        if target not in entered:
+            raise HTTPException(422, 'Enrich a target you have entered (domain or IP).')
+        providers = list(dict.fromkeys(body.providers))
+        for pid in providers:
+            if pid not in PASSIVE_ADAPTERS:
+                raise HTTPException(422, f'Unknown passive provider: {pid}')
+        http = passive_http or default_passive_http
+        if passive_http is None and not passive_enabled():
+            raise HTTPException(409, 'Enable passive outbound (set AI_TRICKY_ALLOW_PASSIVE=1) to query provider APIs. Platform hosting stays local.')
+        # Snapshot the selected provider credentials once, server-side.
+        snapshot = {}
+        for pid in providers:
+            for var in PASSIVE_ADAPTERS[pid]['vars']:
+                value = vault.effective(var)
+                if not value:
+                    raise HTTPException(409, f"Store the {PASSIVE_ADAPTERS[pid]['name']} credential ({var}) in Credentials before enriching.")
+                snapshot[var] = value
+        return await passive_ingestor.enrich(target, parsed.kind, providers, snapshot, http)
 
     @app.get('/api/assets/graph')
     def assets_graph(run_id: str | None = None, kind: str | None = None, q: str = '', limit: int = 500):

@@ -132,3 +132,26 @@ def test_environment_fallback_and_store_precedence(monkeypatch, tmp_path):
     vault.set_many({'GITHUB_TOKEN': ''})
     assert vault.effective('GITHUB_TOKEN') == 'env-token'
     assert _var(vault.status(), 'GITHUB_TOKEN')['source'] == 'environment'
+
+
+def test_categories_fofa_and_model_providers(clean_env, tmp_path):
+    with TestClient(create_app(tmp_path)) as c:
+        providers = c.get('/api/credentials').json()['providers']
+    by_id = {p['id']: p for p in providers}
+    fofa = by_id['fofa']
+    assert fofa['category'] == 'passive'
+    assert [v['name'] for v in fofa['variables']] == ['FOFA_EMAIL', 'FOFA_KEY']
+    for pid in ('anthropic', 'openai', 'xai', 'gemini', 'venice'):
+        p = by_id[pid]
+        assert p['category'] == 'model' and p['purpose']
+        assert all(v['consumed_by'] == [] for v in p['variables'])
+
+
+def test_model_key_stores_without_tool_binding(clean_env, tmp_path):
+    with TestClient(create_app(tmp_path)) as c:
+        body = c.post('/api/credentials', json={'updates': {'ANTHROPIC_API_KEY': 'sk-ant-xyz'}}).json()
+        var = _var(body['providers'], 'ANTHROPIC_API_KEY')
+        assert var['configured'] and var['source'] == 'stored' and var['consumed_by'] == []
+        # Model keys are never exposed as selectable CLI credential variables.
+        runtime = c.get('/api/runtime').json()['cli_credential_variables']
+        assert all(v['name'] != 'ANTHROPIC_API_KEY' for v in runtime)

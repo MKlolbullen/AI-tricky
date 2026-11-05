@@ -19,9 +19,13 @@ import os
 import stat
 from pathlib import Path
 
-# Curated passive data sources. `variables` are the environment-variable names
-# the catalog's tools read. `consumed` is computed at runtime from the tool
-# catalog, so a variable no installed adapter declares is still storable here.
+# Curated credential providers in two categories. `category` is 'passive' (data
+# sources recon tools read, via the env-var names in `variables`) or 'model'
+# (LLM providers for agents and template planning). `consumed` is computed at
+# runtime from the tool catalog, so a variable no installed adapter declares is
+# still storable here. Model keys are never injected into CLI tools, and storing
+# one does not by itself enable remote inference — that stays an opt-in model
+# configuration.
 PROVIDERS: list[dict] = [
     {
         'id': 'shodan', 'name': 'Shodan',
@@ -79,6 +83,51 @@ PROVIDERS: list[dict] = [
         'docs': 'https://github.com/settings/tokens',
         'description': 'Token for GitHub code/subdomain reconnaissance (read-only scope recommended).',
         'variables': [{'name': 'GITHUB_TOKEN', 'label': 'Personal access token'}],
+    },
+    {
+        'id': 'fofa', 'name': 'FOFA', 'category': 'passive',
+        'docs': 'https://fofa.info/api',
+        'description': 'Cyberspace asset search for hosts, services and certificates.',
+        'variables': [
+            {'name': 'FOFA_EMAIL', 'label': 'Account email'},
+            {'name': 'FOFA_KEY', 'label': 'API key'},
+        ],
+    },
+    # Model providers — for agents and template planning, not CLI-tool secrets.
+    {
+        'id': 'anthropic', 'name': 'Anthropic', 'category': 'model',
+        'purpose': 'Agents & template planning',
+        'docs': 'https://console.anthropic.com/settings/keys',
+        'description': 'Claude models for agent reasoning and workflow planning.',
+        'variables': [{'name': 'ANTHROPIC_API_KEY', 'label': 'API key'}],
+    },
+    {
+        'id': 'openai', 'name': 'OpenAI', 'category': 'model',
+        'purpose': 'Agents & template planning',
+        'docs': 'https://platform.openai.com/api-keys',
+        'description': 'GPT models for agent reasoning and workflow planning.',
+        'variables': [{'name': 'OPENAI_API_KEY', 'label': 'API key'}],
+    },
+    {
+        'id': 'xai', 'name': 'xAI (Grok)', 'category': 'model',
+        'purpose': 'Agents & template planning',
+        'docs': 'https://console.x.ai/',
+        'description': 'Grok models for agent reasoning and workflow planning.',
+        'variables': [{'name': 'XAI_API_KEY', 'label': 'API key'}],
+    },
+    {
+        'id': 'gemini', 'name': 'Google Gemini', 'category': 'model',
+        'purpose': 'Agents & template planning',
+        'docs': 'https://aistudio.google.com/app/apikey',
+        'description': 'Gemini models for agent reasoning and workflow planning.',
+        'variables': [{'name': 'GEMINI_API_KEY', 'label': 'API key'}],
+    },
+    {
+        'id': 'venice', 'name': 'Venice.ai', 'category': 'model',
+        'purpose': 'Agents & template planning',
+        'docs': 'https://venice.ai/settings/api',
+        'description': 'Venice.ai models for agent reasoning and workflow planning.',
+        'variables': [{'name': 'VENICE_API_KEY', 'label': 'API key'}],
     },
 ]
 
@@ -217,6 +266,8 @@ class CredentialVault:
             providers.append({
                 'id': provider['id'],
                 'name': provider['name'],
+                'category': provider.get('category', 'passive'),
+                'purpose': provider.get('purpose'),
                 'docs': provider['docs'],
                 'description': provider['description'],
                 'variables': variables,

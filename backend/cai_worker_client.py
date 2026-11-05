@@ -18,9 +18,10 @@ async def send_frame(writer, value):
     await writer.drain()
 
 
-async def assess_worker(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False):
+async def assess_worker(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False, model=None):
     from .cli_runner import stop_process
-    base = model_base_url(os.environ.get('CAI_MODEL_BASE_URL', 'http://127.0.0.1:11434/v1'),
+    cfg = model or {}
+    base = model_base_url(cfg.get('base_url') or os.environ.get('CAI_MODEL_BASE_URL', 'http://127.0.0.1:11434/v1'),
                           os.environ.get('CAI_ALLOW_REMOTE_MODEL') == '1')
     # Preserve the venv executable path; resolving its symlink would select the
     # base interpreter and silently lose the SDK environment.
@@ -28,6 +29,12 @@ async def assess_worker(targets, goal, request_tool, *, network_tool=None, timeo
     allowed = ('PATH', 'SystemRoot', 'WINDIR', 'LANG', 'LC_ALL', 'CAI_MODEL', 'CAI_MODEL_API_KEY',
                'CAI_LOCAL_API_KEY', 'CAI_ALLOW_REMOTE_MODEL')
     env = {k: os.environ[k] for k in allowed if k in os.environ}
+    # A selected provider's config is passed to the worker through its own env
+    # dict only — never the parent process environment.
+    if cfg.get('api_key'):
+        env['CAI_MODEL_API_KEY'] = cfg['api_key']
+    if cfg.get('model'):
+        env['CAI_MODEL'] = cfg['model']
     env['CAI_MODEL_BASE_URL'] = base
     env['PYTHONUNBUFFERED'] = '1'
     proc = None

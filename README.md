@@ -91,7 +91,7 @@ A useful assessment platform needs more than a canvas that launches commands and
 | CLI adapters | 141 application-owned, shell-free adapters with executable preflight, typed files/stdin and scalar fan-out |
 | Registered inputs | Local files/folders, uploaded text inputs, wordlists, SBOMs, resolver lists and reviewed template/signature folders |
 | Provider credentials | Store API keys locally: passive data sources (Shodan, Censys, ProjectDiscovery, SecurityTrails, Netlas, urlscan, VirusTotal, BinaryEdge, GitHub, FOFA) injected only into tools that declare them, plus model providers (Anthropic, OpenAI, xAI/Grok, Gemini, Venice.ai) for agents and template planning |
-| Agent desk | Native/catalog workflow planning plus persisted, evidence-guided follow-up proposals using rules or the optional CAI model |
+| Agent desk | Native/catalog workflow planning plus persisted, evidence-guided follow-up proposals using rules or a model; choose the model provider (local endpoint or a configured remote provider) for model-backed planning |
 | Evidence review | Optional CAI analysis of captured HTTP evidence with structured candidates, references and coverage limits |
 | Evidence workbench | Structured observations, persistent candidate IDs, operator review history and run comparisons |
 | Run controls | Pause/resume, cancellation, node deadlines, separate native-operation and CLI-launch budgets |

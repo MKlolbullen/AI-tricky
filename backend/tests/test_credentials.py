@@ -155,3 +155,30 @@ def test_model_key_stores_without_tool_binding(clean_env, tmp_path):
         # Model keys are never exposed as selectable CLI credential variables.
         runtime = c.get('/api/runtime').json()['cli_credential_variables']
         assert all(v['name'] != 'ANTHROPIC_API_KEY' for v in runtime)
+
+
+def test_runtime_lists_model_providers(clean_env, tmp_path):
+    with TestClient(create_app(tmp_path)) as c:
+        mps = c.get('/api/runtime').json()['model_providers']
+    ids = [m['id'] for m in mps]
+    assert ids[0] == 'local' and {'anthropic', 'openai', 'xai', 'gemini', 'venice'} <= set(ids)
+    assert all(m['configured'] is False for m in mps if m['is_remote'])
+
+
+def test_model_planning_provider_gating(clean_env, tmp_path, monkeypatch):
+    monkeypatch.delenv('CAI_ALLOW_REMOTE_MODEL', raising=False)
+    with TestClient(create_app(tmp_path)) as c:
+        # Remote provider with no stored key is refused.
+        assert c.post('/api/agent/plan', json={'goal': 'x', 'use_model': True, 'provider': 'openai'}).status_code == 409
+        c.post('/api/credentials', json={'updates': {'OPENAI_API_KEY': 'sk-test'}})
+        # Key present but remote model use disabled is still refused.
+        r = c.post('/api/agent/plan', json={'goal': 'x', 'use_model': True, 'provider': 'openai'})
+        assert r.status_code == 409 and 'remote model use' in r.json()['detail']
+        # Unknown provider is rejected.
+        assert c.post('/api/agent/plan', json={'goal': 'x', 'use_model': True, 'provider': 'nope'}).status_code == 422
+        # Deterministic planning never needs a provider.
+        assert c.post('/api/agent/plan', json={'goal': 'x', 'use_model': False}).json()['planner'] == 'local-rules'
+    monkeypatch.setenv('CAI_ALLOW_REMOTE_MODEL', '1')
+    with TestClient(create_app(tmp_path)) as c:
+        # Remote enabled + key present but no model name is rejected before any call.
+        assert c.post('/api/agent/plan', json={'goal': 'x', 'use_model': True, 'provider': 'openai'}).status_code == 422

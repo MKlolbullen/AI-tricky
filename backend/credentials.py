@@ -94,9 +94,12 @@ PROVIDERS: list[dict] = [
         ],
     },
     # Model providers — for agents and template planning, not CLI-tool secrets.
+    # `endpoint` is the provider's OpenAI-compatible base URL, used only when the
+    # provider is selected for inference and remote model use is enabled.
     {
         'id': 'anthropic', 'name': 'Anthropic', 'category': 'model',
         'purpose': 'Agents & template planning',
+        'endpoint': 'https://api.anthropic.com/v1/',
         'docs': 'https://console.anthropic.com/settings/keys',
         'description': 'Claude models for agent reasoning and workflow planning.',
         'variables': [{'name': 'ANTHROPIC_API_KEY', 'label': 'API key'}],
@@ -104,6 +107,7 @@ PROVIDERS: list[dict] = [
     {
         'id': 'openai', 'name': 'OpenAI', 'category': 'model',
         'purpose': 'Agents & template planning',
+        'endpoint': 'https://api.openai.com/v1',
         'docs': 'https://platform.openai.com/api-keys',
         'description': 'GPT models for agent reasoning and workflow planning.',
         'variables': [{'name': 'OPENAI_API_KEY', 'label': 'API key'}],
@@ -111,6 +115,7 @@ PROVIDERS: list[dict] = [
     {
         'id': 'xai', 'name': 'xAI (Grok)', 'category': 'model',
         'purpose': 'Agents & template planning',
+        'endpoint': 'https://api.x.ai/v1',
         'docs': 'https://console.x.ai/',
         'description': 'Grok models for agent reasoning and workflow planning.',
         'variables': [{'name': 'XAI_API_KEY', 'label': 'API key'}],
@@ -118,6 +123,7 @@ PROVIDERS: list[dict] = [
     {
         'id': 'gemini', 'name': 'Google Gemini', 'category': 'model',
         'purpose': 'Agents & template planning',
+        'endpoint': 'https://generativelanguage.googleapis.com/v1beta/openai/',
         'docs': 'https://aistudio.google.com/app/apikey',
         'description': 'Gemini models for agent reasoning and workflow planning.',
         'variables': [{'name': 'GEMINI_API_KEY', 'label': 'API key'}],
@@ -125,11 +131,18 @@ PROVIDERS: list[dict] = [
     {
         'id': 'venice', 'name': 'Venice.ai', 'category': 'model',
         'purpose': 'Agents & template planning',
+        'endpoint': 'https://api.venice.ai/api/v1',
         'docs': 'https://venice.ai/settings/api',
         'description': 'Venice.ai models for agent reasoning and workflow planning.',
         'variables': [{'name': 'VENICE_API_KEY', 'label': 'API key'}],
     },
 ]
+
+# Model providers keyed by id, for endpoint/key resolution.
+MODEL_PROVIDERS: dict[str, dict] = {
+    p['id']: {'name': p['name'], 'endpoint': p['endpoint'], 'key': p['variables'][0]['name']}
+    for p in PROVIDERS if p.get('category') == 'model'
+}
 
 VARS: list[str] = [v['name'] for p in PROVIDERS for v in p['variables']]
 VAR_SET: set[str] = set(VARS)

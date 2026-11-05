@@ -16,6 +16,7 @@ import uuid
 from urllib.parse import urlsplit
 
 from .observations import canonical_asset, digest, encoded
+from .scope import ScopeError, parse_target
 from .store import now
 
 GRAPH_VERSION = '2'
@@ -340,26 +341,61 @@ class AssetGraph:
                 'warnings': warnings}
 
     def scope_subgraph(self, targets, max_entities=2000):
-        """The asset graph reachable (within two hops) from the entered hosts —
-        the hosts themselves, their subdomains, and the services/ips/technologies/
+        """The asset graph reachable (within two hops) from the entered hosts/IPs —
+        the seeds themselves, their subdomains, and the services/ips/technologies/
         vulnerabilities/etc. attached to them. Read-only observed data; it never
-        expands scope or emits anything for live probing."""
+        expands scope or emits anything for live probing.
+
+        The seeds are matched by the entered targets' hosts (so a URL target like
+        `https://example.com/app` still matches the `example.com` host entity) and
+        by entered IPs. The two-hop expansion collects only the non-host entities
+        attached to the seeds: a host reached through a shared IP or technology is
+        outside the entered scope and is never admitted. Synchronous and
+        connection-local, so callers run it off the event loop (asyncio.to_thread).
+        """
         self.index_pending()
-        entered = {h for h in (canonical_asset(t) for t in targets) if h}
+        hosts, ips = set(), set()
+        for value in targets:
+            try:
+                t = parse_target(value)
+            except ScopeError:
+                continue
+            if t.kind in ('url', 'domain') and t.host:
+                hosts.add(t.host)
+            elif t.kind == 'ip' and t.host:
+                ips.add(t.host)
+            # CIDR targets carry no host/ip-entity membership in v1; skipped.
+        if not hosts and not ips:
+            return {'entities': [], 'edges': []}
+        # Bound the per-hop neighbour scan so a single high-degree entity (e.g. a
+        # shared IP) cannot load its whole edge set into memory regardless of cap.
+        edge_cap = max(max_entities * 4, 2000)
         with self.store.connect() as c:
-            host_ids = [r['id'] for r in c.execute("SELECT id,canonical FROM assets WHERE kind='host'")
-                        if r['canonical'] in entered or any(r['canonical'].endswith('.' + e) for e in entered)]
-            seen, frontier = set(host_ids), set(host_ids)
+            seed = {r['id'] for r in c.execute("SELECT id,kind,canonical FROM assets WHERE kind IN ('host','ip')")
+                    if (r['kind'] == 'host' and (r['canonical'] in hosts or any(r['canonical'].endswith('.' + h) for h in hosts)))
+                    or (r['kind'] == 'ip' and r['canonical'] in ips)}
+            seen, frontier = set(seed), set(seed)
             for _ in range(2):
                 if not frontier or len(seen) >= max_entities:
                     break
                 marks = ','.join('?' * len(frontier))
-                args = list(frontier) + list(frontier)
-                neighbours = c.execute(f'SELECT src_id,dst_id FROM asset_edges WHERE src_id IN ({marks}) OR dst_id IN ({marks})', args).fetchall()
-                new = {nid for e in neighbours for nid in (e['src_id'], e['dst_id']) if nid not in seen}
+                args = list(frontier) + list(frontier) + [edge_cap]
+                neighbours = c.execute(f'SELECT src_id,dst_id FROM asset_edges WHERE src_id IN ({marks}) OR dst_id IN ({marks}) LIMIT ?', args).fetchall()
+                cand = {nid for e in neighbours for nid in (e['src_id'], e['dst_id']) if nid not in seen}
+                if not cand:
+                    break
+                cmarks = ','.join('?' * len(cand))
+                kinds = {r['id']: r['kind'] for r in c.execute(f'SELECT id,kind FROM assets WHERE id IN ({cmarks})', list(cand))}
+                # Admit attached non-host entities only; a host reached here shares
+                # an IP/technology but is outside the entered scope.
+                new = {nid for nid in cand if kinds.get(nid) != 'host'}
                 seen |= new
                 frontier = new
-            seen = set(list(seen)[:max_entities])
+            # Keep the entered seeds first when capping, so a seed is never dropped
+            # in favour of a neighbour; fill the rest deterministically.
+            if len(seen) > max_entities:
+                keep = set(sorted(seed)[:max_entities])
+                seen = keep | set(sorted(seen - keep)[:max_entities - len(keep)])
             if not seen:
                 return {'entities': [], 'edges': []}
             marks = ','.join('?' * len(seen))

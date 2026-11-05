@@ -183,7 +183,10 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
         if kind == 'native_asset_graph':
             # Read-only: the current asset graph scoped to the entered targets.
             # No target traffic and no scope expansion — observed data for review.
-            sub = asset_graph.scope_subgraph(config['targets']) if asset_graph else {'entities': [], 'edges': []}
+            # scope_subgraph runs index_pending() + synchronous SQLite reads, so
+            # keep it off the event loop to avoid blocking other runs/requests.
+            sub = (await asyncio.to_thread(asset_graph.scope_subgraph, config['targets'])
+                   if asset_graph else {'entities': [], 'edges': []})
             counts = {}
             for e in sub['entities']:
                 counts[e['kind']] = counts.get(e['kind'], 0) + 1

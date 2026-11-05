@@ -117,15 +117,41 @@ def test_native_asset_graph_node_emits_the_scoped_subgraph(tmp_path):
         r = c.post('/api/runs', json={'engine': 'workflow', 'workflow': g, 'target_ids': [tid], 'allow_http': True})
         assert r.status_code == 201, r.text
         wrid = r.json()['id']
-        assert wait_done(c, wrid)['status'] == 'completed'
+        done = wait_done(c, wrid)
+        assert done['status'] == 'completed'
+        # The node reads the graph only; it admits no fetch/probe requests.
+        assert done['result']['request_count'] == 0
         arts = {a['name']: a['id'] for a in c.get('/api/runs/' + wrid + '/artifacts').json()}
         node = c.get('/api/artifacts/' + arts['node-n1.json']).json()
         sub = node[0]['asset_graph']
         canon = {(e['kind'], e['canonical']) for e in sub['entities']}
         assert ('host', 'api.example.com') in canon and ('host', 'example.com') in canon
         assert node[0]['evidence_status'] == 'OBSERVATION'
-        # The node reads the graph only; it emits no targets for live probing.
+        # It emits no targets for live probing — only the three observed-data keys.
+        assert set(node[0]) == {'report', 'asset_graph', 'evidence_status'}
         assert node[0]['report'].startswith('Asset graph for the entered scope')
+
+
+def test_scope_subgraph_matches_url_targets_and_excludes_foreign_hosts(tmp_path):
+    store = Store(tmp_path)
+    _seed(store)  # api.example.com + example.com, resolving to 93.184.216.34
+    # An unrelated host that merely shares the same IP — outside the entered scope.
+    other = store.new_run({'engine': 'inventory', 'targets': ['https://evil.other.com/']})['id']
+    store.artifact(other, 'http-1.json', {'url': 'https://evil.other.com/', 'status': 200,
+                                          'connected_ip': '93.184.216.34', 'headers': {'Server': 'nginx'}})
+    g = AssetGraph(store)
+    # A URL target still matches the host entity (canonical_asset would keep the
+    # scheme/path and miss it) — the graph is not empty.
+    sub = g.scope_subgraph(['https://api.example.com/app'])
+    canon = {(e['kind'], e['canonical']) for e in sub['entities']}
+    assert ('host', 'api.example.com') in canon
+    assert ('ip', '93.184.216.34') in canon          # the attached IP is in scope
+    assert ('service', 'api.example.com:443/tcp') in canon
+    # A foreign host sharing the IP is never pulled into the entered scope.
+    assert ('host', 'evil.other.com') not in canon
+    # An out-of-scope / unmatched target yields an empty graph, not a crash.
+    assert g.scope_subgraph(['https://nope.invalid/']) == {'entities': [], 'edges': []}
+    assert g.scope_subgraph(['10.0.0.0/8']) == {'entities': [], 'edges': []}  # CIDR: skipped in v1
 
 
 def test_asset_graph_api_end_to_end(tmp_path, target_server):

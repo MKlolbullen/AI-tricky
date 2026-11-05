@@ -111,6 +111,12 @@ PROVIDERS: list[dict] = [
         'description': 'Cyberspace search for hosts, services, technologies and exposures.',
         'variables': [{'name': 'ZOOMEYE_API_KEY', 'label': 'API key'}],
     },
+    {
+        'id': 'intelx', 'name': 'Intelligence X', 'category': 'passive',
+        'docs': 'https://intelx.io/account?tab=developer',
+        'description': 'Phonebook search for subdomains and email selectors of a domain.',
+        'variables': [{'name': 'INTELX_API_KEY', 'label': 'API key'}],
+    },
     # Model providers — for agents and template planning, not CLI-tool secrets.
     # `endpoint` is the provider's OpenAI-compatible base URL, used only when the
     # provider is selected for inference and remote model use is enabled.

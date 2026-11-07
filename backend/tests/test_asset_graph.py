@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
@@ -102,7 +103,8 @@ def test_asset_diff_api_and_validation(tmp_path):
         assert c.get(f'/api/assets/diff?baseline={ra}&current=missing').status_code == 404
 
 
-def test_native_asset_graph_node_emits_the_scoped_subgraph(tmp_path):
+@pytest.mark.parametrize('scope,expected', [('example.com', {'example.com'}), ('*.example.com', {'api.example.com','dev.example.com'})])
+def test_native_asset_graph_node_emits_the_scoped_subgraph(tmp_path, scope, expected):
     # Seed the asset graph with passive subdomains of example.com, then run a
     # workflow whose native_asset_graph node reads it back for the entered scope.
     store = Store(tmp_path)
@@ -113,7 +115,7 @@ def test_native_asset_graph_node_emits_the_scoped_subgraph(tmp_path):
     AssetGraph(store).index_pending(rid)
     g = graph('native_scope', 'native_asset_graph')
     with TestClient(create_app(tmp_path)) as c:
-        tid = c.post('/api/targets', json={'value': 'example.com'}).json()['id']
+        tid = c.post('/api/targets', json={'value': scope}).json()['id']
         r = c.post('/api/runs', json={'engine': 'workflow', 'workflow': g, 'target_ids': [tid], 'allow_http': True})
         assert r.status_code == 201, r.text
         wrid = r.json()['id']
@@ -125,7 +127,7 @@ def test_native_asset_graph_node_emits_the_scoped_subgraph(tmp_path):
         node = c.get('/api/artifacts/' + arts['node-n1.json']).json()
         sub = node[0]['asset_graph']
         canon = {(e['kind'], e['canonical']) for e in sub['entities']}
-        assert ('host', 'api.example.com') in canon and ('host', 'example.com') in canon
+        assert {value for kind,value in canon if kind=='host'} == expected
         assert node[0]['evidence_status'] == 'OBSERVATION'
         # It emits no targets for live probing — only the three observed-data keys.
         assert set(node[0]) == {'report', 'asset_graph', 'evidence_status'}

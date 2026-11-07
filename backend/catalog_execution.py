@@ -36,9 +36,21 @@ def source_values(data,config):
     if typ=='query':
         if not value:raise ScopeError('Enter an explicit search query.')
         return [value]
-    values=value.splitlines() if value else [t for t in config['targets'] if typ=='targets' or (typ=='domain' and parse_target(t).kind=='domain') or (typ=='url' and parse_target(t).kind=='url')]
+    values=value.splitlines() if value else [t for t in config['targets'] if (typ=='targets' and parse_target(t).kind!='wildcard') or (typ=='domain' and parse_target(t).kind in ('domain','wildcard')) or (typ=='url' and parse_target(t).kind=='url')]
     if not values:raise ScopeError(f'No selected {typ} targets are available for this source.')
+    if typ=='domain':
+        # Wildcards are selectors, never executable target strings. A domain
+        # source supplies their apex as a passive enumeration seed only; each
+        # active consumer still checks the original immutable run scope.
+        entered={parse_target(t).url for t in config['targets']}
+        if any(parse_target(v).kind=='wildcard' and parse_target(v).url not in entered for v in values):
+            raise ScopeError('Enumeration seed is outside the selected run scope.')
+        values=[parse_target(v).host if parse_target(v).kind=='wildcard' else v for v in values]
     allowed,rejected=scoped_lines(values,typ,config)
+    if typ=='domain':
+        seeds={parse_target(t).host for t in config['targets'] if parse_target(t).kind=='wildcard'}
+        allowed=list(dict.fromkeys(allowed+[v for v in rejected if parse_target(v).kind=='domain' and parse_target(v).host in seeds]))
+        rejected=[v for v in rejected if v not in allowed]
     if rejected:raise ScopeError('A source value is outside the selected run scope.')
     if typ=='domain' and any(parse_target(v).kind!='domain' for v in allowed):raise ScopeError('Domain source needs a plain domain scope.')
     if typ=='url' and any(not v.startswith(('http://','https://')) for v in allowed):raise ScopeError('URL source needs an explicit HTTP(S) URL scope.')

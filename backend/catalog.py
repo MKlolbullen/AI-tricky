@@ -163,7 +163,7 @@ def scoped_lines(lines,typ,config,*,discovery=False):
                 # but never turns those discoveries into active authorization.
                 try:
                     t=parse_target(value)
-                    if t.kind=='domain' and any(s.kind=='domain' and (t.host==s.host or t.host.endswith('.'+s.host)) for s in scope):result.append(value);continue
+                    if t.kind=='domain' and any(s.kind in ('domain','wildcard') and (t.host==s.host or t.host.endswith('.'+s.host)) for s in scope):result.append(value);continue
                 except (ScopeError,ValueError):pass
             rejected.append(value)
     return result,rejected

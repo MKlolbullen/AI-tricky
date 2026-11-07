@@ -219,7 +219,7 @@ class WorkflowRecoveries:
         if not scope or any(t not in known for t in scope):
             raise ExecutionError('Restore the original entered scope before preparing a recovery.')
         for target in map(parse_target, scope):
-            if target.kind != 'url':
+            if target.kind not in ('url', 'wildcard'):
                 network_hosts(target.url, [parse_target(t) for t in scope], options['max_hosts'])
         tools = [TOOLS[n['data']['toolId']] for n in subgraph['nodes']
                  if n['id'] in rerun and n['data']['kind'] == 'catalog_tool']

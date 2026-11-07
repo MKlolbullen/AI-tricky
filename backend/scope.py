@@ -31,6 +31,30 @@ def safe_path(path: str) -> str:
     return decoded
 
 
+def domain_name(value: str) -> str:
+    try:
+        host = value.encode('idna').decode('ascii').lower().rstrip('.')
+    except UnicodeError as exc:
+        raise ScopeError('Invalid domain name.') from exc
+    if not host or len(host) > 253 or any(not label or len(label) > 63 or label.startswith('-') or label.endswith('-') or
+                                         not all(c.isascii() and (c.isalnum() or c == '-') for c in label)
+                                         for label in host.split('.')):
+        raise ScopeError('Invalid domain name.')
+    return host
+
+
+def host_matches(host: str, target: Target) -> bool:
+    """Host membership only; URL scheme/port/path checks belong to authorize()."""
+    if target.kind == 'wildcard':
+        return host != target.host and host.endswith('.' + target.host)
+    if target.kind == 'cidr':
+        try:
+            return ipaddress.ip_address(host) in ipaddress.ip_network(target.url)
+        except ValueError:
+            return False
+    return host == target.host
+
+
 def parse_url(value: str, *, scope_entry=False) -> Target:
     if not value or len(value) > 4096 or any(ord(c) < 33 for c in value) or '\\' in value:
         raise ScopeError('Invalid HTTP(S) URL.')
@@ -43,7 +67,11 @@ def parse_url(value: str, *, scope_entry=False) -> Target:
     if p.scheme not in ('http', 'https') or not host or p.username is not None or p.password is not None:
         raise ScopeError('Only HTTP(S) targets without embedded credentials are supported.')
     if p.fragment or '*' in host or '%' in host or not 1 <= port <= 65535 or (scope_entry and p.query):
-        raise ScopeError('Enter an exact target; wildcard hosts and fragments are not supported.')
+        raise ScopeError('URLs must use concrete hosts without fragments; enter *.example.com as a separate host scope.')
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        host = domain_name(host)
     path = safe_path(p.path or '/')
     netloc = f'[{host}]' if ':' in host else host
     if port != (443 if p.scheme == 'https' else 80):
@@ -57,6 +85,13 @@ def parse_target(value: str) -> Target:
         raise ScopeError('Enter a domain, IP, CIDR or HTTP(S) URL.')
     if '://' in value:
         return parse_url(value, scope_entry=True)
+    if value.startswith('*.'):
+        host = domain_name(value[2:])
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            return Target('*.' + host, host, kind='wildcard')
+        raise ScopeError('Wildcard scope requires a domain, not an IP address.')
     try:
         if '/' in value:
             net = ipaddress.ip_network(value, strict=False)
@@ -67,9 +102,7 @@ def parse_target(value: str) -> Target:
         pass
     if any(c in value for c in '/:@?#*'):
         raise ScopeError('Use a plain domain, IP, CIDR or explicit HTTP(S) URL.')
-    host = value.encode('idna').decode('ascii').lower().rstrip('.')
-    if not host or any(not label or len(label)>63 or label.startswith('-') or label.endswith('-') or not all(c.isalnum() or c=='-' for c in label) for label in host.split('.')):
-        raise ScopeError('Invalid domain name.')
+    host = domain_name(value)
     return Target(host, host, kind='domain')
 
 
@@ -82,8 +115,8 @@ def authorize(url: str, targets: list[Target]) -> Target:
                     return req
             except ValueError:
                 continue
-        elif t.kind in ('domain', 'ip'):
-            if req.host == t.host:
+        elif t.kind in ('domain', 'ip', 'wildcard'):
+            if host_matches(req.host, t):
                 return req
         else:
             base = t.path.rstrip('/')
@@ -94,6 +127,8 @@ def authorize(url: str, targets: list[Target]) -> Target:
 
 def network_hosts(value: str, targets: list[Target], max_hosts: int) -> list[str]:
     requested = parse_target(value)
+    if requested.kind == 'wildcard':
+        raise ScopeError('A wildcard is a scope selector. Discover concrete subdomains before probing.')
     if requested.kind == 'url':
         raise ScopeError('Port probing requires an entered domain, IP or CIDR; URL-only scope does not authorize port enumeration.')
     if requested.kind == 'cidr':
@@ -105,7 +140,7 @@ def network_hosts(value: str, targets: list[Target], max_hosts: int) -> list[str
         if count > max_hosts:
             raise ScopeError(f'CIDR exceeds this run\'s {max_hosts}-host limit. Choose a smaller subnet or increase the bounded host limit.')
         return [str(ip) for ip in net.hosts()]
-    if requested.kind == 'domain' and any(t.kind=='domain' and t.host==requested.host for t in targets):
+    if requested.kind == 'domain' and any(t.kind in ('domain', 'wildcard') and host_matches(requested.host,t) for t in targets):
         return [requested.host]
     if requested.kind == 'ip':
         ip = ipaddress.ip_address(requested.host)

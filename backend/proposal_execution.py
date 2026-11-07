@@ -153,7 +153,7 @@ class ProposalExecutions:
                       cli_credential_keys=[])
         scopes = [parse_target(t) for t in config['targets']]
         for target in scopes:
-            if target.kind != 'url':
+            if target.kind not in ('url', 'wildcard'):
                 network_hosts(target.url, scopes, config['max_hosts'])
         if action['cost']['native_operations'] > config['max_requests'] or action['cost']['cli_invocations'] > config['max_cli_invocations']:
             raise ExecutionError('The selected budgets do not cover this proposal.', 422)

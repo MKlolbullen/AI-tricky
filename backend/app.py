@@ -27,6 +27,7 @@ from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
 from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
+from .recovery import WorkflowRecoveries, RecoveryOptions
 from .credentials import CredentialVault, MODEL_PROVIDERS, MODEL_VARS
 from .asset_graph import AssetGraph, ENTITY_KINDS
 from .observations import canonical_asset
@@ -203,6 +204,16 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         return providers
     proposal_planner = ProposalPlanner(store, evidence)
     proposal_executions = ProposalExecutions(store, proposal_planner)
+    def recovery_model_config():
+        if assessor is not None:
+            return None  # injected test analyst, no SDK or provider request
+        if cai_adapter.installed_version() != cai_adapter.SUPPORTED_CAI:
+            raise ExecutionError('Install the supported CAI SDK before recovering an analyst node.')
+        try:
+            return resolve_model()
+        except HTTPException as exc:
+            raise ExecutionError(str(exc.detail), exc.status_code) from None
+    recoveries = WorkflowRecoveries(store, credential=vault.effective, model_config=recovery_model_config)
     controls = {}
     dispatch_lock = asyncio.Lock()
     dispatch_tasks = set()
@@ -288,7 +299,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                 'sdk_ready': version == cai_adapter.SUPPORTED_CAI and config_error is None,
                 'model_base_url': base, 'model': os.environ.get('CAI_MODEL', 'local-model'),
                 'model_connection': 'not tested', 'remote_model_enabled': os.environ.get('CAI_ALLOW_REMOTE_MODEL') == '1', 'config_error': config_error,
-                'capabilities': ['scoped_http_get', 'scoped_tcp_connect', 'domain_ip_cidr_inventory', 'cai_model', 'sqlite_history', 'native_dag', 'saved_workflows'],
+                'capabilities': ['scoped_http_get', 'scoped_tcp_connect', 'domain_ip_cidr_inventory', 'cai_model', 'sqlite_history', 'native_dag', 'saved_workflows', 'workflow_recovery'],
                 'workflow_adapters': REGISTRY,
                 'workflow_execution': 'Native DAG, CAI evidence review and 151 migrated catalog contracts; CLI execution requires explicit run enablement and preflight',
                 'catalog_tools':len(TOOLS),'catalog_workflows':len(MINI_CATALOG['workflows']),
@@ -782,6 +793,8 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                         extra = {} if role_instructions is None else {'role_instructions': role_instructions}
                         if max_turns is not None:
                             extra['max_turns'] = max_turns
+                        if ctl.model is not None:
+                            extra['model'] = ctl.model
                         if assessor is not None:
                             return await assess([], goal, disabled, **extra)
                         return await assess([], goal, disabled, evidence_only=True, **extra)
@@ -920,15 +933,14 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         if sum(not c.task.done() for c in controls.values() if c.task) >= 2:
             raise HTTPException(409, 'Two local runs are already active.')
 
-    def start_run(run, model=None):
+    def start_run(run, model=None, credentials=None):
         ctl = RunControl()
         ctl.model = model
         # Snapshot the selected credentials once, server-side, for the whole run
         # so a concurrent settings change cannot alter an in-flight run. The
         # snapshot lives only on the control object, never in the persisted run.
-        ctl.credentials = {key: vault.effective(key)
-                           for key in run['config'].get('cli_credential_keys', [])
-                           if vault.effective(key)}
+        ctl.credentials = credentials if credentials is not None else {
+            key: vault.effective(key) for key in run['config'].get('cli_credential_keys', []) if vault.effective(key)}
         controls[run['id']] = ctl
         ctl.task = asyncio.create_task(execute(run['id'], run['config'], ctl))
 
@@ -969,6 +981,44 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             dispatch_tasks.discard(job)
             if not job.cancelled():
                 job.exception()  # Retrieve failures even if the requesting client disconnected.
+        task.add_done_callback(finished)
+        return await asyncio.shield(task)
+
+    @app.get('/api/runs/{rid}/recovery')
+    def inspect_recovery(rid: str):
+        return recoveries.inspect(rid)
+
+    @app.post('/api/runs/{rid}/recoveries', status_code=201)
+    async def prepare_recovery(rid: str, body: RecoveryOptions):
+        return await asyncio.to_thread(recoveries.prepare, rid, body.model_dump())
+
+    @app.get('/api/recoveries/{recovery_id}')
+    def recovery_review(recovery_id: str):
+        return recoveries.get(recovery_id)
+
+    @app.post('/api/recoveries/{recovery_id}/revoke')
+    async def revoke_recovery(recovery_id: str, body: SnapshotAction):
+        return await asyncio.to_thread(recoveries.revoke, recovery_id, body.expected_hash)
+
+    @app.post('/api/recoveries/{recovery_id}/dispatch')
+    async def dispatch_recovery(recovery_id: str, body: DispatchAction):
+        if body.approve is not True:
+            raise HTTPException(422, 'Explicit operator approval is required to recover this workflow.')
+        async def consume_and_start():
+            async with dispatch_lock:
+                receipt = await asyncio.to_thread(recoveries.get, recovery_id)
+                if receipt['status'] == 'pending':
+                    check_run_capacity()
+                run, created, credentials, model = await asyncio.to_thread(recoveries.dispatch, recovery_id, body.expected_hash)
+                if created:
+                    start_run(run, credentials=credentials, model=model)
+                return {'run': run, 'created': created, 'recovery_id': recovery_id}
+        task = asyncio.create_task(consume_and_start())
+        dispatch_tasks.add(task)
+        def finished(job):
+            dispatch_tasks.discard(job)
+            if not job.cancelled():
+                job.exception()
         task.add_done_callback(finished)
         return await asyncio.shield(task)
 

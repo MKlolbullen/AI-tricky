@@ -29,6 +29,13 @@ class Store:
             CREATE TABLE IF NOT EXISTS inputs(id TEXT PRIMARY KEY,name TEXT NOT NULL,kind TEXT NOT NULL,path TEXT NOT NULL,sha256 TEXT,created TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS verification_runs(run_id TEXT PRIMARY KEY,execution_id TEXT NOT NULL,finding_id TEXT,profile_id TEXT NOT NULL,created TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS verification_by_finding ON verification_runs(finding_id,created);
+            CREATE TABLE IF NOT EXISTS artifact_reuse(
+                artifact_id TEXT PRIMARY KEY,source_artifact_id TEXT NOT NULL,source_run_id TEXT NOT NULL,
+                recovery_id TEXT NOT NULL,source_sha256 TEXT NOT NULL,sha256 TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS workflow_checkpoints(
+                run_id TEXT NOT NULL,node_id TEXT NOT NULL,artifact_id TEXT NOT NULL,sha256 TEXT NOT NULL,
+                source_run_id TEXT NOT NULL,source_artifact_id TEXT NOT NULL,captured_at TEXT,
+                PRIMARY KEY(run_id,node_id));
             ''')
             if 'node_id' not in {r['name'] for r in c.execute('PRAGMA table_info(artifacts)')}:
                 c.execute('ALTER TABLE artifacts ADD COLUMN node_id TEXT')
@@ -119,6 +126,10 @@ class Store:
     def nodes(self, rid):
         with self.connect() as c:
             return [{**dict(r), 'result': json.loads(r['result']) if r['result'] else None} for r in c.execute('SELECT * FROM run_nodes WHERE run_id=? ORDER BY rowid', (rid,))]
+
+    def checkpoints(self, rid):
+        with self.connect() as c:
+            return {r['node_id']: dict(r) for r in c.execute('SELECT * FROM workflow_checkpoints WHERE run_id=?', (rid,))}
 
     def workflows(self):
         with self.connect() as c:

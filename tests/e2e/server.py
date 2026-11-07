@@ -18,7 +18,28 @@ from backend.team import run_team
 
 
 def seed(store, fixture_url):
-    store.add_target(fixture_url + '/')
+    target = store.add_target(fixture_url + '/')
+    # Interrupted workflow fixture: only the selected recovery dispatch will
+    # contact the loopback HTTP server. Seeding/previewing has no target access.
+    from backend.workflows import REGISTRY
+    kinds = ['native_scope', 'native_http', 'native_summary']
+    titles = ['Saved scope', 'HTTP retry', 'Recovery summary']
+    recovery_graph = {'schema': 'offsecs-u-ai.workflow/v1', 'nodes': [
+        {'id': f'r{i}', 'type': 'tool', 'position': {'x': i * 230, 'y': 0},
+         'data': {'kind': kind, 'title': titles[i], 'inputs': REGISTRY[kind]['inputs'],
+                  'output': REGISTRY[kind]['output'], 'timeout': 30, 'retries': 0}}
+        for i, kind in enumerate(kinds)], 'edges': [
+            {'id': f're{i}', 'source': f'r{i}', 'target': f'r{i+1}'} for i in range(2)]}
+    recovery_config = {'engine': 'workflow', 'allow_http': True, 'workflow': recovery_graph,
+                       'targets': [fixture_url + '/'], 'target_ids': [target['id']], 'goal': 'Recovery browser fixture',
+                       'max_requests': 1, 'max_cli_invocations': 1, 'max_hosts': 1, 'max_seconds': 30,
+                       'parallelism': 1, 'ports': [80], 'allow_cli': False, 'cli_credential_keys': []}
+    with store.connect() as c:
+        c.execute('INSERT INTO runs VALUES(?,?,?,?,?,?)', ('qa-recovery', 'failed', now(), now(), json.dumps(recovery_config), None))
+    checkpoint = store.artifact('qa-recovery', 'node-r0.json', [{'target': fixture_url + '/', 'kind': 'url'}], node_id='r0')
+    store.node_status('qa-recovery', 'r0', 'completed', {'artifact_id': checkpoint, 'records': 1, 'errors': 0})
+    store.node_status('qa-recovery', 'r1', 'failed', {'error': 'Interrupted fixture capture'})
+    store.node_status('qa-recovery', 'r2', 'skipped', {'reason': 'Upstream capture interrupted'})
     async def fixture_analyst(*args, **kwargs):
         return {'report': 'Browser fixture candidate review; no model or target access.'}
     # Real deterministic coordinator output, with injected evidence-only fixture

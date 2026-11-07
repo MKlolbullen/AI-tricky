@@ -45,9 +45,10 @@ def source_values(data,config):
     return allowed
 
 
-def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset()):
+def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),node_ids=None):
     issues=[];binaries={};snapshots={}
     for n in graph['nodes']:
+        if node_ids is not None and n['id'] not in node_ids:continue
         data=n['data'];kind=data['kind'];reason=[]
         if kind=='catalog_source':
             try:
@@ -76,7 +77,7 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset()):
                 try:binaries[tool['id']]=pin_binary(tool)
                 except ScopeError as exc:reason.append(str(exc))
         if reason:issues.append({'node_id':n['id'],'reasons':list(dict.fromkeys(reason))})
-    return {'ready':not issues,'issues':issues,'cli_binaries':binaries,'input_snapshots':snapshots,'catalog_tools':len({n['data']['toolId'] for n in graph['nodes'] if n['data']['kind']=='catalog_tool'}),'accounting':'Native operations count HTTP/TCP admissions. CLI operations count process launches; tool-internal network requests are not measured or limited by the native request cap.'}
+    return {'ready':not issues,'issues':issues,'cli_binaries':binaries,'input_snapshots':snapshots,'catalog_tools':len({n['data']['toolId'] for n in graph['nodes'] if n['data']['kind']=='catalog_tool' and (node_ids is None or n['id'] in node_ids)}),'accounting':'Native operations count HTTP/TCP admissions. CLI operations count process launches; tool-internal network requests are not measured or limited by the native request cap.'}
 
 
 async def execute_catalog_node(rid,nid,data,streams,config,ctl,store):

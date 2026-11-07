@@ -92,6 +92,7 @@ Both review records and recovered run configuration contain durable provenance.
   cannot reuse one side of a pair or inherit its original approval.
 - Reusable artifact bundles are bounded to 25 MB and 1,000 artifacts. Include an
   oversized or unavailable upstream checkpoint in the retry to recapture it.
-- No automatic retry loop, worker resurrection, actual token accounting or
-  evidence-age expiration policy is introduced. Capture ages are visible for
+- Recovery has no automatic retry loop, worker resurrection or evidence-age
+  expiration policy. New model calls use the separate [usage ledger](MODEL-USAGE.md);
+  reused model passes are not counted twice. Capture ages remain visible for
   the operator's decision; a fresh review authorizes the selected reuse.

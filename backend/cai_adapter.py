@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 from .scope import model_base_url
+from .model_usage import tracked_completion, provider_tokens
 
 SUPPORTED_CAI = '0.5.10'
 
@@ -56,19 +57,19 @@ def local_installed_version():
 
 
 async def assess(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False, model=None,
-                 role_instructions=None, max_turns=12):
+                 role_instructions=None, max_turns=12, usage_callback=None):
     if os.environ.get('CAI_PYTHON'):
         from .cai_worker_client import assess_worker
         return await assess_worker(targets, goal, request_tool, network_tool=network_tool,
                                    timeout=timeout, evidence_only=evidence_only, model=model,
-                                   role_instructions=role_instructions, max_turns=max_turns)
+                                   role_instructions=role_instructions, max_turns=max_turns, usage_callback=usage_callback)
     return await assess_local(targets, goal, request_tool, network_tool=network_tool,
                               timeout=timeout, evidence_only=evidence_only, model=model,
-                              role_instructions=role_instructions, max_turns=max_turns)
+                              role_instructions=role_instructions, max_turns=max_turns, usage_callback=usage_callback)
 
 
 async def assess_local(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False, model=None,
-                       role_instructions=None, max_turns=12):
+                       role_instructions=None, max_turns=12, usage_callback=None):
     if local_installed_version() != SUPPORTED_CAI:
         raise RuntimeError('Install the supported optional cai-framework==0.5.10 dependency in this Python environment.')
     # A selected provider's config (base_url, api_key, model) overrides the env
@@ -111,6 +112,7 @@ async def assess_local(targets, goal, request_tool, *, network_tool=None, timeou
         # This explicit Model implementation never delegates routing to LiteLLM.
         def __init__(self, client):
             self.client = client
+            self.sequence = 0
 
         async def get_response(self, system_instructions, input, model_settings, tools, output_schema, handoffs, tracing):
             if output_schema or handoffs:
@@ -134,7 +136,8 @@ async def assess_local(targets, goal, request_tool, *, network_tool=None, timeou
                 else:
                     raise RuntimeError('Unsupported model input item.')
             tool_defs = [{'type':'function','function':{'name':t.name,'description':t.description,'parameters':t.params_json_schema}} for t in tools]
-            response = await self.client.chat.completions.create(model=model_name, messages=messages,
+            self.sequence += 1
+            response = await tracked_completion(self.client, usage_callback, self.sequence, model=model_name, messages=messages,
                          tools=tool_defs or None, max_tokens=2048, temperature=0.1)
             message = response.choices[0].message
             output = []
@@ -144,9 +147,11 @@ async def assess_local(targets, goal, request_tool, *, network_tool=None, timeou
             for call in message.tool_calls or []:
                 output.append(ResponseFunctionToolCall(id=str(uuid.uuid4()), type='function_call', call_id=call.id,
                               name=call.function.name, arguments=call.function.arguments))
-            usage = response.usage
-            return ModelResponse(output=output, usage=Usage(requests=1,input_tokens=usage.prompt_tokens if usage else 0,
-                                 output_tokens=usage.completion_tokens if usage else 0,total_tokens=usage.total_tokens if usage else 0), referenceable_id=None)
+            usage = provider_tokens(response.usage)
+            # The SDK requires numeric values; the durable ledger above retains
+            # unknowns instead of interpreting this SDK fallback as measured zero.
+            return ModelResponse(output=output, usage=Usage(requests=1,input_tokens=usage['input_tokens'] or 0,
+                                 output_tokens=usage['output_tokens'] or 0,total_tokens=usage['total_tokens'] or 0), referenceable_id=None)
 
         async def stream_response(self, *args, **kwargs):
             raise RuntimeError('Streaming is not enabled; run events are recorded separately.')

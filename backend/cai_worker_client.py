@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from .scope import model_base_url
+from .model_usage import validate_event
 
 MAX_FRAME = 2_000_000
 WORKER_PATH = Path(__file__).with_name('cai_worker.py')
@@ -19,7 +20,7 @@ async def send_frame(writer, value):
 
 
 async def assess_worker(targets, goal, request_tool, *, network_tool=None, timeout=180, evidence_only=False, model=None,
-                        role_instructions=None, max_turns=12):
+                        role_instructions=None, max_turns=12, usage_callback=None):
     from .cli_runner import stop_process
     cfg = model or {}
     base = model_base_url(cfg.get('base_url') or os.environ.get('CAI_MODEL_BASE_URL', 'http://127.0.0.1:11434/v1'),
@@ -47,8 +48,10 @@ async def assess_worker(targets, goal, request_tool, *, network_tool=None, timeo
                        start_new_session=os.name == 'posix')
             await send_frame(proc.stdin, {'targets': targets, 'goal': goal, 'timeout': timeout,
                                          'evidence_only': evidence_only, 'network_enabled': network_tool is not None,
-                                         'role_instructions': role_instructions, 'max_turns': max_turns})
-            for _ in range(64):
+                                         'role_instructions': role_instructions, 'max_turns': max_turns,
+                                         'metering': usage_callback is not None})
+            sequence, pending, tool_count = 0, None, 0
+            for _ in range(128):  # 24 start/response pairs + at most 64 target tool frames
                 raw = await proc.stdout.readline()
                 if not raw or len(raw) > MAX_FRAME:
                     raise RuntimeError('CAI worker stopped without a valid response.')
@@ -58,12 +61,32 @@ async def assess_worker(targets, goal, request_tool, *, network_tool=None, timeo
                 if frame.get('type') == 'error':
                     raise RuntimeError('CAI SDK worker failed; check the selected runtime and model endpoint.')
                 if frame.get('type') == 'result':
+                    if usage_callback is not None and (not sequence or pending is not None):
+                        raise RuntimeError('CAI worker returned incomplete model usage accounting.')
                     result = frame.get('result')
                     if not isinstance(result, dict) or not isinstance(result.get('report'), str) or result.get('evidence_status') != 'CANDIDATE':
                         raise RuntimeError('CAI worker returned an invalid assessment.')
                     return {**result, 'sdk_execution': 'isolated-interpreter'}
+                if frame.get('type') == 'model_usage':
+                    if usage_callback is None or set(frame) != {'type', 'event'}:
+                        raise RuntimeError('CAI worker attempted an unavailable accounting operation.')
+                    event = validate_event(frame['event'])
+                    if event['phase'] == 'started':
+                        if pending is not None or event['sequence'] != sequence + 1 or event['sequence'] > max(1, min(int(max_turns), 24)):
+                            raise RuntimeError('CAI worker model usage is out of sequence.')
+                        sequence = pending = event['sequence']
+                    elif pending != event['sequence']:
+                        raise RuntimeError('CAI worker model usage has no admitted attempt.')
+                    else:
+                        pending = None
+                    await usage_callback(event)
+                    await send_frame(proc.stdin, {'result': {'ok': True}})
+                    continue
                 if frame.get('type') != 'tool' or evidence_only:
                     raise RuntimeError('CAI worker attempted an unavailable operation.')
+                tool_count += 1
+                if tool_count > 64:
+                    raise RuntimeError('CAI worker exceeded its target-tool message budget.')
                 arguments = frame.get('arguments')
                 if not isinstance(arguments, dict):
                     raise RuntimeError('CAI worker supplied invalid tool arguments.')

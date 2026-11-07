@@ -28,6 +28,7 @@ from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
 from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
 from .recovery import WorkflowRecoveries, RecoveryOptions
+from .model_usage import ModelUsage
 from .credentials import CredentialVault, MODEL_PROVIDERS, MODEL_VARS
 from .asset_graph import AssetGraph, ENTITY_KINDS
 from .observations import canonical_asset
@@ -218,7 +219,14 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         source_active=lambda rid: bool(controls.get(rid) and controls[rid].task and not controls[rid].task.done()))
     dispatch_lock = asyncio.Lock()
     dispatch_tasks = set()
-    assess = assessor or cai_adapter.assess
+    usage = ModelUsage(store)
+    raw_assess = assessor or cai_adapter.assess
+    async def assess(targets, goal, request_tool, *, usage_run_id=None, usage_related_run_id=None,
+                     usage_node_id=None, usage_role=None, usage_purpose='assessment', **kwargs):
+        return await usage.assess(raw_assess, targets, goal, request_tool,
+            run_id=usage_run_id, related_run_id=usage_related_run_id, node_id=usage_node_id,
+            role=usage_role, purpose=usage_purpose,
+            execution_mode='injected' if assessor is not None else None, **kwargs)
     preview = (os.environ.get('AI_TRICKY_PREVIEW') or os.environ.get('OFFSECS_U_AI_PREVIEW') or os.environ.get('RECONFORGE_PREVIEW')) == '1'
 
     @asynccontextmanager
@@ -300,7 +308,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                 'sdk_ready': version == cai_adapter.SUPPORTED_CAI and config_error is None,
                 'model_base_url': base, 'model': os.environ.get('CAI_MODEL', 'local-model'),
                 'model_connection': 'not tested', 'remote_model_enabled': os.environ.get('CAI_ALLOW_REMOTE_MODEL') == '1', 'config_error': config_error,
-                'capabilities': ['scoped_http_get', 'scoped_tcp_connect', 'domain_ip_cidr_inventory', 'cai_model', 'sqlite_history', 'native_dag', 'saved_workflows', 'workflow_recovery'],
+                'capabilities': ['scoped_http_get', 'scoped_tcp_connect', 'domain_ip_cidr_inventory', 'cai_model', 'sqlite_history', 'native_dag', 'saved_workflows', 'workflow_recovery', 'model_usage'],
                 'workflow_adapters': REGISTRY,
                 'workflow_execution': 'Native DAG, CAI evidence review and 151 migrated catalog contracts; CLI execution requires explicit run enablement and preflight',
                 'catalog_tools':len(TOOLS),'catalog_workflows':len(MINI_CATALOG['workflows']),
@@ -405,8 +413,9 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                 'Start with native_scope. Use 2–5 unique adapters with matching input/output types. '
                 f'CAI analysis allowed: {body.include_analysis}. No commands or new adapters. Catalog: ' + json.dumps(REGISTRY) + '\nGoal: ' + body.goal)
         try:
-            result = await assess([], goal, disabled, **({'evidence_only': True, 'model': resolved_model} if assessor is None else {}))
-            return plan_workflow(body.goal, include_analysis=body.include_analysis, model_plan=result['report'])
+            result = await assess([], goal, disabled, usage_purpose='workflow_plan', **({'evidence_only': True, 'model': resolved_model} if assessor is None else {}))
+            return {**plan_workflow(body.goal, include_analysis=body.include_analysis, model_plan=result['report']),
+                    'model_usage_id': result['model_usage_id']}
         except ScopeError:
             raise
         except Exception:
@@ -436,8 +445,9 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                 'Start with native_scope. Use 2–5 unique adapters with matching input/output types. '
                 f'CAI analysis allowed: {body.include_analysis}. No commands or new adapters. Catalog: ' + json.dumps(REGISTRY) + '\nChange: ' + body.goal)
         try:
-            result = await assess([], goal, disabled, **({'evidence_only': True, 'model': resolved_model} if assessor is None else {}))
-            return finish(plan_workflow(body.goal, include_analysis=body.include_analysis, model_plan=result['report']))
+            result = await assess([], goal, disabled, usage_purpose='canvas_assist', **({'evidence_only': True, 'model': resolved_model} if assessor is None else {}))
+            return {**finish(plan_workflow(body.goal, include_analysis=body.include_analysis, model_plan=result['report'])),
+                    'model_usage_id': result['model_usage_id']}
         except ScopeError:
             raise
         except Exception:
@@ -461,6 +471,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             return {'error': 'Evidence-guided planning has no target access.'}
         try:
             result = await assess([], proposal_planner.prompt(body.goal, context), disabled,
+                                  usage_related_run_id=body.run_id, usage_purpose='evidence_plan',
                                   **({'evidence_only': True, 'model': resolved_model} if assessor is None else {}))
             return await asyncio.to_thread(proposal_planner.save, body.goal, context, result['report'], result)
         except StalePlan as exc:
@@ -651,6 +662,15 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         get_run(rid)
         return store.nodes(rid)
 
+    @app.get('/api/model-usage')
+    def model_usage(limit: int = 50, offset: int = 0):
+        return usage.history(limit=limit, offset=offset)
+
+    @app.get('/api/runs/{rid}/model-usage')
+    def run_model_usage(rid: str, limit: int = 50, offset: int = 0):
+        get_run(rid)
+        return usage.history(run_id=rid, limit=limit, offset=offset)
+
     @app.get('/api/runs/{rid}/verification')
     def run_verification(rid: str):
         get_run(rid)
@@ -786,7 +806,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         try:
             async with asyncio.timeout(config.get('max_seconds',240)):
                 if config['engine']=='workflow':
-                    async def analyze(values, role_instructions=None, max_turns=None):
+                    async def analyze(values, role_instructions=None, max_turns=None, node_id=None):
                         async def disabled(url):
                             return {'error': 'Evidence-only analysis has no target access.'}
                         # Bounded evidence is untrusted input. No target or network tools attached.
@@ -796,6 +816,8 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                             extra['max_turns'] = max_turns
                         if ctl.model is not None:
                             extra['model'] = ctl.model
+                        extra.update(usage_run_id=rid, usage_node_id=node_id, usage_purpose='workflow_analysis',
+                                     usage_role=next((key for key, role in team_leader.ROLES.items() if role['focus']==role_instructions), 'analyst'))
                         if assessor is not None:
                             return await assess([], goal, disabled, **extra)
                         return await assess([], goal, disabled, evidence_only=True, **extra)
@@ -812,8 +834,12 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                         async def disabled(url):
                             return {'error': 'Team synthesis has no target access.'}
                         if assessor is not None:
-                            return await assess([], prompt, disabled, max_turns=max_turns)
-                        return await assess([], prompt, disabled, evidence_only=True, model=ctl.model, max_turns=max_turns)
+                            return await assess([], prompt, disabled, max_turns=max_turns, usage_run_id=rid, usage_role='lead', usage_purpose='team_synthesis')
+                        return await assess([], prompt, disabled, evidence_only=True, model=ctl.model, max_turns=max_turns,
+                                            usage_run_id=rid, usage_role='lead', usage_purpose='team_synthesis')
+                    async def team_assess(*args, **kwargs):
+                        role = next((key for key, spec in team_leader.ROLES.items() if spec['focus']==kwargs.get('role_instructions')), 'analyst')
+                        return await assess(*args, usage_run_id=rid, usage_role=role, usage_purpose='team_member', **kwargs)
                     # Adaptive selection (opt-in, no explicit roles): gather the
                     # entered scope's existing observations and asset-graph entities
                     # so the deterministic leader can narrow the roles. No evidence
@@ -823,7 +849,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                     if team_adaptive:
                         team_evidence = await asyncio.to_thread(gather_team_evidence, config['targets'])
                         team_assets = (await asyncio.to_thread(asset_graph.scope_subgraph, config['targets']))['entities']
-                    result=await team_leader.run_team(config['targets'],config['goal'],fetch,probe,assess,
+                    result=await team_leader.run_team(config['targets'],config['goal'],fetch,probe,team_assess,
                                                        roles=config.get('roles'),model=ctl.model,
                                                        member_max_turns=config.get('member_max_turns',8),
                                                        timeout=min(config.get('max_seconds',240),180),
@@ -834,27 +860,30 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                                                        team_max_turns=config.get('team_max_turns',team_leader.DEFAULT_TEAM_TURNS),
                                                        on_budget=lambda budget: store.event(rid, 'team.turn_budget', budget))
                 elif assessor is None:
-                    result=await assess(config['targets'],config['goal'],fetch,network_tool=probe)
+                    result=await assess(config['targets'],config['goal'],fetch,network_tool=probe, usage_run_id=rid)
                 else:
-                    result=await assess(config['targets'],config['goal'],fetch)
+                    result=await assess(config['targets'],config['goal'],fetch, usage_run_id=rid)
             await ctl.gate.wait()
             if ctl.cancelled:
                 raise asyncio.CancelledError()
             result['request_count'] = ctl.requests
             result['cli_invocation_count'] = ctl.cli_invocations
+            result['model_usage'] = usage.summary(run_id=rid)
             aid = store.artifact(rid, 'assessment-report.json', result)
             status = 'failed' if result.get('failed_nodes') else 'completed'
             store.status(rid, status, result)
             store.event(rid, f'run.{status}', {'artifact_id': aid, 'request_count': ctl.requests,'cli_invocation_count':ctl.cli_invocations})
         except asyncio.CancelledError:
-            store.status(rid, 'cancelled', {'request_count':ctl.requests,'cli_invocation_count':ctl.cli_invocations})
+            store.status(rid, 'cancelled', {'request_count':ctl.requests,'cli_invocation_count':ctl.cli_invocations,
+                                            'model_usage': usage.summary(run_id=rid)})
             store.event(rid, 'run.cancelled', {'request_count': ctl.requests,'cli_invocation_count':ctl.cli_invocations})
         except Exception as exc:
             ctl.cancelled = True  # A timed-out HTTP worker must not dispatch after DNS returns.
             ctl.gate.set()
             # Do not persist SDK exception bodies that may contain secrets or prompts.
             message = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
-            store.status(rid, 'failed', {'error': message[:500], 'request_count': ctl.requests,'cli_invocation_count':ctl.cli_invocations})
+            store.status(rid, 'failed', {'error': message[:500], 'request_count': ctl.requests,'cli_invocation_count':ctl.cli_invocations,
+                                       'model_usage': usage.summary(run_id=rid)})
             store.event(rid, 'run.failed', {'error': message[:500]})
 
     def gather_team_evidence(targets, limit=200):
@@ -935,6 +964,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             raise HTTPException(409, 'Two local runs are already active.')
 
     def start_run(run, model=None, credentials=None):
+        usage.start_run(run['id'])
         ctl = RunControl()
         ctl.model = model
         # Snapshot the selected credentials once, server-side, for the whole run

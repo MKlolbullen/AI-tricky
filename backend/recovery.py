@@ -111,8 +111,9 @@ def load_checkpoints(store, rid, config):
 
 
 class WorkflowRecoveries:
-    def __init__(self, store, *, credential=lambda key: None, model_config=None):
+    def __init__(self, store, *, credential=lambda key: None, model_config=None, source_active=lambda rid: False):
         self.store, self.credential, self.model_config = store, credential, model_config
+        self.source_active = source_active
         self.session, self.salt = str(uuid.uuid4()), secrets.token_bytes(32)
         with store.connect() as c:
             c.executescript('''
@@ -144,6 +145,8 @@ class WorkflowRecoveries:
         except KeyError:
             raise ExecutionError('Source run not found.', 404) from None
         config = source['config']
+        if self.source_active(rid):
+            raise ExecutionError('The source run is still stopping. Wait for its workers to finish before recovery.')
         if source['status'] not in TERMINAL:
             raise ExecutionError('Wait for the source run to stop before recovering branches.')
         if config.get('engine') != 'workflow' or not config.get('allow_http'):

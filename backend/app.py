@@ -204,6 +204,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         return providers
     proposal_planner = ProposalPlanner(store, evidence)
     proposal_executions = ProposalExecutions(store, proposal_planner)
+    controls = {}
     def recovery_model_config():
         if assessor is not None:
             return None  # injected test analyst, no SDK or provider request
@@ -213,8 +214,8 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             return resolve_model()
         except HTTPException as exc:
             raise ExecutionError(str(exc.detail), exc.status_code) from None
-    recoveries = WorkflowRecoveries(store, credential=vault.effective, model_config=recovery_model_config)
-    controls = {}
+    recoveries = WorkflowRecoveries(store, credential=vault.effective, model_config=recovery_model_config,
+        source_active=lambda rid: bool(controls.get(rid) and controls[rid].task and not controls[rid].task.done()))
     dispatch_lock = asyncio.Lock()
     dispatch_tasks = set()
     assess = assessor or cai_adapter.assess

@@ -16,6 +16,7 @@ from backend.catalog import TOOLS
 from backend.cli_runner import input_fingerprint, prepare_context
 from backend.observations import digest
 from backend.recovery import WorkflowRecoveries, checked_reused_content
+from backend.proposal_execution import ExecutionError
 from backend.scope import ScopeError
 from backend.tests.test_catalog import data_for
 from backend.tests.test_local import target_server, wait_done
@@ -379,3 +380,14 @@ def test_registered_folder_is_rechecked_after_copying_for_a_recovery_invocation(
     with pytest.raises(ScopeError, match='Approved input contents changed'):
         prepare_context({'folder': ['input:' + entry['id']]}, data_for(TOOLS['semgrep']), work,
                         app.state.store, config, TOOLS['semgrep'], run_id='fixture')
+
+
+def test_cancelled_source_cannot_recover_while_its_workers_are_still_stopping(tmp_path):
+    app = create_app(tmp_path)
+    source = seed_source(app.state.store, 'https://example.invalid/', status='cancelled')
+    stopping = [True]
+    recoveries = WorkflowRecoveries(app.state.store, source_active=lambda rid: stopping[0])
+    with pytest.raises(ExecutionError, match='still stopping'):
+        recoveries.inspect(source['id'])
+    stopping[0] = False
+    assert recoveries.inspect(source['id'])['source_run_id'] == source['id']

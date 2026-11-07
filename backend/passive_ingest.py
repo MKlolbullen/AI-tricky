@@ -8,7 +8,12 @@ page until a page yields no records or the page cap is hit), explicit rate-limit
 and quota handling (surfaced as clear coverage gaps), and an in-process TTL cache
 so repeated enrichment of the same target does not re-spend provider quota.
 """
+from collections import OrderedDict
+import hashlib
+import hmac
+import json
 import os
+import secrets
 import time
 from urllib.parse import urlsplit
 
@@ -61,8 +66,26 @@ class PassiveIngestor:
     def __init__(self, store, asset_graph):
         self.store = store
         self.asset_graph = asset_graph
-        # (provider, query_type, query) -> (expiry_monotonic, [page responses]).
-        self._cache = {}
+        # Memory-only, bounded LRU. Identity uses a per-process keyed digest of
+        # the adapter's declared credentials; no raw keys or stable key hashes
+        # enter the cache index, events, artifacts or public summaries.
+        self._cache = OrderedDict()
+        self._cache_salt = secrets.token_bytes(32)
+
+    def _cache_key(self, pid, qt, query, credentials):
+        identity = json.dumps([(v, credentials.get(v)) for v in ADAPTERS[pid]['vars']],
+                              separators=(',', ':')).encode()
+        digest = hmac.new(self._cache_salt, identity, hashlib.sha256).digest()
+        return pid, qt, query, digest, max_pages(), cache_ttl()
+
+    def _prune_cache(self):
+        now = time.monotonic()
+        for key, (expires, _) in list(self._cache.items()):
+            if expires <= now or not cache_ttl():
+                del self._cache[key]
+        capacity = _bounded('AI_TRICKY_PASSIVE_CACHE_ENTRIES', 128, 1, 1024)
+        while len(self._cache) > capacity:
+            self._cache.popitem(last=False)
 
     async def _fetch(self, http, adapter, pid, qt, query, credentials):
         """Return the list of raw page responses for one provider query. A
@@ -95,14 +118,18 @@ class PassiveIngestor:
             report = {'provider': pid, 'name': adapter['name'], 'queries': 0, 'status': 'ok'}
             for qt in query_types(pid, target_kind):
                 try:
-                    key = (pid, qt, target)
+                    self._prune_cache()
+                    key = self._cache_key(pid, qt, target, credentials)
                     cached = self._cache.get(key)
                     if cached and cached[0] > time.monotonic():
                         responses = cached[1]
+                        self._cache.move_to_end(key)
                         report['source'] = 'cache'
                     else:
                         responses = await self._fetch(http, adapter, pid, qt, target, credentials)
-                        self._cache[key] = (time.monotonic() + cache_ttl(), responses)
+                        if cache_ttl():
+                            self._cache[key] = (time.monotonic() + cache_ttl(), responses)
+                            self._prune_cache()
                         report['source'] = 'live'
                     # Store only provider/query/response — never the request URL,
                     # which may carry the key for query-parameter auth.

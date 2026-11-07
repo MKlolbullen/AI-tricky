@@ -61,6 +61,7 @@ class RunInput(BaseModel):
     cli_credential_keys: list[str] = Field(default_factory=list,max_length=30)
     roles: list[Annotated[str, StringConstraints(min_length=1, max_length=40)]] = Field(default_factory=list, max_length=12)
     member_max_turns: int = Field(default=8, ge=1, le=24)
+    team_max_turns: int = Field(default=team_leader.DEFAULT_TEAM_TURNS, ge=1, le=team_leader.MAX_TEAM_TURNS, strict=True)
     member_workers: int = Field(default=3, ge=1, le=8)
     synthesize: bool = False
     adaptive: bool = False
@@ -773,12 +774,14 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         try:
             async with asyncio.timeout(config.get('max_seconds',240)):
                 if config['engine']=='workflow':
-                    async def analyze(values, role_instructions=None):
+                    async def analyze(values, role_instructions=None, max_turns=None):
                         async def disabled(url):
                             return {'error': 'Evidence-only analysis has no target access.'}
                         # Bounded evidence is untrusted input. No target or network tools attached.
                         goal = analysis_goal(config['goal'], values)
                         extra = {} if role_instructions is None else {'role_instructions': role_instructions}
+                        if max_turns is not None:
+                            extra['max_turns'] = max_turns
                         if assessor is not None:
                             return await assess([], goal, disabled, **extra)
                         return await assess([], goal, disabled, evidence_only=True, **extra)
@@ -789,14 +792,14 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                     # Members share this run's fetch/probe, so they draw on one
                     # budget ledger, scope and credential snapshot. The resolved
                     # model lives on the control object only, never persisted.
-                    async def synthesize(prompt):
+                    async def synthesize(prompt, *, max_turns):
                         # The optional lead synthesizer reviews role reports only;
                         # it gets no target access and never confirms a finding.
                         async def disabled(url):
                             return {'error': 'Team synthesis has no target access.'}
                         if assessor is not None:
-                            return await assess([], prompt, disabled)
-                        return await assess([], prompt, disabled, evidence_only=True, model=ctl.model)
+                            return await assess([], prompt, disabled, max_turns=max_turns)
+                        return await assess([], prompt, disabled, evidence_only=True, model=ctl.model, max_turns=max_turns)
                     # Adaptive selection (opt-in, no explicit roles): gather the
                     # entered scope's existing observations and asset-graph entities
                     # so the deterministic leader can narrow the roles. No evidence
@@ -813,7 +816,9 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                                                        concurrency=config.get('parallelism',4),
                                                        synthesize=synthesize if config.get('synthesize') else None,
                                                        adaptive=team_adaptive, evidence=team_evidence,
-                                                       asset_entities=team_assets, max_workers=config.get('member_workers'))
+                                                       asset_entities=team_assets, max_workers=config.get('member_workers'),
+                                                       team_max_turns=config.get('team_max_turns',team_leader.DEFAULT_TEAM_TURNS),
+                                                       on_budget=lambda budget: store.event(rid, 'team.turn_budget', budget))
                 elif assessor is None:
                     result=await assess(config['targets'],config['goal'],fetch,network_tool=probe)
                 else:

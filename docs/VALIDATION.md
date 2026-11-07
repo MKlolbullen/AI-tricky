@@ -77,3 +77,11 @@ npm test
 ```
 
 Install `requirements-cai.lock` into a separate environment, then set `CAI_TEST_PYTHON` to its Python executable to include the eight optional CAI SDK fixture cases. The real URO test runs when URO is installed beside the main Python interpreter; external security binaries are not bundled. `npm run test:browser` runs the Chromium regression suite after installing Playwright's Chromium browser and building the frontend.
+
+## Team budgets and cache isolation — 2026-11-07
+
+- Added coordinator allocation coverage for combined/per-member caps, synthesis inclusion, adaptive/explicit role selection, tiny budgets and skipped roles, and SDK failures that preserve other members' evidence.
+- API tests verify durable budget metadata and events, strict limit validation, and evidence-only workflow tool isolation.
+- Passive-cache regressions cover API-key rotation with separate provenance, all declared account variables, unrelated-key changes, TTL expiry, TTL zero, LRU eviction and pagination changes.
+- The production build and 12 JavaScript contract/packaging tests pass locally. Both new Chromium interaction regressions are discovered by Playwright and run in the existing browser CI job.
+- Local browser execution remains blocked: system Chromium cannot create its process socket (`Operation not permitted`); the shared browser cannot reach the workspace loopback server (`ERR_CONNECTION_REFUSED`); Playwright's headless-shell download returned invalid ZIP data. These observations do not establish a browser pass. No external target or paid provider was queried for this change.

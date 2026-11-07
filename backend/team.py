@@ -52,6 +52,35 @@ ROLES: dict[str, dict] = {
 
 DEFAULT_ROLES: list[str] = ['surface', 'transport', 'authz', 'injection', 'logic']
 MAX_ROLES = len(ROLES)
+DEFAULT_TEAM_TURNS = 48  # five members at eight turns, plus an optional synthesis
+MAX_TEAM_TURNS = 144  # six SDK passes at the adapter's 24-turn maximum
+SYNTHESIS_MAX_TURNS = 8
+
+
+def allocate_turns(roles, total, member_cap, *, synthesis=False):
+    """Reserve deterministic SDK turn ceilings before any model work starts.
+
+    Round-robin allocation gives each selected role one turn before allocating
+    additional turns (the optional synthesis is last). Reservations are never
+    recycled after failure/early completion: actual SDK usage is not measured,
+    and concurrent passes must never spend the same allowance twice.
+    """
+    for name, value, maximum in (('team_max_turns', total, MAX_TEAM_TURNS),
+                                  ('member_max_turns', member_cap, 24)):
+        if type(value) is not int or not 1 <= value <= maximum:
+            raise ValueError(f'{name} must be a whole number from 1 to {maximum}.')
+    caps = [member_cap] * len(roles) + ([SYNTHESIS_MAX_TURNS] if synthesis else [])
+    limits = [0] * len(caps)
+    remaining = total
+    while remaining and any(value < cap for value, cap in zip(limits, caps)):
+        for i, cap in enumerate(caps):
+            if remaining and limits[i] < cap:
+                limits[i] += 1
+                remaining -= 1
+    return {'limit': total, 'reserved': total - remaining, 'unallocated': remaining,
+            'member_limits': dict(zip(roles, limits[:len(roles)])),
+            'synthesis_limit': limits[-1] if synthesis else 0,
+            'accounting': 'Reserved SDK turn ceilings; actual usage is not measured.'}
 
 
 def resolve_roles(roles):
@@ -178,7 +207,8 @@ def synthesis_prompt(goal, members):
 
 async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=None,
                    member_max_turns=8, timeout=180, concurrency=3, synthesize=None,
-                   adaptive=False, evidence=None, asset_entities=None, max_workers=None):
+                   adaptive=False, evidence=None, asset_entities=None, max_workers=None,
+                   team_max_turns=DEFAULT_TEAM_TURNS, on_budget=None):
     """Dispatch one scoped run across the selected roles and aggregate reports.
 
     `assess` is the adapter's assess callable; `fetch`/`probe` are the run's own
@@ -200,6 +230,10 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
         selected, selection_reasons = select_roles(evidence, asset_entities)
     else:
         selected = list(DEFAULT_ROLES)
+    turn_budget = allocate_turns(selected, team_max_turns, member_max_turns,
+                                 synthesis=synthesize is not None)
+    if on_budget is not None:
+        on_budget(turn_budget)  # persist the reservation before any model work
     # Dedicated ceiling on how many members assess concurrently — each member's
     # assess() call is its own isolated interpreter when a worker runtime is
     # configured, so this bounds concurrent SDK worker processes independently of
@@ -209,14 +243,18 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
 
     async def member(key):
         spec = ROLES[key]
+        allowance = turn_budget['member_limits'][key]
+        metadata = {'role': key, 'name': spec['name'], 'max_turns': allowance}
+        if not allowance:
+            return {**metadata, 'status': 'skipped', 'reason': 'No model turns allocated by the team budget.'}
         async with semaphore:
             role_goal = f'{goal}\n\nYour assigned focus on this cooperating team: {spec["name"]}.'
             try:
                 result = await assess(targets, role_goal, fetch,
                                       network_tool=probe if spec['network'] else None,
                                       role_instructions=spec['focus'], model=model,
-                                      max_turns=member_max_turns, timeout=timeout)
-                return {'role': key, 'name': spec['name'], 'status': 'ok',
+                                      max_turns=allowance, timeout=timeout)
+                return {**metadata, 'status': 'ok',
                         'report': str(result.get('report', '')),
                         'model': result.get('model'), 'engine': result.get('engine'),
                         'sdk_execution': result.get('sdk_execution', 'in-process')}
@@ -224,7 +262,7 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
                 raise
             except Exception as exc:  # noqa: BLE001 - surface as a coverage gap, no secrets
                 reason = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
-                return {'role': key, 'name': spec['name'], 'status': 'failed', 'reason': reason[:300]}
+                return {**metadata, 'status': 'failed', 'reason': reason[:300]}
 
     members = await asyncio.gather(*(member(key) for key in selected))
     completed = [m for m in members if m['status'] == 'ok']
@@ -233,10 +271,13 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
     # A role the adaptive selector skipped is an explicit coverage note, not a gap.
     coverage_limits = _selection_coverage(selection_reasons) + coverage_limits
     synthesis = None
-    if synthesize is not None and completed:
+    if synthesize is not None and not turn_budget['synthesis_limit']:
+        coverage_limits += ['Lead synthesis skipped: no model turns allocated by the team budget.']
+    elif synthesize is not None and completed:
         try:
-            out = await synthesize(synthesis_prompt(goal, members))
+            out = await synthesize(synthesis_prompt(goal, members), max_turns=turn_budget['synthesis_limit'])
             synthesis = {'report': str(out.get('report', '')), 'model': out.get('model'),
+                         'max_turns': turn_budget['synthesis_limit'],
                          'label': 'CAI MODEL SYNTHESIS · CANDIDATES', 'model_called': True, 'confirmed': False}
         except asyncio.CancelledError:
             raise
@@ -264,6 +305,7 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
         'role_selection': selection_reasons,
         'members': members,
         'isolation': isolation,
+        'model_turn_budget': turn_budget,
         'coverage_limits': coverage_limits,
         'synthesis': synthesis,
     }

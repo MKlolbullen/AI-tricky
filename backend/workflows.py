@@ -70,6 +70,15 @@ def validate_workflow(graph, *, live=False):
             raise ScopeError('Node timeout must be 1–240 whole seconds.')
         if type(data.get('retries', 0)) is not int or (live and data.get('retries', 0) != 0):
             raise ScopeError('Native DAG retries must be zero; rerun explicitly to repeat traffic.')
+        if kind == 'native_team':
+            from .team import allocate_turns
+            try:
+                allocate_turns([], data.get('team_max_turns', 60), data.get('member_max_turns', 12))
+            except ValueError as exc:
+                raise ScopeError(str(exc)) from exc
+            workers = data.get('max_workers', 3)
+            if type(workers) is not int or not 1 <= workers <= 5:
+                raise ScopeError('Team workers must be a whole number from 1 to 5.')
         specs[n['id']] = (inputs, data['outputs'] if kind in CATALOG_KINDS else [output])
         by_id[n['id']], incoming[n['id']] = n, []
     edge_ids, pairs = set(), set()
@@ -207,14 +216,19 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
             node_sem = asyncio.Semaphore(worker_ceiling)
             async def member(key):
                 spec = team_leader.ROLES[key]
+                allowance = turn_budget['member_limits'][key]
+                metadata = {'role': key, 'name': spec['name'], 'max_turns': allowance}
+                if not allowance:
+                    return {**metadata, 'status': 'skipped', 'reason': 'No model turns allocated by the team budget.'}
                 async with node_sem:
                     try:
-                        out = await analyze(values, role_instructions=spec['focus'])
+                        out = await analyze(values, role_instructions=spec['focus'], max_turns=allowance)
                         analysis = validate_analysis(out['report'], values)
-                        return {'role': key, 'name': spec['name'], 'status': 'ok', 'summary': analysis['summary'],
+                        return {**metadata, 'status': 'ok', 'summary': analysis['summary'],
                                 'analysis': analysis, 'sdk_execution': out.get('sdk_execution', 'in-process')}
-                    except (ScopeError, RuntimeError) as exc:
-                        return {'role': key, 'name': spec['name'], 'status': 'failed', 'reason': str(exc)[:300]}
+                    except Exception as exc:  # individual SDK failures remain coverage gaps
+                        reason = str(exc) if isinstance(exc, (ScopeError, RuntimeError)) else type(exc).__name__
+                        return {**metadata, 'status': 'failed', 'reason': reason[:300]}
             # Opt-in deterministic adaptive selection: narrow the roles to those the
             # captured evidence (these observations + the scoped asset graph) warrants.
             selection_reasons = None
@@ -224,6 +238,9 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
                 selected, selection_reasons = team_leader.select_roles(values, entities)
             else:
                 selected = list(team_leader.DEFAULT_ROLES)
+            turn_budget = team_leader.allocate_turns(selected, by_id[nid]['data'].get('team_max_turns', 60),
+                                                      by_id[nid]['data'].get('member_max_turns', 12))
+            store.event(rid, 'team.turn_budget', {'node_id': nid, **turn_budget})
             members = list(await asyncio.gather(*(member(k) for k in selected)))
             completed = [m for m in members if m['status'] == 'ok']
             coverage = team_leader._selection_coverage(selection_reasons) + \
@@ -235,6 +252,7 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
                        f'{"adaptively selected " if adapted else ""}roles completed. Candidates only; nothing auto-confirmed.')
             return [{'report': summary, 'team': True, 'adaptive': adapted, 'members': members,
                      'role_selection': selection_reasons, 'isolation': isolation,
+                     'model_turn_budget': turn_budget,
                      'coverage_limits': coverage, 'evidence_status': 'CANDIDATE'}]
         open_ports = sum(v.get('state') == 'open' for v in values)
         responses = sum('status' in v and 'url' in v for v in values)

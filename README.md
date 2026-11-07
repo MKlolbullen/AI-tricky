@@ -319,6 +319,20 @@ The adapter matrix uses executable fixtures across all 151 entries: 141 exercise
 
 Chromium workbench and evidence-guided planning interaction regressions run in CI. Broader desktop/platform QA and real-binary version validation remain open. See [the validation record](docs/VALIDATION.md).
 
+### Team budgets and passive cache reliability
+
+Multi-agent assessments now have a combined model-turn ceiling, including the
+optional lead synthesizer. Configure **Total team model turns** in Run setup or
+on a CAI team analyst node. Reports show each pass's reserved ceiling and explicit
+coverage gaps for skipped or incomplete analysts. See [defaults, API fields and
+allocation semantics](docs/TEAM-BUDGETS.md).
+
+Passive response caching is isolated by the selected provider credentials.
+Changing an API key or a pagination limit triggers a fresh fetch. The in-memory
+LRU expires old entries and bounds retained queries; setting the TTL to zero
+disables cache reads and writes. Each enrichment still creates its own evidence
+artifacts and run provenance.
+
 ## Configuration and compatibility
 
 | Variable | Purpose |
@@ -329,6 +343,10 @@ Chromium workbench and evidence-guided planning interaction regressions run in C
 | `CAI_MODEL` | Model identifier at that endpoint |
 | `CAI_MODEL_API_KEY` | Optional server-side provider credential |
 | `CAI_ALLOW_REMOTE_MODEL=1` | Permit a remote HTTPS model endpoint |
+| `AI_TRICKY_ALLOW_PASSIVE=1` | Enable explicit passive-provider enrichment |
+| `AI_TRICKY_PASSIVE_MAX_PAGES` | Provider pagination ceiling: default 3, range 1–10 |
+| `AI_TRICKY_PASSIVE_CACHE_TTL` | In-memory cache lifetime in seconds: default 900, range 0–86400; zero disables caching |
+| `AI_TRICKY_PASSIVE_CACHE_ENTRIES` | In-memory LRU query capacity: default 128, range 1–1024 |
 
 AI-tricky continues the Offsecs-u-AI prototype. Existing `OFFSECS_U_AI_*` and `RECONFORGE_*` environment names remain supported. Existing database selection and the `offsecs-u-ai.workflow/v1` interchange schema are retained; legacy `reconforge.prototype.workflow/v1` imports remain readable. These identifiers are compatibility details, not separate products.
 
@@ -337,7 +355,7 @@ AI-tricky continues the Offsecs-u-AI prototype. Existing `OFFSECS_U_AI_*` and `R
 - Dedicated account, cluster, callback and notification contracts for restricted catalog entries.
 - Real-binary compatibility coverage across supported tool versions and platforms.
 - Controlled replay and recovery of selected failed workflow branches.
-- Request-bound approval/execution of evidence-guided proposals and controlled multi-identity testing.
+- Actual model-turn/token usage accounting and controlled multi-identity testing.
 - Burp/burpaderp and Strix integration through their own policy and evidence contracts.
 - Broader desktop/platform QA and refinement of the workflow studio.
 

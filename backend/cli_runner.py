@@ -106,7 +106,8 @@ def prepare_context(streams,data,work,store,config,tool,run_id=None):
             total=0;paths=[]
             for index,reference in enumerate(values):
                 aid=reference.removeprefix('artifact:')
-                try:meta=store.artifact_metadata(aid);body=store.content(aid)
+                from .recovery import checked_reused_content
+                try:meta=store.artifact_metadata(aid);body=checked_reused_content(store,aid)
                 except KeyError:raise ScopeError('Upstream file artifact is unavailable.') from None
                 if meta['run_id']!=run_id or not isinstance(body,dict) or body.get('encoding')!='base64':raise ScopeError('File artifact must belong to this run.')
                 try:raw=base64.b64decode(body['bytes'],validate=True)
@@ -122,11 +123,12 @@ def prepare_context(streams,data,work,store,config,tool,run_id=None):
             if typ in ('folder','templates'):path=snapshot_folder(source,work/('source' if typ=='folder' else 'templates'))
             else:
                 path=work/(typ+'.input');shutil.copyfile(source,path)
-            if config.get('proposal_execution'):
-                pin=config.get('proposal_input_pins',{}).get(values[0][6:])
+            if config.get('proposal_execution') or config.get('workflow_recovery'):
+                pins='recovery_input_pins' if config.get('workflow_recovery') else 'proposal_input_pins'
+                pin=config.get(pins,{}).get(values[0][6:])
                 kind='folder' if typ in ('folder','templates') else 'file'
                 if not pin or pin['kind']!=kind or input_fingerprint(path,kind)!=pin['sha256']:
-                    raise ScopeError('Approved input contents changed before execution. Prepare a new proposal review.')
+                    raise ScopeError('Approved input contents changed before execution. Prepare a new execution review.')
             context[typ if typ in ('folder','templates') else 'sbom_file' if typ=='sbom' else 'wordlist_file' if typ=='wordlist' else typ if typ.endswith('_file') else typ+'_file']=str(path)
             streams[typ]=[str(path)]
         elif typ in ('wordlist','sbom','targets','url','domain','query','paths_file','resolvers'):

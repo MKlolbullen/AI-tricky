@@ -193,3 +193,5 @@
 .state-same{color:#8aa6cb}
 
 .team-turn-budget table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px}.team-turn-budget th,.team-turn-budget td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left}.team-turn-budget tbody th{font-weight:400}.team-turn-budget small{display:block;line-height:1.6}
+
+.workflow-recovery{margin:24px 0}.workflow-recovery>div{margin-top:16px}.recovery-node-list{grid-column:1/-1}.recovery-node-list .http-toggle{margin:10px 0}.workflow-recovery table{width:100%;border-collapse:collapse;font-size:12px;margin:15px 0}.workflow-recovery td,.workflow-recovery th{padding:9px;text-align:left;border-bottom:1px solid var(--line);overflow-wrap:anywhere}.workflow-recovery tbody th{font-weight:400}.workflow-recovery td button{margin-left:8px}.recovery-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.checkpoint-origin{display:block;margin-top:6px;line-height:1.5;color:#92b5cc}.run-status.reused{color:#8abfea}

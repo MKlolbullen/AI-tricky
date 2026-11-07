@@ -333,6 +333,14 @@ LRU expires old entries and bounds retained queries; setting the TTL to zero
 disables cache reads and writes. Each enrichment still creates its own evidence
 artifacts and run provenance.
 
+### Checkpointed workflow recovery
+
+Recover selected branches from a stopped workflow through **Local workspace →
+Runs → Recover workflow branches**. Review which steps execute again and which
+upstream outputs are reused, then approve a new run bound to the original scope,
+budgets, input hashes and executable pins. Reused captures retain their original
+age and provenance. See [recovery contracts and limits](docs/WORKFLOW-RECOVERY.md).
+
 ## Configuration and compatibility
 
 | Variable | Purpose |
@@ -354,7 +362,7 @@ AI-tricky continues the Offsecs-u-AI prototype. Existing `OFFSECS_U_AI_*` and `R
 
 - Dedicated account, cluster, callback and notification contracts for restricted catalog entries.
 - Real-binary compatibility coverage across supported tool versions and platforms.
-- Controlled replay and recovery of selected failed workflow branches.
+- Additional controlled replay profiles and evidence-age policies for recovery.
 - Actual model-turn/token usage accounting and controlled multi-identity testing.
 - Burp/burpaderp and Strix integration through their own policy and evidence contracts.
 - Broader desktop/platform QA and refinement of the workflow studio.

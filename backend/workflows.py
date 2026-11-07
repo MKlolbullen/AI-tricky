@@ -131,6 +131,10 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
     outputs, states = {}, {nid: 'queued' for nid in order}
     slots = asyncio.Semaphore(config['parallelism'])
     tasks = {}
+    checkpoints = {}
+    if config.get('workflow_recovery'):
+        from .recovery import load_checkpoints
+        checkpoints = load_checkpoints(store, rid, config)
 
     async def dispatch(nid, values):
         kind = by_id[nid]['data']['kind']
@@ -262,7 +266,7 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
     async def run_node(nid):
         for parent in incoming[nid]:
             await tasks[parent]
-        if any(states[p] not in ('completed', 'planned') for p in incoming[nid]):
+        if any(states[p] not in ('completed', 'reused', 'planned') for p in incoming[nid]):
             states[nid] = 'skipped'
             store.node_status(rid, nid, 'skipped', {'reason': 'Upstream node failed.'})
             store.event(rid, 'node.skipped', {'node_id': nid, 'reason': 'Upstream node failed.'})
@@ -271,6 +275,15 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
             await ctl.gate.wait()
             if ctl.cancelled:
                 raise asyncio.CancelledError()
+            if nid in checkpoints:
+                checkpoint = checkpoints[nid]
+                outputs[nid] = checkpoint['content']
+                states[nid] = 'reused'
+                metadata = {k: v for k, v in checkpoint.items() if k not in ('content', 'run_id', 'node_id')}
+                metadata.update(records=len(outputs[nid]), errors=0)
+                store.node_status(rid, nid, 'reused', metadata)
+                store.event(rid, 'node.reused', {'node_id': nid, **metadata})
+                return
             if not config['allow_http']:
                 states[nid] = 'planned'
                 store.node_status(rid, nid, 'planned', {'reason': 'Planning only; no adapters or model called.'})
@@ -326,8 +339,9 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
     if not config['allow_http']:
         return {'report': f'Validated plan for {len(order)} nodes. No target requests or model calls were made.', 'engine': 'native-dag', 'evidence_status': 'PLAN'}
     failed = sum(s == 'failed' for s in states.values())
+    reused = sum(s == 'reused' for s in states.values())
     records = sum(len(v) for v in outputs.values())
     errors = sum('error' in row or row.get('state') in ('blocked', 'budget_exhausted') for rows in outputs.values() for row in rows)
     verification = next((row['verification'] for rows in outputs.values() for row in rows if 'verification' in row), None)
-    return {'report': f'Workflow finished: {sum(s == "completed" for s in states.values())}/{len(order)} nodes completed, {failed} failed. {errors} output records contain errors or blocked operations; inspect node artifacts for coverage. No vulnerabilities are automatically confirmed.', 'engine': 'native-dag', 'evidence_status': 'OBSERVATION', 'failed_nodes': failed, 'records': records, 'node_states': states,
+    return {'report': f'Workflow finished: {sum(s in ("completed", "reused") for s in states.values())}/{len(order)} nodes completed, {failed} failed; {reused} checkpoint(s) reused. {errors} output records contain errors or blocked operations; inspect node artifacts for coverage. No vulnerabilities are automatically confirmed.', 'engine': 'native-dag', 'evidence_status': 'OBSERVATION', 'failed_nodes': failed, 'reused_nodes': reused, 'records': records, 'node_states': states,
             **({'verification': verification} if verification else {})}

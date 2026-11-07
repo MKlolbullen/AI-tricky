@@ -1,5 +1,6 @@
 """Disposable browser data; execution tests contact only the loopback fixture."""
 import json
+import asyncio
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import sys
@@ -13,10 +14,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from backend.app import create_app
 from backend.store import Store, now
 from backend.proposals import ProposalPlanner
+from backend.team import run_team
 
 
 def seed(store, fixture_url):
     store.add_target(fixture_url + '/')
+    async def fixture_analyst(*args, **kwargs):
+        return {'report': 'Browser fixture candidate review; no model or target access.'}
+    # Real deterministic coordinator output, with injected evidence-only fixture
+    # analysts. Seed before the existing runs so comparison defaults stay stable.
+    budget_result = asyncio.run(run_team([], 'Fixture review', None, None, fixture_analyst, team_max_turns=2))
+    budget_config = {'engine': 'team', 'targets': [fixture_url + '/'], 'max_requests': 1, 'team_max_turns': 2}
+    with store.connect() as c:
+        c.execute('INSERT INTO runs VALUES(?,?,?,?,?,?)', ('qa-team-budget', 'completed', now(), now(),
+                  json.dumps(budget_config), json.dumps(budget_result)))
     fixture_config = {'targets': [fixture_url + '/'], 'engine': 'inventory', 'allow_http': True,
                       'goal': 'Loopback proposal execution fixture', 'max_requests': 1,
                       'max_cli_invocations': 1, 'ports': [80], 'max_hosts': 1}

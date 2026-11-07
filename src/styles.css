@@ -191,3 +191,5 @@
 .state-new{color:#6fd3a6;border-color:#2f6f52}
 .state-gone{color:#e08a8a;border-color:#6f3434}
 .state-same{color:#8aa6cb}
+
+.team-turn-budget table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px}.team-turn-budget th,.team-turn-budget td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left}.team-turn-budget tbody th{font-weight:400}.team-turn-budget small{display:block;line-height:1.6}

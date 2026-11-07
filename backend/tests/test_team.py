@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import create_app
 from backend.cai_adapter import build_instructions, LIVE_INSTRUCTIONS, EVIDENCE_ONLY_INSTRUCTIONS
-from backend.team import run_team, resolve_roles, select_roles, evidence_signals, ROLES, DEFAULT_ROLES
+from backend.team import run_team, resolve_roles, select_roles, evidence_signals, allocate_turns, ROLES, DEFAULT_ROLES
 from backend.tests.test_local import target_server, wait_done
 from backend.tests.test_workflows import graph, launch
 
@@ -322,7 +322,7 @@ def test_run_team_synthesizes_role_reports_when_enabled():
         return {'report': 'role report', 'evidence_status': 'CANDIDATE'}
 
     seen = {}
-    async def synthesize(prompt):
+    async def synthesize(prompt, *, max_turns):
         seen['prompt'] = prompt
         return {'report': 'Unified lead synthesis across roles.', 'model': 'synth'}
 
@@ -345,7 +345,7 @@ def test_run_team_synthesis_failure_is_a_coverage_gap():
     async def assess(targets, goal, f, **kw):
         return {'report': 'ok', 'evidence_status': 'CANDIDATE'}
 
-    async def synthesize(prompt):
+    async def synthesize(prompt, *, max_turns):
         raise RuntimeError('synth provider down')
 
     result = asyncio.run(run_team(['http://x/'], 'g', fetch, probe, assess, roles=['surface'], synthesize=synthesize))
@@ -364,7 +364,7 @@ def test_run_team_synthesis_skipped_when_no_member_completed():
         raise RuntimeError('all roles down')
 
     called = {'n': 0}
-    async def synthesize(prompt):
+    async def synthesize(prompt, *, max_turns):
         called['n'] += 1
         return {'report': 'should not run'}
 

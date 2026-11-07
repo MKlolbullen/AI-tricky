@@ -42,8 +42,8 @@ confirms findings and still receives no target tools.
 
 ## Next improvements
 
-1. Record actual model turns and token usage across isolated workers, preserving
-   an atomic run-wide ledger before allowing unused allowances to be reclaimed.
+1. Review controlled reclamation of unused reservations using the durable
+   [model usage ledger](MODEL-USAGE.md); retain unknown outcomes conservatively.
 2. Add checkpointed workflow recovery that reuses immutable upstream artifacts
    and requires a fresh review for requests that will be repeated.
 3. Add named test identities and request-bound paired comparisons for authorized

@@ -189,10 +189,11 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
             return rows
         if kind == 'native_cai':
             # Evidence-only analysis: the existing configured CAI provider gets no live tools.
-            result = await analyze(values)
+            result = await analyze(values, node_id=nid)
             from .intelligence import validate_analysis
             analysis = validate_analysis(result['report'], values)
-            return [{'report': analysis['summary'], 'analysis': analysis, 'evidence_status': 'CANDIDATE'}]
+            return [{'report': analysis['summary'], 'analysis': analysis, 'evidence_status': 'CANDIDATE',
+                     'model_usage_id': result.get('model_usage_id')}]
         if kind == 'native_asset_graph':
             # Read-only: the current asset graph scoped to the entered targets.
             # No target traffic and no scope expansion — observed data for review.
@@ -226,10 +227,11 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
                     return {**metadata, 'status': 'skipped', 'reason': 'No model turns allocated by the team budget.'}
                 async with node_sem:
                     try:
-                        out = await analyze(values, role_instructions=spec['focus'], max_turns=allowance)
+                        out = await analyze(values, role_instructions=spec['focus'], max_turns=allowance, node_id=nid)
                         analysis = validate_analysis(out['report'], values)
                         return {**metadata, 'status': 'ok', 'summary': analysis['summary'],
-                                'analysis': analysis, 'sdk_execution': out.get('sdk_execution', 'in-process')}
+                                'analysis': analysis, 'sdk_execution': out.get('sdk_execution', 'in-process'),
+                                'model_usage_id': out.get('model_usage_id')}
                     except Exception as exc:  # individual SDK failures remain coverage gaps
                         reason = str(exc) if isinstance(exc, (ScopeError, RuntimeError)) else type(exc).__name__
                         return {**metadata, 'status': 'failed', 'reason': reason[:300]}

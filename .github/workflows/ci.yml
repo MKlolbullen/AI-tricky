@@ -55,7 +55,7 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m venv .venv-cai
       - run: .venv-cai/bin/python -m pip install -r requirements-cai.lock
-      - run: CAI_TEST_PYTHON="$PWD/.venv-cai/bin/python" python -m pytest backend/tests/test_cai_sdk.py -q
+      - run: CAI_TEST_PYTHON="$PWD/.venv-cai/bin/python" .venv-cai/bin/python -m pytest backend/tests/test_cai_sdk.py backend/tests/test_cai_usage_sdk.py -q
 
   browser:
     runs-on: ubuntu-latest

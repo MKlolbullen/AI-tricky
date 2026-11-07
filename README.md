@@ -25,7 +25,7 @@ The interface, API, SQLite history and execution jobs run on your machine. Asses
 </p>
 <p align="center"><em>Workflow studio — typed DAG canvas, node library, evidence inspector and run console.</em></p>
 
-Every view and tab in the current build (v0.8.0) is shown below. Canvas output is explicit fixture simulation; the local workspace reflects real backend-backed state (shown here with sample scope and no recorded runs).
+Selected views and tabs from v0.8.0 are shown below. Canvas output is explicit fixture simulation; the local workspace reflects real backend-backed state (shown here with sample scope and no recorded runs).
 
 <details>
 <summary><strong>Workflow studio — views, inspector and console</strong></summary>
@@ -341,6 +341,14 @@ upstream outputs are reused, then approve a new run bound to the original scope,
 budgets, input hashes and executable pins. Reused captures retain their original
 age and provenance. See [recovery contracts and limits](docs/WORKFLOW-RECOVERY.md).
 
+### Actual model usage
+
+The **Usage** tab and per-run panels show admitted model call attempts, responses
+and provider-reported tokens, with per-node and specialist-role attribution.
+Missing reports stay unknown, and old runs show usage unavailable. Planning and
+recovery have separate accounting. Records survive failures and runtime restarts,
+including isolated CAI workers. See [counter definitions and API](docs/MODEL-USAGE.md).
+
 ## Configuration and compatibility
 
 | Variable | Purpose |
@@ -363,7 +371,7 @@ AI-tricky continues the Offsecs-u-AI prototype. Existing `OFFSECS_U_AI_*` and `R
 - Dedicated account, cluster, callback and notification contracts for restricted catalog entries.
 - Real-binary compatibility coverage across supported tool versions and platforms.
 - Additional controlled replay profiles and evidence-age policies for recovery.
-- Actual model-turn/token usage accounting and controlled multi-identity testing.
+- Controlled multi-identity testing and reviewed reuse of unused model-turn allowances.
 - Burp/burpaderp and Strix integration through their own policy and evidence contracts.
 - Broader desktop/platform QA and refinement of the workflow studio.
 

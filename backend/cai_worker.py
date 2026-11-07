@@ -21,14 +21,20 @@ def emit(value):
 async def main():
     request = json.loads(sys.stdin.readline(MAX_FRAME + 1))
     lock = asyncio.Lock()
-    async def rpc(name, arguments):
+    async def exchange(frame):
         # Serialize replies even when the SDK schedules multiple tool calls.
         async with lock:
-            emit({'type': 'tool', 'name': name, 'arguments': arguments})
+            emit(frame)
             raw = await asyncio.to_thread(sys.stdin.readline, MAX_FRAME + 1)
             if not raw or len(raw.encode()) > MAX_FRAME:
                 raise RuntimeError('Invalid parent response.')
             return json.loads(raw)['result']
+    async def rpc(name, arguments):
+        return await exchange({'type': 'tool', 'name': name, 'arguments': arguments})
+    async def usage(event):
+        result = await exchange({'type': 'model_usage', 'event': event})
+        if result != {'ok': True}:
+            raise RuntimeError('Parent did not acknowledge model usage.')
     async def fetch(url):
         return await rpc('fetch_target', {'url': url})
     async def probe(target, ports):
@@ -36,7 +42,8 @@ async def main():
     result = await assess_local(request['targets'], request['goal'], fetch,
                                network_tool=probe if request['network_enabled'] else None,
                                timeout=request['timeout'], evidence_only=request['evidence_only'],
-                               role_instructions=request.get('role_instructions'), max_turns=request.get('max_turns', 12))
+                               role_instructions=request.get('role_instructions'), max_turns=request.get('max_turns', 12),
+                               usage_callback=usage if request.get('metering') else None)
     emit({'type': 'result', 'result': result})
 
 

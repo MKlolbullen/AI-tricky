@@ -89,3 +89,10 @@ Install `requirements-cai.lock` into a separate environment, then set `CAI_TEST_
 ## Workflow recovery — 2026-11-07
 
 Added recovery API/coordinator tests covering preserved source runs, reuse without repeated HTTP capture, unchanged observation age, strict options, altered scope/graph/node/artifact bindings, expiry/revocation/restart, concurrent idempotent dispatch, branch expansion, excluded unrelated branches, registered input and binary changes, same-run copied file artifacts, credential/model rotation, and existing pause/resume/cancel controls. The complete suite passed with 456 cases before five additional targeted recovery cases; all 30 recovery cases passed afterward. The build, 12 JavaScript checks and migration check passed locally. Two browser regressions cover restore-without-approval, exact-once loopback dispatch and revoked settings changes. The shared browser still cannot reach the workspace loopback server; GitHub Chromium CI passed all 16 interaction cases on the first recovery commit. A final regression also blocks recovery while cancelled source workers are still stopping.
+
+## Actual model usage — 2026-11-07
+
+- Full main-environment suite: 493 passed, 16 optional SDK cases skipped. All 32 targeted accounting and worker-protocol cases also passed after the snapshot-read refinement.
+- Real CAI SDK: 16 passed using `.venv-cai/bin/python` against loopback model fixtures, covering both in-process and isolated execution, tool turns, missing reports, turn exhaustion and provider failures. No paid provider or external assessment target was queried.
+- The production build, 12 JavaScript tests and pinned catalog check passed. Usage and recovery UI modules load separately; the main bundle remains below the existing 500 kB warning threshold.
+- Two new Chromium interactions cover partial totals/export, unavailable historical runs and persistent per-run totals. The browser suite now contains 18 cases. Local shared-browser loopback access remains environment-blocked; GitHub CI supplies interaction validation.

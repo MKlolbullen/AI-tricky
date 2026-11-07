@@ -15,6 +15,7 @@ from backend.app import create_app
 from backend.store import Store, now
 from backend.proposals import ProposalPlanner
 from backend.team import run_team
+from backend.model_usage import ModelUsage, TOKEN_FIELDS
 
 
 def seed(store, fixture_url):
@@ -82,6 +83,17 @@ def seed(store, fixture_url):
         row = c.execute('SELECT context FROM agent_plans WHERE id=?', (stale['id'],)).fetchone()
         context = json.loads(row['context']); context['catalog_hash'] = 'previous-catalog-fixture'
         c.execute('UPDATE agent_plans SET context=? WHERE id=?', (json.dumps(context), stale['id']))
+    # Metadata fixtures only: no provider request is made by this seed.
+    usage = ModelUsage(store)
+    usage.start_run('qa-current')
+    identifier = usage.begin(run_id='qa-current', purpose='workflow_analysis', node_id='qa-analysis',
+                             role='analyst', provider='local', model='local-usage-fixture', execution_mode='fixture')
+    usage.record(identifier, {'phase': 'started', 'sequence': 1})
+    usage.record(identifier, {'phase': 'response', 'sequence': 1,
+                              'tokens': dict(zip(TOKEN_FIELDS, (100, 25, 125, 40, 5)))})
+    usage.record(identifier, {'phase': 'started', 'sequence': 2})
+    usage.record(identifier, {'phase': 'response', 'sequence': 2, 'tokens': {key: None for key in TOKEN_FIELDS}})
+    usage.finish(identifier, 'completed')
 
 
 if __name__ == '__main__':

@@ -257,6 +257,7 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
                 return {**metadata, 'status': 'ok',
                         'report': str(result.get('report', '')),
                         'model': result.get('model'), 'engine': result.get('engine'),
+                        'model_usage_id': result.get('model_usage_id'),
                         'sdk_execution': result.get('sdk_execution', 'in-process')}
             except asyncio.CancelledError:
                 raise

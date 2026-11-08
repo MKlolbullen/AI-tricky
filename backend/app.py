@@ -16,13 +16,14 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from . import cai_adapter
-from .scope import ScopeError, parse_target, authorize, fetch_scoped, model_base_url, network_hosts, resolve_target
+from .scope import ScopeError, parse_target, authorize, fetch_scoped, model_base_url, network_hosts, resolve_target, host_matches
 from .store import Store
 from .workflows import REGISTRY, validate_workflow, execute_workflow
 from .intelligence import analysis_goal, plan_workflow
 from .catalog import CATALOG as MINI_CATALOG, CATALOG_KINDS, TOOLS, convert_mini, tool_readiness, blocked_flag
 from .catalog_execution import preflight as catalog_preflight
 from .cli_runner import pause_processes, snapshot_folder
+from .support_data import SupportData
 from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
@@ -86,6 +87,11 @@ class WorkflowInput(BaseModel):
     graph: dict
     id: str | None = None
     expected_revision: int | None = Field(default=None, ge=1)
+
+
+class SupportBinding(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    graph: dict
 
 
 class PlanInput(BaseModel):
@@ -158,6 +164,7 @@ class RunControl:
 
 def create_app(data_dir=None, assessor=None, passive_http=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
+    support_data = SupportData(store)
     evidence = EvidenceIndex(store)
     asset_graph = AssetGraph(store)
     passive_ingestor = PassiveIngestor(store, asset_graph)
@@ -334,6 +341,11 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     async def workflows():
         return store.workflows()
 
+    @app.get('/api/workflow-starters/web-recon')
+    async def web_recon_starter(fuzz: bool = False):
+        from .web_recon import recon_workflow
+        return recon_workflow(fuzz=fuzz)
+
     @app.get('/api/catalog')
     async def catalog():
         return {**MINI_CATALOG,'readiness':[tool_readiness(t) for t in TOOLS.values()]}
@@ -357,6 +369,23 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     @app.get('/api/inputs')
     async def inputs():
         return store.inputs()
+
+    @app.get('/api/support-data')
+    async def support_status():
+        return await asyncio.to_thread(support_data.status)
+
+    @app.post('/api/support-data/install/{package}')
+    async def install_support_data(package: str):
+        try:
+            return await asyncio.to_thread(support_data.install,package)
+        except ScopeError:
+            raise
+        except Exception as exc:
+            raise HTTPException(409,f'Support data installation did not complete ({type(exc).__name__}). Retry to resume registration; existing versions are preserved.') from None
+
+    @app.post('/api/support-data/bind')
+    async def bind_support_data(body: SupportBinding):
+        return await asyncio.to_thread(support_data.bind,body.graph)
 
     @app.post('/api/inputs',status_code=201)
     async def register_input(body: InputRegistration):
@@ -553,7 +582,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             raise HTTPException(422, 'Passive enrichment takes an entered domain or IP.')
         entered = set()
         for row in store.targets():
-            host = canonical_asset(parse_target(row['url']).url if parse_target(row['url']).kind != 'url' else urlsplit(row['url']).hostname or '')
+            host = canonical_asset(parse_target(row['url']).host if parse_target(row['url']).kind in ('domain','ip','wildcard') else urlsplit(row['url']).hostname or '')
             if host:
                 entered.add(host)
         if target not in entered:
@@ -889,21 +918,21 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     def gather_team_evidence(targets, limit=200):
         """Existing in-scope observations for adaptive team role selection. Read
         only; never initiates traffic. Returns observation records for assets in
-        the entered scope (the entered hosts/IPs and their subdomains)."""
-        hosts = set()
-        for value in targets:
-            try:
-                t = parse_target(value)
-            except ScopeError:
-                continue
-            if t.kind in ('url', 'domain', 'ip') and t.host:
-                hosts.add(t.host)
-        if not hosts:
-            return []
+        the explicit entered host/URL scope."""
+        scopes = [parse_target(value) for value in targets]
         def in_scope(asset):
-            host = canonical_asset(asset) or str(asset)
-            host = host.split('://', 1)[-1].split('/', 1)[0].split(':', 1)[0]
-            return any(host == h or host.endswith('.' + h) for h in hosts)
+            try:
+                value = canonical_asset(asset) or str(asset)
+                if value.startswith('tcp://'):
+                    host = urlsplit(value).hostname
+                    return bool(host) and any(t.kind != 'url' and host_matches(host, t) for t in scopes)
+                if '://' in value:
+                    authorize(value, scopes)
+                    return True
+                host = parse_target(value).host
+                return bool(host) and any(t.kind != 'url' and host_matches(host, t) for t in scopes)
+            except ScopeError:
+                return False
         return [item for item in evidence.observations(limit=limit)['items'] if in_scope(item.get('asset'))]
 
     def prepare_config(body):
@@ -931,7 +960,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         if body.engine in ('inventory','workflow','team') and body.allow_http:
             entered=[parse_target(t) for t in config['targets']]
             for target in entered:
-                if target.kind!='url':
+                if target.kind not in ('url','wildcard'):
                     network_hosts(target.url,entered,body.max_hosts)
         return config
 

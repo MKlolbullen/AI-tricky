@@ -79,6 +79,9 @@ def validate_workflow(graph, *, live=False):
             workers = data.get('max_workers', 3)
             if type(workers) is not int or not 1 <= workers <= 5:
                 raise ScopeError('Team workers must be a whole number from 1 to 5.')
+        if kind == 'native_web_assets':
+            from .web_recon import limits
+            limits(data)
         specs[n['id']] = (inputs, data['outputs'] if kind in CATALOG_KINDS else [output])
         by_id[n['id']], incoming[n['id']] = n, []
     edge_ids, pairs = set(), set()
@@ -147,7 +150,9 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
         if kind == 'native_tcp':
             rows = []
             for entry in values:
-                if entry['kind'] == 'url':
+                if entry['kind'] == 'wildcard':
+                    rows.append({'target': entry['target'], 'state': 'needs_discovery', 'error': 'Discover concrete subdomains before probing a wildcard selector.'})
+                elif entry['kind'] == 'url':
                     rows.append({'url': entry['target'], 'state': 'url_scope', 'kind': 'url'})
                 else:
                     result = await probe(entry['target'], config['ports'], node_id=nid)
@@ -158,6 +163,7 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
             return rows
         if kind == 'native_http':
             urls = []
+            rows = []
             expanded=[]
             for entry in values:
                 if 'catalog_streams' in entry:
@@ -173,6 +179,8 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
                     target = parse_url(entry['target']) if '://' in entry['target'] else parse_target(entry['target'])
                     if target.kind == 'url':
                         urls.append(target.url)
+                    elif target.kind == 'wildcard':
+                        rows.append({'target':target.url,'state':'needs_discovery','error':'Discover and probe concrete subdomains before HTTP capture.'})
                     else:
                         for host in network_hosts(target.url, [parse_target(t) for t in config['targets']], config['max_hosts']):
                             urls.extend(web_url(host, p) for p in config['ports'] if p in (80, 443, 8080, 8443))
@@ -180,13 +188,15 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
                     urls.append(entry['url'])
                 elif entry.get('state') == 'open' and entry['port'] in (80, 443, 8080, 8443):
                     urls.append(web_url(entry['host'], entry['port']))
-            rows = []
             if config.get('verification') and nid == config['verification']['node_id']:
                 from .verification import execute_pair
                 return await execute_pair(rid, nid, config, urls, fetch, store)
             for url in dict.fromkeys(urls):
                 rows.append({'url': url, **await fetch(url, node_id=nid)})
             return rows
+        if kind == 'native_web_assets':
+            from .web_recon import collect_assets
+            return await collect_assets(values, config, by_id[nid]['data'], fetch, store, nid)
         if kind == 'native_cai':
             # Evidence-only analysis: the existing configured CAI provider gets no live tools.
             result = await analyze(values, node_id=nid)

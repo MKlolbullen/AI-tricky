@@ -14,9 +14,10 @@ import re
 import shutil
 import signal
 import tempfile
+from urllib.parse import urlsplit, urlunsplit
 
 from .catalog import TOOLS, registered_path, scoped_lines
-from .scope import ScopeError
+from .scope import ScopeError, authorize, parse_target
 
 MAX_STREAM=2_000_000
 MAX_INPUT=10_000_000
@@ -117,10 +118,15 @@ def prepare_context(streams,data,work,store,config,tool,run_id=None):
                 path=destination/f'{index}-{Path(meta["name"]).name}';path.write_bytes(raw);paths.append(path)
             context['folder' if typ=='folder' else 'file_file']=str(destination if typ=='folder' else paths[0])
             streams[typ]=[context['folder' if typ=='folder' else 'file_file']]
-        elif typ in ('folder','file','sbom','paths_file','resolvers','wordlist','templates') and values and values[0].startswith('input:'):
+        elif typ in ('folder','file','sbom','paths_file','resolvers','resolvers_trusted','wordlist','templates') and values and values[0].startswith('input:'):
             if len(values)!=1:raise ScopeError('File and folder ports accept one registered input.')
             source=registered_path(store,values[0][6:],'folder' if typ in ('folder','templates') else 'file')
-            if typ in ('folder','templates'):path=snapshot_folder(source,work/('source' if typ=='folder' else 'templates'))
+            if typ in ('folder','templates'):
+                destination=work/'home'/'nuclei-templates' if typ=='templates' and tool['id'] in ('nuclei','nuclei-takeover') else work/('source' if typ=='folder' else 'templates')
+                destination.parent.mkdir(parents=True,exist_ok=True)
+                path=snapshot_folder(source,destination)
+                expected=store.input(values[0][6:]).get('sha256')
+                if expected and input_fingerprint(path,'folder')!=expected:raise ScopeError('Pinned support folder changed during copying.')
             else:
                 path=work/(typ+'.input');shutil.copyfile(source,path)
             if config.get('proposal_execution') or config.get('workflow_recovery'):
@@ -144,12 +150,28 @@ def prepare_context(streams,data,work,store,config,tool,run_id=None):
         if rejected and not target_values:raise ScopeError('No upstream targets are authorized for this CLI invocation.')
         if rejected:context['rejected_count']=len(rejected)
     if target_values:
+        if tool['id']=='ffuf':
+            scoped=[parse_target(v) for v in config['targets']]
+            fuzzed=[]
+            for value in target_values:
+                # Path-fuzzing convenience only. Custom FUZZ query/path inputs
+                # remain explicit; wordlists still need a registered binding.
+                if 'FUZZ' not in value:
+                    parsed=urlsplit(value)
+                    if parsed.scheme not in ('http','https'):raise ScopeError('ffuf requires HTTP(S) URL inputs.')
+                    value=urlunsplit((parsed.scheme,parsed.netloc,parsed.path.rstrip('/')+'/FUZZ',parsed.query,''))
+                fuzzed.append(authorize(value,scoped).url)
+            target_values=fuzzed
         # Avoid option injection even when a CLI doesn't support an explicit -- delimiter.
         if any(v.startswith('-') or '\n' in v or '\r' in v for v in target_values):raise ScopeError('Invalid scalar target.')
         path=work/'targets.txt';path.write_text('\n'.join(target_values)+'\n')
         context['targets_file']=str(path)
         context['targets']=target_values[0]
     if streams.get('domain') and target_values:context['domain']=target_values[0]
+    if tool['id']=='katana':
+        from .web_recon import crawler_scope
+        path=work/'crawl-scope.txt';path.write_text('\n'.join(crawler_scope(config))+'\n')
+        context['crawl_scope_file']=str(path)
     if streams.get('query'):context['query']=streams['query'][0]
     # Upstream URL lists can feed tools whose original placeholder is named targets.
     context.update({k:v for k,v in data.get('params',{}).items() if k in ('pattern','exploit_type')})
@@ -164,6 +186,9 @@ def build_command(tool,data,context,binary):
     if tool['id'] in ('shuffledns','massdns'):
         if not context.get('resolvers_file'):raise ScopeError('Register a resolvers file for this DNS adapter.')
         argv=[context['resolvers_file'] if part in ('/usr/share/resolvers.txt','resolvers.txt') else part for part in argv]
+    if tool['id']=='puredns':
+        if not context.get('resolvers_file') or not context.get('resolvers_trusted_file'):raise ScopeError('Bind regular and trusted resolver files for PureDNS.')
+        argv+=['-r',context['resolvers_file'],'--resolvers-trusted',context['resolvers_trusted_file']]
     for key,value in data.get('params',{}).items():
         if not key.startswith('-'):continue
         if value is False or value=='':continue
@@ -185,6 +210,7 @@ def build_command(tool,data,context,binary):
         if not context.get('templates'):raise ScopeError('Bind a reviewed Jaeles signatures folder.')
         argv+=['-s',context['templates']]
     if tool['id']=='httpx':argv+=['-duc']
+    if tool['id']=='katana':argv+=['-dr','-fs','fqdn','-duc','-cs',context['crawl_scope_file']]
     return argv
 
 
@@ -267,6 +293,16 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store):
     total_streams={k:[] for k in tool['outputs']};invocation_artifacts=[]
     # Scalar adapters fan out instead of silently using only the first target.
     scalar=any('{targets}' in p or '{domain}' in p for p in tool['command'])
+    streams=dict(streams)
+    # Filter before scalar fan-out as well as immediately before dispatch: one
+    # unapproved discovery must not prevent the remaining approved hosts running.
+    if tool['adapter']['traffic']!='offline':
+        key=next((k for k in ('targets','url','domain') if streams.get(k)),None)
+        if key:
+            allowed,rejected=scoped_lines(streams[key],key,config,discovery=tool['adapter']['traffic']=='passive')
+            if rejected:store.event(rid,'cli.inputs_filtered',{'node_id':nid,'tool_id':tool['id'],'rejected_count':len(rejected)})
+            if not allowed:raise ScopeError('No upstream targets are authorized for this CLI invocation.')
+            streams[key]=allowed
     base=streams.get('targets') or streams.get('url') or streams.get('domain') or streams.get('file') or [None]
     batches=[[v] for v in base] if scalar else [base]
     if len(batches)>config['max_hosts']:raise ScopeError('Scalar CLI fan-out exceeds the run host cap.')
@@ -281,7 +317,7 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store):
             if tool['id']=='hakrawler':argv=[pin['path']]+[a for a in argv[1:] if a not in ('-url',context.get('targets'))]
             stdin_lines=targets if tool['adapter']['stdin'] or tool['id']=='hakrawler' else []
             stdin_data=('\n'.join(stdin_lines)+'\n').encode() if stdin_lines else b''
-            env['HOME']=str(work/'home');env['USERPROFILE']=env['HOME'];Path(env['HOME']).mkdir()
+            env['HOME']=str(work/'home');env['USERPROFILE']=env['HOME'];Path(env['HOME']).mkdir(exist_ok=True)
             if tool['id']=='gf':
                 patterns=json.loads((Path(__file__).parent/'gf-patterns.json').read_text())
                 pattern=context['pattern']

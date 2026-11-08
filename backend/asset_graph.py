@@ -16,7 +16,7 @@ import uuid
 from urllib.parse import urlsplit
 
 from .observations import canonical_asset, digest, encoded
-from .scope import ScopeError, parse_target
+from .scope import ScopeError, parse_target, host_matches
 from .store import now
 
 GRAPH_VERSION = '2'
@@ -342,7 +342,7 @@ class AssetGraph:
 
     def scope_subgraph(self, targets, max_entities=2000):
         """The asset graph reachable (within two hops) from the entered hosts/IPs —
-        the seeds themselves, their subdomains, and the services/ips/technologies/
+        the matching host seeds and the services/ips/technologies/
         vulnerabilities/etc. attached to them. Read-only observed data; it never
         expands scope or emits anything for live probing.
 
@@ -354,14 +354,14 @@ class AssetGraph:
         connection-local, so callers run it off the event loop (asyncio.to_thread).
         """
         self.index_pending()
-        hosts, ips = set(), set()
+        hosts, ips = [], set()
         for value in targets:
             try:
                 t = parse_target(value)
             except ScopeError:
                 continue
-            if t.kind in ('url', 'domain') and t.host:
-                hosts.add(t.host)
+            if t.kind in ('url', 'domain', 'wildcard') and t.host:
+                hosts.append(t)
             elif t.kind == 'ip' and t.host:
                 ips.add(t.host)
             # CIDR targets carry no host/ip-entity membership in v1; skipped.
@@ -372,7 +372,7 @@ class AssetGraph:
         edge_cap = max(max_entities * 4, 2000)
         with self.store.connect() as c:
             seed = {r['id'] for r in c.execute("SELECT id,kind,canonical FROM assets WHERE kind IN ('host','ip')")
-                    if (r['kind'] == 'host' and (r['canonical'] in hosts or any(r['canonical'].endswith('.' + h) for h in hosts)))
+                    if (r['kind'] == 'host' and any(host_matches(r['canonical'], t) for t in hosts))
                     or (r['kind'] == 'ip' and r['canonical'] in ips)}
             seen, frontier = set(seed), set(seed)
             for _ in range(2):

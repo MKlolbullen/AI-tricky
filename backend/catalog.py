@@ -53,7 +53,7 @@ def validate_params(tool,data):
         elif not isinstance(value,str) or len(value)>2048 or any(ord(c)<32 for c in value) or value.startswith('-'):
             raise ScopeError('Invalid string parameter.')
     refs=data.get('inputRefs',{})
-    if not isinstance(refs,dict) or any(k not in ('wordlist','file','folder','sbom','paths_file','resolvers','templates') or not isinstance(v,str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',v) for k,v in refs.items()):
+    if not isinstance(refs,dict) or any(k not in ('wordlist','file','folder','sbom','paths_file','resolvers','resolvers_trusted','templates') or not isinstance(v,str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',v) for k,v in refs.items()):
         raise ScopeError('Invalid registered input references.')
 
 
@@ -130,6 +130,10 @@ def registered_path(store,identifier,expected=None):
     if path.is_symlink() or path.resolve()!=path or not path.exists():raise ScopeError('Registered input path changed or no longer exists.')
     if expected=='folder':
         if not path.is_dir():raise ScopeError('A registered folder is required.')
+        if entry.get('sha256'):
+            from .cli_runner import input_fingerprint
+            if input_fingerprint(path,'folder')!=entry['sha256']:
+                raise ScopeError('Pinned support folder changed; install a new version or register a separate reviewed input.')
     elif not path.is_file():raise ScopeError('A registered file is required.')
     # Files are bound to their registered content, not just a reusable pathname.
     if path.is_file() and (path.stat().st_size>10_000_000 or hashlib.sha256(path.read_bytes()).hexdigest()!=entry['sha256']):
@@ -163,7 +167,7 @@ def scoped_lines(lines,typ,config,*,discovery=False):
                 # but never turns those discoveries into active authorization.
                 try:
                     t=parse_target(value)
-                    if t.kind=='domain' and any(s.kind=='domain' and (t.host==s.host or t.host.endswith('.'+s.host)) for s in scope):result.append(value);continue
+                    if t.kind=='domain' and any(s.kind in ('domain','wildcard') and (t.host==s.host or t.host.endswith('.'+s.host)) for s in scope):result.append(value);continue
                 except (ScopeError,ValueError):pass
             rejected.append(value)
     return result,rejected

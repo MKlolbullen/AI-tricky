@@ -86,6 +86,8 @@ A useful assessment platform needs more than a canvas that launches commands and
 | Surface | Current behavior |
 | --- | --- |
 | Native inventory | Domain resolution, bounded TCP connect checks, and scoped HTTP GET evidence collection |
+| Web recon | Explicit `*.example.com` scope, discovery → httprobe → katana starter, optional wordlist-bound path fuzzing, and bounded JS/TS/chunk/source-map capture manifests ([details](docs/WEB-RECON.md)) |
+| Support data | Bundled Nuclei HTTP templates, Trickest resolvers and starter wordlists; pinned full Nuclei/Jaeles downloads with typed input bindings ([setup](docs/SUPPORT-DATA.md)) |
 | Workflow runner | Executes validated native and catalog DAGs; independent branches share configured run limits |
 | Migrated catalog | 151 tool contracts and 57 typed workflows; searchable by source, category, input type and readiness |
 | CLI adapters | 141 application-owned, shell-free adapters with executable preflight, typed files/stdin and scalar fan-out |

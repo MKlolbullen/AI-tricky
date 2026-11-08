@@ -1,6 +1,7 @@
 # Catalog migration — 0.4
 All 151 source tool definitions and 57 built-in workflows are migrated. The original 22 curated workflows/presets and legacy schema imports remain available. The source is pinned to mini-tricky commit `96971000b0058423da52884d9028250ab76b0633` with its MIT license and source-file hashes.
 **141 tools have CLI execution adapters. Ten entries are migrated with explicit context restrictions.** A CLI adapter does not imply that a compatible binary is installed, configured or validated against every upstream release. Preflight checks binary presence, hashes the executable, validates sources and reports missing context. No external security binary is included in the ZIP.
+Required support files can now be installed and bound through **Local workspace → Inputs**; see [Support data](SUPPORT-DATA.md) for pinned Nuclei templates, Jaeles signatures, resolvers, wordlists and catalog compatibility.
 ## Execution contracts
 - Commands come from the application-owned catalog. Graphs can select typed inputs and allowlisted arguments, but cannot supply commands, executable paths, environment dictionaries or shell strings.
 - Multiple output sockets retain their names and edge bindings. Scalar targets fan out into separate invocations; file-list and stdin adapters receive the full input. Merge and collector nodes preserve typed streams.

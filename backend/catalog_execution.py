@@ -36,9 +36,21 @@ def source_values(data,config):
     if typ=='query':
         if not value:raise ScopeError('Enter an explicit search query.')
         return [value]
-    values=value.splitlines() if value else [t for t in config['targets'] if typ=='targets' or (typ=='domain' and parse_target(t).kind=='domain') or (typ=='url' and parse_target(t).kind=='url')]
+    values=value.splitlines() if value else [t for t in config['targets'] if (typ=='targets' and parse_target(t).kind!='wildcard') or (typ=='domain' and parse_target(t).kind in ('domain','wildcard')) or (typ=='url' and parse_target(t).kind=='url')]
     if not values:raise ScopeError(f'No selected {typ} targets are available for this source.')
+    if typ=='domain':
+        # Wildcards are selectors, never executable target strings. A domain
+        # source supplies their apex as a passive enumeration seed only; each
+        # active consumer still checks the original immutable run scope.
+        entered={parse_target(t).url for t in config['targets']}
+        if any(parse_target(v).kind=='wildcard' and parse_target(v).url not in entered for v in values):
+            raise ScopeError('Enumeration seed is outside the selected run scope.')
+        values=[parse_target(v).host if parse_target(v).kind=='wildcard' else v for v in values]
     allowed,rejected=scoped_lines(values,typ,config)
+    if typ=='domain':
+        seeds={parse_target(t).host for t in config['targets'] if parse_target(t).kind=='wildcard'}
+        allowed=list(dict.fromkeys(allowed+[v for v in rejected if parse_target(v).kind=='domain' and parse_target(v).host in seeds]))
+        rejected=[v for v in rejected if v not in allowed]
     if rejected:raise ScopeError('A source value is outside the selected run scope.')
     if typ=='domain' and any(parse_target(v).kind!='domain' for v in allowed):raise ScopeError('Domain source needs a plain domain scope.')
     if typ=='url' and any(not v.startswith(('http://','https://')) for v in allowed):raise ScopeError('URL source needs an explicit HTTP(S) URL scope.')
@@ -71,7 +83,8 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
             for field,typ in [('wordlist_file','wordlist'),('paths_file','paths_file'),('folder','folder'),('sbom_file','sbom')]:
                 if field in placeholders and typ not in incoming and typ not in data.get('inputRefs',{}):reason.append(f'Requires a connected or registered {typ} input.')
             if tool['id'] in ('nuclei','nuclei-takeover','jaeles') and not data.get('inputRefs',{}).get('templates'):reason.append('Register and bind a reviewed templates/signatures folder for this adapter.')
-            if tool['id'] in ('massdns','shuffledns') and not data.get('inputRefs',{}).get('resolvers'):reason.append('Register and bind a resolvers file for this DNS adapter.')
+            if tool['id'] in ('massdns','shuffledns','puredns') and not data.get('inputRefs',{}).get('resolvers'):reason.append('Register and bind a resolvers file for this DNS adapter.')
+            if tool['id']=='puredns' and not data.get('inputRefs',{}).get('resolvers_trusted'):reason.append('Register and bind a trusted resolvers file for PureDNS.')
             if 'exploit_type' in placeholders and not data.get('params',{}).get('exploit_type'):reason.append('Choose a named exploit_type context.')
             if check_binaries and tool['adapter']['mode']!='blocked':
                 try:binaries[tool['id']]=pin_binary(tool)

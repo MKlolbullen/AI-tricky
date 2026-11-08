@@ -82,8 +82,9 @@ def test_every_tool_compiles_or_reports_its_explicit_context_restriction(tid,tmp
     pin={'path':str(binary),'sha256':digest(binary)}
     rid=store.new_run(CONFIG)['id'];ctl=RunControl()
     streams=streams_for(tool,store,tmp_path)
-    if tid in ('massdns','shuffledns'):
+    if tid in ('massdns','shuffledns','puredns'):
         resolver=tmp_path/'resolvers';resolver.write_text('127.0.0.1\n');entry=store.add_input('resolvers','file',resolver.resolve(),digest(resolver));data['inputRefs']={'resolvers':entry['id']}
+        if tid=='puredns':data['inputRefs']['resolvers_trusted']=entry['id']
     if tid in ('nuclei','nuclei-takeover','jaeles'):
         entry=store.add_input('templates','folder',(tmp_path/'project').resolve());data['inputRefs']={**data.get('inputRefs',{}),'templates':entry['id']}
     config={**CONFIG,'cli_binaries':{tid:pin}}

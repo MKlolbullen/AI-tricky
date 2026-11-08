@@ -1,0 +1,10 @@
+.git/config
+asset-manifest.json
+build-manifest.json
+composer.json
+docker-compose.yml
+manifest.json
+package.json
+robots.txt
+sitemap.xml
+webpack.config.js

@@ -83,7 +83,8 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
             for field,typ in [('wordlist_file','wordlist'),('paths_file','paths_file'),('folder','folder'),('sbom_file','sbom')]:
                 if field in placeholders and typ not in incoming and typ not in data.get('inputRefs',{}):reason.append(f'Requires a connected or registered {typ} input.')
             if tool['id'] in ('nuclei','nuclei-takeover','jaeles') and not data.get('inputRefs',{}).get('templates'):reason.append('Register and bind a reviewed templates/signatures folder for this adapter.')
-            if tool['id'] in ('massdns','shuffledns') and not data.get('inputRefs',{}).get('resolvers'):reason.append('Register and bind a resolvers file for this DNS adapter.')
+            if tool['id'] in ('massdns','shuffledns','puredns') and not data.get('inputRefs',{}).get('resolvers'):reason.append('Register and bind a resolvers file for this DNS adapter.')
+            if tool['id']=='puredns' and not data.get('inputRefs',{}).get('resolvers_trusted'):reason.append('Register and bind a trusted resolvers file for PureDNS.')
             if 'exploit_type' in placeholders and not data.get('params',{}).get('exploit_type'):reason.append('Choose a named exploit_type context.')
             if check_binaries and tool['adapter']['mode']!='blocked':
                 try:binaries[tool['id']]=pin_binary(tool)

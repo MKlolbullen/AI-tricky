@@ -500,8 +500,12 @@ Then verify what AI-tricky can now see:
   * Templates catalog → readiness badges, or
   * Local workspace → Run setup → "Check workflow readiness".
 
-Some tools need extra data after install, e.g.:
-  nuclei -update-templates
+Install pinned support data and register it in the local workspace:
+  python3 scripts/setup-support-data.py
+  python3 scripts/setup-support-data.py --install nuclei-templates --install jaeles-signatures
+
+Or use Local workspace → Inputs → Templates, resolvers and wordlists.
+Installing data does not bind it to a workflow or start an assessment.
 EOF
 
 # Non-zero exit only if literally nothing succeeded and something was attempted.

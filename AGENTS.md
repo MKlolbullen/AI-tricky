@@ -99,3 +99,8 @@ Added `backend/model_usage.py`: a durable metadata-only ledger for parent-owned 
 ## Explicit wildcard host scope and web recon — 2026-11-07
 
 The user clarified that `example.com` is an exact host and `*.example.com` permits all nested subdomains. The wildcard excludes the apex; select both for both. Never send a literal selector to DNS/probes or promote passive discoveries, resolved IPs or external CNAMEs into active scope. Domain sources may derive the wildcard apex as a passive enumeration seed; active consumers independently revalidate original scope. Align scoped evidence views with that distinction. Added an independently authored discovery→httprobe→katana starter, optional registered-wordlist ffuf branch, and a bounded native source collector with immutable HTTP captures and provenance manifest. Keep limits/partial coverage explicit and CLI accounting separate from native transport enforcement. See docs/WEB-RECON.md; the pinned migrated catalog remains unchanged.
+
+
+## Support data and catalog completeness — 2026-11-07
+
+The user requested Nuclei templates, resolvers and other required data files, and raised adding Trickest workflows/tools. Ship an offline checksummed starter plus explicit pinned optional upstream downloads, register immutable versioned inputs, preserve user bindings and show missing data in preflight. Keep full Nuclei data locally with bounded HTTP category views that retain helpers and upstream licenses; do not weaken generic folder limits. Nuclei jobs use a private home template tree. The existing 151-tool/57-workflow mini-tricky migration is not full Trickest parity; do not claim arbitrary Trickest exports execute without a format-specific adapter. See docs/SUPPORT-DATA.md.

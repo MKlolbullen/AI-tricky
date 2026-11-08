@@ -1,0 +1,144 @@
+{
+  "schema": "ai-tricky.support-data/v1",
+  "bundled": [
+    {
+      "id": "nuclei-starter",
+      "name": "Nuclei HTTP starter (7 exposure templates)",
+      "kind": "folder",
+      "path": "nuclei-starter",
+      "roles": [
+        "nuclei-templates"
+      ],
+      "source": "https://github.com/projectdiscovery/nuclei-templates",
+      "revision": "52d0a07e15251ee5413b2c6a3c97b8f3e20e0c28",
+      "sha256": {
+        ".nuclei-ignore": "699053f709b11e80d853b63ebdcfe7ea0b15464f7d9709379c71bb12a41c627b",
+        "LICENSE.md": "5fa6644d2dd1987a79c06f4af210d2cf8cfc4ee799999029d0f9980c9cf95a2c",
+        "http/exposures/configs/exposed-svn.yaml": "4f99844c8a34d0d418b1b56a708199f157c66b94f91dc551ed0fb73556c80192",
+        "http/exposures/configs/git-config.yaml": "bd8bdfa0b5ed5bf4d3712edb793adfd0987d9282e51c6f7d673bf14b9e4dd524",
+        "http/exposures/configs/webpack-config.yaml": "7ae737bce6d7b3ac5b749b6d01617ffd88855c1eb749d2a253d1502ebfd34136",
+        "http/exposures/configs/composer-config.yaml": "01631377e15e83ed6306d7c02105a3b3d78f388e7393a733f4a354f1a1baf572",
+        "http/exposures/configs/docker-compose-config.yaml": "b2603cd2bf3fdb6f74a835746774894d8dc21b7cb21c9b679eaba293213a0fb0",
+        "http/exposures/configs/package-json.yaml": "55992232b5a1dd8f931e88574cca7d238f9a387b26e68d49a81f886136aaa842",
+        "http/exposures/files/webpack-sourcemap-disclosure.yaml": "703d0f02193d09f9a53bea9cc462ab05669456ed786006069d6b011abdb850e1"
+      }
+    },
+    {
+      "id": "resolvers-trusted",
+      "name": "Trickest trusted resolvers",
+      "kind": "file",
+      "path": "resolvers/resolvers-trusted.txt",
+      "roles": [
+        "resolvers",
+        "resolvers-trusted"
+      ],
+      "source": "https://github.com/trickest/resolvers",
+      "revision": "6047aa832a85852caa6ec7d0c2e071bd823a749e",
+      "sha256": {
+        ".": "a9a875e04f3756ad4620b2e79dbb843955ea05838b99ac3356630b6f49616d1a"
+      }
+    },
+    {
+      "id": "resolvers-public",
+      "name": "Trickest public resolvers",
+      "kind": "file",
+      "path": "resolvers/resolvers.txt",
+      "roles": [],
+      "source": "https://github.com/trickest/resolvers",
+      "revision": "6047aa832a85852caa6ec7d0c2e071bd823a749e",
+      "sha256": {
+        ".": "03afdb37cd2f75c30c52638e379036df8b01282f21e60c14afde7eaaee3c778e"
+      }
+    },
+    {
+      "id": "wordlist-paths",
+      "name": "Small directory paths",
+      "kind": "file",
+      "path": "wordlists/paths-small.txt",
+      "roles": [
+        "wordlist-paths"
+      ],
+      "source": "AI-tricky original",
+      "revision": "1",
+      "sha256": {
+        ".": "18f6aa70f71c70383cee542cbf440133ca0e0af80524b5d1445e4dfe16c71d0d"
+      }
+    },
+    {
+      "id": "wordlist-subdomains",
+      "name": "Small DNS labels",
+      "kind": "file",
+      "path": "wordlists/subdomains-small.txt",
+      "roles": [
+        "wordlist-subdomains"
+      ],
+      "source": "AI-tricky original",
+      "revision": "1",
+      "sha256": {
+        ".": "ff5eece5a370d781310d57714f8f864a1bf5e814e35b4cbcfcb04c3d6d9681a5"
+      }
+    },
+    {
+      "id": "wordlist-interesting",
+      "name": "Interesting source/configuration paths",
+      "kind": "file",
+      "path": "wordlists/interesting-files.txt",
+      "roles": [],
+      "source": "AI-tricky original",
+      "revision": "1",
+      "sha256": {
+        ".": "cf6e25f40cc1493b03c7fefa579562c3103d85c1d429819ead128a13b0bf22bf"
+      }
+    },
+    {
+      "id": "wordlist-extensions",
+      "name": "Web source extensions",
+      "kind": "file",
+      "path": "wordlists/extensions.txt",
+      "roles": [],
+      "source": "AI-tricky original",
+      "revision": "1",
+      "sha256": {
+        ".": "c254313ad798537710c533ed23e9b8fbb209f05c2b6ff9091fe0e2d44adffad6"
+      }
+    },
+    {
+      "id": "wordlist-rooted-paths",
+      "name": "Rooted HTTP paths",
+      "kind": "file",
+      "path": "wordlists/paths-rooted.txt",
+      "roles": [
+        "paths"
+      ],
+      "source": "AI-tricky original",
+      "revision": "1",
+      "sha256": {
+        ".": "b77f1fc31f6b4ee06fa31390ecc22c2f3ed62e13e887fcb59939b22ed45fce48"
+      }
+    }
+  ],
+  "remote": [
+    {
+      "id": "nuclei-templates",
+      "name": "Nuclei Templates",
+      "repository": "projectdiscovery/nuclei-templates",
+      "revision": "52d0a07e15251ee5413b2c6a3c97b8f3e20e0c28",
+      "license": "MIT",
+      "license_file": "LICENSE.md",
+      "url": "https://codeload.github.com/projectdiscovery/nuclei-templates/zip/52d0a07e15251ee5413b2c6a3c97b8f3e20e0c28",
+      "archive_prefix": "nuclei-templates-52d0a07e15251ee5413b2c6a3c97b8f3e20e0c28",
+      "sha256": "2b06bafb9a4f7d7ec1fa9a5549e7c7bcb0eb36165d4c43954e136a3e44ecd0fd"
+    },
+    {
+      "id": "jaeles-signatures",
+      "name": "Jaeles Signatures",
+      "repository": "jaeles-project/jaeles-signatures",
+      "revision": "98b358e9737131b01d5ab0685c063be52e3e3754",
+      "license": "MIT (declared in upstream README)",
+      "license_file": "README.md",
+      "url": "https://codeload.github.com/jaeles-project/jaeles-signatures/zip/98b358e9737131b01d5ab0685c063be52e3e3754",
+      "archive_prefix": "jaeles-signatures-98b358e9737131b01d5ab0685c063be52e3e3754",
+      "sha256": "6051a3b19da6592fc8d4f5d25908611b16cf3e4a7d4463a9ae733800da557d0c"
+    }
+  ]
+}

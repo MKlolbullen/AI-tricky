@@ -96,3 +96,9 @@ Added recovery API/coordinator tests covering preserved source runs, reuse witho
 - Real CAI SDK: 16 passed using `.venv-cai/bin/python` against loopback model fixtures, covering both in-process and isolated execution, tool turns, missing reports, turn exhaustion and provider failures. No paid provider or external assessment target was queried.
 - The production build, 12 JavaScript tests and pinned catalog check passed. Usage and recovery UI modules load separately; the main bundle remains below the existing 500 kB warning threshold.
 - Two new Chromium interactions cover partial totals/export, unavailable historical runs and persistent per-run totals. The browser suite now contains 18 cases. Local shared-browser loopback access remains environment-blocked; GitHub CI supplies interaction validation.
+
+## Support data packs — 2026-11-08
+
+- The support-data suite passes 21 tests: offline/idempotent installation, pinned data tampering, exact archive hash checks, safe extraction limits, helpers/licenses, private Nuclei home, automatic binding preservation, PureDNS regular/trusted resolvers, rooted paths, and binding metadata version changes.
+- Verified the complete pinned Nuclei and Jaeles archives through the installer using locally cached upstream ZIPs. Nuclei produces 18 bounded HTTP category inputs with helpers; Jaeles produces one separate signatures input. No assessment target was contacted.
+- All 12 JavaScript checks, production build, and the unchanged pinned catalog migration check pass. Two support-data browser regressions are included. Local browser attempts are blocked: the Playwright download is absent and system Chromium cannot create a process socket (Operation not permitted). GitHub CI is the browser validation source.

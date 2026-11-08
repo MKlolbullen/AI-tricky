@@ -118,10 +118,15 @@ def prepare_context(streams,data,work,store,config,tool,run_id=None):
                 path=destination/f'{index}-{Path(meta["name"]).name}';path.write_bytes(raw);paths.append(path)
             context['folder' if typ=='folder' else 'file_file']=str(destination if typ=='folder' else paths[0])
             streams[typ]=[context['folder' if typ=='folder' else 'file_file']]
-        elif typ in ('folder','file','sbom','paths_file','resolvers','wordlist','templates') and values and values[0].startswith('input:'):
+        elif typ in ('folder','file','sbom','paths_file','resolvers','resolvers_trusted','wordlist','templates') and values and values[0].startswith('input:'):
             if len(values)!=1:raise ScopeError('File and folder ports accept one registered input.')
             source=registered_path(store,values[0][6:],'folder' if typ in ('folder','templates') else 'file')
-            if typ in ('folder','templates'):path=snapshot_folder(source,work/('source' if typ=='folder' else 'templates'))
+            if typ in ('folder','templates'):
+                destination=work/'home'/'nuclei-templates' if typ=='templates' and tool['id'] in ('nuclei','nuclei-takeover') else work/('source' if typ=='folder' else 'templates')
+                destination.parent.mkdir(parents=True,exist_ok=True)
+                path=snapshot_folder(source,destination)
+                expected=store.input(values[0][6:]).get('sha256')
+                if expected and input_fingerprint(path,'folder')!=expected:raise ScopeError('Pinned support folder changed during copying.')
             else:
                 path=work/(typ+'.input');shutil.copyfile(source,path)
             if config.get('proposal_execution') or config.get('workflow_recovery'):
@@ -181,6 +186,9 @@ def build_command(tool,data,context,binary):
     if tool['id'] in ('shuffledns','massdns'):
         if not context.get('resolvers_file'):raise ScopeError('Register a resolvers file for this DNS adapter.')
         argv=[context['resolvers_file'] if part in ('/usr/share/resolvers.txt','resolvers.txt') else part for part in argv]
+    if tool['id']=='puredns':
+        if not context.get('resolvers_file') or not context.get('resolvers_trusted_file'):raise ScopeError('Bind regular and trusted resolver files for PureDNS.')
+        argv+=['-r',context['resolvers_file'],'--resolvers-trusted',context['resolvers_trusted_file']]
     for key,value in data.get('params',{}).items():
         if not key.startswith('-'):continue
         if value is False or value=='':continue
@@ -309,7 +317,7 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store):
             if tool['id']=='hakrawler':argv=[pin['path']]+[a for a in argv[1:] if a not in ('-url',context.get('targets'))]
             stdin_lines=targets if tool['adapter']['stdin'] or tool['id']=='hakrawler' else []
             stdin_data=('\n'.join(stdin_lines)+'\n').encode() if stdin_lines else b''
-            env['HOME']=str(work/'home');env['USERPROFILE']=env['HOME'];Path(env['HOME']).mkdir()
+            env['HOME']=str(work/'home');env['USERPROFILE']=env['HOME'];Path(env['HOME']).mkdir(exist_ok=True)
             if tool['id']=='gf':
                 patterns=json.loads((Path(__file__).parent/'gf-patterns.json').read_text())
                 pattern=context['pattern']

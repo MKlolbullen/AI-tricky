@@ -23,6 +23,7 @@ from .intelligence import analysis_goal, plan_workflow
 from .catalog import CATALOG as MINI_CATALOG, CATALOG_KINDS, TOOLS, convert_mini, tool_readiness, blocked_flag
 from .catalog_execution import preflight as catalog_preflight
 from .cli_runner import pause_processes, snapshot_folder
+from .support_data import SupportData
 from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
@@ -86,6 +87,11 @@ class WorkflowInput(BaseModel):
     graph: dict
     id: str | None = None
     expected_revision: int | None = Field(default=None, ge=1)
+
+
+class SupportBinding(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    graph: dict
 
 
 class PlanInput(BaseModel):
@@ -158,6 +164,7 @@ class RunControl:
 
 def create_app(data_dir=None, assessor=None, passive_http=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
+    support_data = SupportData(store)
     evidence = EvidenceIndex(store)
     asset_graph = AssetGraph(store)
     passive_ingestor = PassiveIngestor(store, asset_graph)
@@ -362,6 +369,23 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     @app.get('/api/inputs')
     async def inputs():
         return store.inputs()
+
+    @app.get('/api/support-data')
+    async def support_status():
+        return await asyncio.to_thread(support_data.status)
+
+    @app.post('/api/support-data/install/{package}')
+    async def install_support_data(package: str):
+        try:
+            return await asyncio.to_thread(support_data.install,package)
+        except ScopeError:
+            raise
+        except Exception as exc:
+            raise HTTPException(409,f'Support data installation did not complete ({type(exc).__name__}). Retry to resume registration; existing versions are preserved.') from None
+
+    @app.post('/api/support-data/bind')
+    async def bind_support_data(body: SupportBinding):
+        return await asyncio.to_thread(support_data.bind,body.graph)
 
     @app.post('/api/inputs',status_code=201)
     async def register_input(body: InputRegistration):

@@ -1,5 +1,7 @@
 import asyncio
 import json
+import threading
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -226,3 +228,28 @@ def test_reused_specialist_checkpoints_copy_and_remap_handoff_provenance(tmp_pat
             assert member['handoff_artifact_id'] in owned and member['report_artifact_id'] in owned
             packet=c.get('/api/artifacts/'+member['handoff_artifact_id']).json()
             assert all(e['artifact_id'] in owned for e in packet['evidence'])
+
+
+def test_pause_stops_evidence_only_stage_dispatch_until_resume(tmp_path,target_server):
+    base,_=target_server;calls=[];started=threading.Event();release=threading.Event()
+    delegate=specialist_fixture(calls,base+'/')
+    async def assess(*args,usage_callback=None,**kwargs):
+        result=await delegate(*args,usage_callback=usage_callback,**kwargs)
+        if kwargs.get('role_instructions')==ROLES['surface']['focus']:
+            started.set();await asyncio.to_thread(release.wait,3)
+        return result
+    with TestClient(create_app(tmp_path,assessor=assess)) as c:
+        tid=c.post('/api/targets',json={'value':base+'/'}).json()['id']
+        rid=c.post('/api/runs',json={'engine':'team','target_ids':[tid],'allow_http':True,'team_profile':'specialist'}).json()['id']
+        assert started.wait(2)
+        assert c.post('/api/runs/'+rid+'/pause',json={}).status_code==200
+        release.set()
+        for _ in range(100):
+            artifacts=c.get('/api/runs/'+rid+'/artifacts').json()
+            if any(a['name']=='team-handoff-analyst.json' for a in artifacts):break
+            time.sleep(.01)
+        else:pytest.fail('Expected the next stage to reach its dispatch gate')
+        assert [r for r,_ in calls]==['surface']
+        assert c.post('/api/runs/'+rid+'/resume',json={}).status_code==200
+        assert wait_done(c,rid)['status']=='completed'
+        assert [r for r,_ in calls]==SPECIALIST_ROLES

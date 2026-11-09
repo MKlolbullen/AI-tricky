@@ -249,6 +249,8 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             execution_mode='injected' if assessor is not None else None, **kwargs)
 
     async def role_assess(ctl, rid, role, *args, **kwargs):
+        await ctl.gate.wait()
+        if ctl.cancelled:raise asyncio.CancelledError()
         if role not in ctl.team_routes:
             if ctl.model is not None:kwargs.setdefault('model',ctl.model)
             return await assess(*args,**kwargs)

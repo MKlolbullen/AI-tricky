@@ -23,6 +23,7 @@ from .proposal_execution import ExecutionError, REVIEW_SECONDS
 from .scope import ScopeError, network_hosts, parse_target
 from .store import now
 from .workflows import REGISTRY, validate_workflow
+from .http_routing import HTTPRouting, routing_binding
 
 SCHEMA = 'ai-tricky.workflow-recovery/v1'
 TERMINAL = {'completed', 'failed', 'cancelled', 'interrupted'}
@@ -39,6 +40,7 @@ class RecoveryOptions(BaseModel):
     max_cli_invocations: int = Field(default=64, ge=1, le=256)
     max_hosts: int = Field(default=64, ge=1, le=256)
     max_seconds: int = Field(default=240, ge=1, le=3600)
+    http_routing: HTTPRouting | None = None
 
 
 def artifact_references(value):
@@ -232,6 +234,8 @@ class WorkflowRecoveries:
                   'goal': original.get('goal', 'Recover recorded workflow branches.'),
                   'ports': original.get('ports', [80, 443]), 'parallelism': original.get('parallelism', 4),
                   'cli_credential_keys': keys}
+        config['http_routing']=options.get('http_routing') or original.get('http_routing') or HTTPRouting().model_dump()
+        config['http_routing_binding']=routing_binding(config['http_routing'],self.store)
         ready = preflight(subgraph, config, self.store, credentials={k for k, v in credentials.items() if v}, node_ids=rerun)
         if not ready['ready']:
             raise ExecutionError('Recovery preflight failed: ' + ' '.join(dict.fromkeys(

@@ -11,6 +11,7 @@ import httpx
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
+from backend.http_journal import message, request_message
 from backend.proposal_execution import ExecutionOptions, ProposalExecutions
 from backend.proposals import ProposalPlanner
 from backend.store import Store
@@ -241,7 +242,7 @@ def test_proposal_runs_use_existing_pause_resume_cancel_controls(tmp_path, monke
     started, release = threading.Event(), threading.Event()
     def delayed_fetch(url, scope, **kwargs):
         started.set(); release.wait(3)
-        return {'url': url, 'status': 200, 'headers': {}, 'body': 'loopback execution fixture', 'connected_ip': '127.0.0.1'}
+        return {'url': url, 'status': 200, 'headers': {}, 'body': 'loopback execution fixture', 'connected_ip': '127.0.0.1', 'http_exchange':{'request':request_message(url),'response':message('HTTP/1.1 200 OK',[],b'loopback execution fixture',status=200,reason='OK',http_version='HTTP/1.1'),'route':{'mode':'direct'}}}
     monkeypatch.setattr('backend.app.fetch_scoped', delayed_fetch)
     app = create_app(tmp_path)
     with TestClient(app) as client:
@@ -262,7 +263,7 @@ def test_capacity_denial_does_not_consume_review(tmp_path, monkeypatch):
     started, release = threading.Event(), threading.Event()
     def delayed_fetch(url, scope, **kwargs):
         started.set(); release.wait(4)
-        return {'url': url, 'status': 200, 'headers': {}, 'body': 'fixture', 'connected_ip': '127.0.0.1'}
+        return {'url': url, 'status': 200, 'headers': {}, 'body': 'fixture', 'connected_ip': '127.0.0.1', 'http_exchange':{'request':request_message(url),'response':message('HTTP/1.1 200 OK',[],b'fixture',status=200,reason='OK',http_version='HTTP/1.1'),'route':{'mode':'direct'}}}
     monkeypatch.setattr('backend.app.fetch_scoped', delayed_fetch)
     app = create_app(tmp_path)
     with TestClient(app) as client:

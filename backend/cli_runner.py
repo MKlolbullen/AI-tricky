@@ -314,6 +314,16 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store):
                     if selected.get(typ):selected[typ]=batch
             context,targets,prepared=prepare_context(selected,data,work,store,config,tool,run_id=rid)
             argv=build_command(tool,data,context,pin)
+            from .http_routing import cli_routing, resolve_routing, CLI_PROXY_FLAGS
+            argv+=cli_routing(tool,config)
+            if tool['id'] in CLI_PROXY_FLAGS and (config.get('http_routing') or {}).get('ca_input_id'):
+                resolved=resolve_routing(config['http_routing'],store)
+                if config.get('http_routing_binding') and resolved.ca_sha256!=config['http_routing_binding']['ca_sha256']:
+                    raise ScopeError('Proxy CA changed after execution review.')
+                import ssl
+                bundle=work/'trusted-http-ca.pem'
+                bundle.write_text(''.join(ssl.DER_cert_to_PEM_cert(cert) for cert in resolved.context.get_ca_certs(binary_form=True)))
+                for key in ('SSL_CERT_FILE','REQUESTS_CA_BUNDLE','CURL_CA_BUNDLE'):env[key]=str(bundle)
             if tool['id']=='hakrawler':argv=[pin['path']]+[a for a in argv[1:] if a not in ('-url',context.get('targets'))]
             stdin_lines=targets if tool['adapter']['stdin'] or tool['id']=='hakrawler' else []
             stdin_data=('\n'.join(stdin_lines)+'\n').encode() if stdin_lines else b''
@@ -389,7 +399,7 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store):
                 if proc:
                     await close_pipes(proc)
                     ctl.processes.pop(proc.pid,None)
-                record={'tool_id':tool['id'],'invocation_number':number,'command':argv,'exit_code':returncode,'error':failure,'stdout':redact(bytes(buffers['stdout'][:MAX_STREAM]).decode(errors='replace')),'stderr':redact(bytes(buffers['stderr'][:MAX_STREAM]).decode(errors='replace')),'native_requests_counted':False}
+                record={'tool_id':tool['id'],'invocation_number':number,'command':argv,'exit_code':returncode,'error':failure,'stdout':redact(bytes(buffers['stdout'][:MAX_STREAM]).decode(errors='replace')),'stderr':redact(bytes(buffers['stderr'][:MAX_STREAM]).decode(errors='replace')),'native_requests_counted':False,'http_capture':('external_proxy_history' if (config.get('http_routing') or {}).get('mode')=='proxy' and tool['id'] in CLI_PROXY_FLAGS else 'tool_output_only')}
                 aid=store.artifact(rid,f'cli-{number}-{tool["id"]}.json',record,node_id=nid);invocation_artifacts.append(aid)
                 store.event(rid,'cli.finished',{'node_id':nid,'tool_id':tool['id'],'artifact_id':aid,'exit_code':returncode,'error':failure})
             if returncode!=0:raise CLIError(f'{tool["id"]} exited with status {returncode}; inspect its CLI artifact.')

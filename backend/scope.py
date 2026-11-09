@@ -172,14 +172,14 @@ def resolve_target(host: str, port: int) -> str:
         raise ScopeError('Target has no resolved address.')
     for value in addresses:
         ip = ipaddress.ip_address(value)
-        if ip.is_link_local or ip.is_multicast or ip.is_unspecified or ip.is_reserved:
+        if ip.is_link_local or ip.is_multicast or ip.is_unspecified or (ip.is_reserved and not ip.is_loopback):
             raise ScopeError('Target resolved to a blocked special-use address.')
     return addresses[0]
 
 
 class PinnedHTTPS(http.client.HTTPSConnection):
-    def __init__(self, host: str, port: int, address: str):
-        super().__init__(host, port, timeout=10, context=ssl.create_default_context())
+    def __init__(self, host: str, port: int, address: str, context=None):
+        super().__init__(host, port, timeout=10, context=context or ssl.create_default_context())
         self.address = address
     def connect(self):
         sock = socket.create_connection((self.address,self.port),self.timeout)
@@ -190,9 +190,11 @@ class PinnedHTTPS(http.client.HTTPSConnection):
             raise
 
 
-def fetch_scoped(url: str, targets: list[Target], max_bytes: int = 131072, allowed=None, *, controlled_headers=None) -> dict:
+def fetch_scoped(url: str, targets: list[Target], max_bytes: int = 131072, allowed=None, *, controlled_headers=None, routing=None, on_request=None) -> dict:
     from .verification import TEST_ORIGIN, COMPARE_HEADERS
     import hashlib
+    from .http_journal import message, request_message
+    from .http_routing import ProxyTargetConnection, proxy_request_target
     # Deliberately narrow: model/client input cannot become an arbitrary header surface.
     if controlled_headers is not None and controlled_headers not in ({}, {'Origin': TEST_ORIGIN}):
         raise ScopeError('Unsupported controlled HTTP headers.')
@@ -202,20 +204,37 @@ def fetch_scoped(url: str, targets: list[Target], max_bytes: int = 131072, allow
         raise ScopeError('Run paused or cancelled before HTTP dispatch.')
     p = urlsplit(url)
     path = urlunsplit(('','',p.path or '/',p.query,''))
-    conn = PinnedHTTPS(target.host,target.port,address) if target.scheme=='https' else http.client.HTTPConnection(address,target.port,timeout=10)
+    proxy=bool(routing and routing.config['mode']=='proxy')
+    conn = (ProxyTargetConnection(target,address,routing) if proxy else
+            PinnedHTTPS(target.host,target.port,address,routing.context if routing else None) if target.scheme=='https' else
+            http.client.HTTPConnection(address,target.port,timeout=10))
     host = f'[{target.host}]' if ':' in target.host else target.host
     if target.port != (443 if target.scheme=='https' else 80):
         host += f':{target.port}'
+    headers_out={'Host':host,'User-Agent':'AI-tricky/0.8.0','Accept-Encoding':'identity', **(controlled_headers or {})}
+    wire_target=proxy_request_target(target,address) if proxy and target.scheme=='http' else path
+    request=request_message(url,headers_out,request_target=wire_target)
+    route={'mode':'proxy' if proxy else 'direct','proxy_url':routing.config['proxy_url'] if proxy else None,
+           'resolved_target_ip':address,'origin_peer_observed':not proxy,
+           'tls_verified':target.scheme=='https','ca_sha256':routing.ca_sha256 if routing else None}
     try:
-        conn.request('GET',path,headers={'Host':host,'User-Agent':'AI-tricky/0.8.0','Accept-Encoding':'identity', **(controlled_headers or {})})
+        if on_request:on_request(request)
+        if allowed is not None and not allowed():raise ScopeError('Run paused or cancelled before HTTP dispatch.')
+        conn.request('GET',wire_target,headers=headers_out)
         response = conn.getresponse()
         body = response.read(max_bytes+1)
-        selected = [(k.lower(), v.strip(' \t')) for k,v in response.getheaders() if k.lower() in (*COMPARE_HEADERS, 'location')]
+        all_headers=response.getheaders()
+        selected = [(k.lower(), v.strip(' \t')) for k,v in all_headers if k.lower() in (*COMPARE_HEADERS, 'location')]
         headers = {k:v[:2000] for k,v in selected}
+        version={10:'HTTP/1.0',11:'HTTP/1.1'}.get(response.version,'HTTP/1.1')
+        saved_response=message(f'{version} {response.status} {response.reason}',all_headers,body[:max_bytes],
+                               status=response.status,reason=response.reason,http_version=version)
+        saved_response['body_truncated']=len(body)>max_bytes
         return {'url':url,'status':response.status,'headers':headers,'body':body[:max_bytes].decode('utf-8',errors='replace'),
                 'body_sha256':hashlib.sha256(body[:max_bytes]).hexdigest(),'body_bytes':len(body[:max_bytes]),
                 'ambiguous_headers':sorted({k for k,v in selected if sum(name==k for name,value in selected)>1}),
                 'truncated_headers':sorted({k for k,v in selected if len(v)>2000}),
-                'truncated':len(body)>max_bytes,'connected_ip':address}
+                'truncated':len(body)>max_bytes,'connected_ip':None if proxy else address,
+                'http_exchange':{'request':request,'response':saved_response,'route':route}}
     finally:
         conn.close()

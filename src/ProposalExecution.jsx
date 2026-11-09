@@ -1,12 +1,13 @@
 import React, {useEffect, useState} from 'react';
 import {api, downloadJSON} from './api.mjs';
+const HTTPRoutingSettings=React.lazy(()=>import('./HTTPRoutingSettings'));
 
 export default function ProposalExecution({plan, proposal, onRun}) {
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [inputs, setInputs] = useState([]), [history, setHistory] = useState([]), [review, setReview] = useState(null);
   const [profiles, setProfiles] = useState([]), [findings, setFindings] = useState([]);
   const [approved, setApproved] = useState(false), [clock, setClock] = useState(Date.now());
-  const [options, setOptions] = useState({allow_cli: false, max_requests: 1, max_cli_invocations: 1, max_hosts: 64, max_seconds: 120, input_refs: {}, verification_profile: null, finding_id: null});
+  const [options, setOptions] = useState({allow_cli: false, max_requests: 1, max_cli_invocations: 1, max_hosts: 64, max_seconds: 120, http_routing:{mode:'direct',proxy_url:'http://127.0.0.1:8080',ca_input_id:null}, input_refs: {}, verification_profile: null, finding_id: null});
   const cli = !!proposal.action.cost.cli_invocations, templates = proposal.action.adapter_id === 'nuclei';
   const refreshHistory = async () => setHistory((await api(`/agent/proposals/${plan.id}/executions`)).filter(r => r.proposal_id === proposal.id));
   useEffect(() => {
@@ -24,7 +25,7 @@ export default function ProposalExecution({plan, proposal, onRun}) {
     const config = review.snapshot.config;
     setOptions({allow_cli: config.allow_cli, max_requests: config.max_requests,
       max_cli_invocations: config.max_cli_invocations, max_hosts: config.max_hosts, max_seconds: config.max_seconds,
-      input_refs: config.workflow.nodes.find(n => n.id === 'followup-test')?.data.inputRefs || {},
+      http_routing:config.http_routing||{mode:'direct',proxy_url:'http://127.0.0.1:8080',ca_input_id:null}, input_refs: config.workflow.nodes.find(n => n.id === 'followup-test')?.data.inputRefs || {},
       verification_profile: config.verification?.profile_id || null, finding_id: config.verification?.finding_id || null});
   }, [review?.id]);
   useEffect(() => {
@@ -68,7 +69,7 @@ export default function ProposalExecution({plan, proposal, onRun}) {
       <h4>Review and approve one execution</h4>
       <p>Prepare a saved snapshot, inspect its exact scope and limits, then approve it once. Reviews expire after 15 minutes and a runtime restart requires a new review.</p>
       <form onSubmit={prepare}>
-        <fieldset disabled={busy || pending || !plan.current} className="execution-options"><legend>Execution settings</legend>
+        <fieldset disabled={busy || pending || !plan.current} className="execution-options"><legend>Execution settings</legend><React.Suspense fallback={null}><HTTPRoutingSettings value={options.http_routing} onChange={v=>update('http_routing',v)}/></React.Suspense>
           {proposal.action.adapter_id === 'native_http' && <label className="field-label">HTTP check profile<select value={options.verification_profile || ''} onChange={e => setOptions(previous => ({...previous, verification_profile: e.target.value || null, finding_id: null, max_requests: e.target.value ? Math.max(2, previous.max_requests) : previous.max_requests}))}>
             <option value="">Single capture</option>{profiles.map(p => <option key={p.id} value={p.id}>{p.title} · 2 GETs</option>)}</select></label>}
           <label className="field-label">Native operation limit<input type="number" min={options.verification_profile ? 2 : 1} max={2048} value={options.max_requests} onChange={e => update('max_requests', Number(e.target.value))}/></label>
@@ -94,7 +95,7 @@ export default function ProposalExecution({plan, proposal, onRun}) {
         {cli && <p>CLI-internal network requests are uncounted. Input scope checks do not constrain traffic inside the external binary.</p>}
         <small>Review {review.id.slice(0, 8)} · Expires {new Date(review.expires).toLocaleString()}</small>
         <code className="execution-hash">{review.snapshot_hash}</code>
-        <details><summary>Workflow and pinned bindings</summary><pre>{JSON.stringify({workflow: review.snapshot.config.workflow, verification: review.snapshot.config.verification, binaries: review.snapshot.config.cli_binaries, inputs: review.snapshot.config.input_snapshots, input_hashes: review.snapshot.config.proposal_input_pins, credential_keys: review.snapshot.config.cli_credential_keys}, null, 2)}</pre></details>
+        <details><summary>Workflow and pinned bindings</summary><pre>{JSON.stringify({http_routing:review.snapshot.config.http_routing_binding, workflow: review.snapshot.config.workflow, verification: review.snapshot.config.verification, binaries: review.snapshot.config.cli_binaries, inputs: review.snapshot.config.input_snapshots, input_hashes: review.snapshot.config.proposal_input_pins, credential_keys: review.snapshot.config.cli_credential_keys}, null, 2)}</pre></details>
         {review.reason && <p role="status">{review.reason}</p>}
         {pending && <><label className="http-toggle"><input type="checkbox" disabled={busy || expired} checked={approved} onChange={e => setApproved(e.target.checked)}/><span>I approve this exact scope, workflow and limits.</span></label>
           <div className="evidence-actions"><button className="primary" disabled={busy || expired || !approved} onClick={dispatch}>Approve & start once</button>

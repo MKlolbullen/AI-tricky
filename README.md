@@ -89,6 +89,7 @@ A useful assessment platform needs more than a canvas that launches commands and
 | Web recon | Explicit `*.example.com` scope, discovery → httprobe → katana starter, optional wordlist-bound path fuzzing, and bounded JS/TS/chunk/source-map capture manifests ([details](docs/WEB-RECON.md)) |
 | Support data | Bundled Nuclei HTTP templates, Trickest resolvers and starter wordlists; pinned full Nuclei/Jaeles downloads with typed input bindings ([setup](docs/SUPPORT-DATA.md)) |
 | Specialist teams | Per-role primary/complex-task/fallback model routes, staged evidence handoffs, PoC validation plans and recorded usage ([routing](docs/TEAM-MODEL-ROUTING.md)) |
+| HTTP traffic | Direct or local Burp-compatible proxy routing; always-on native request/response history, binary body downloads, HAR pages and Burp saved-items XML import ([details](docs/HTTP-TRAFFIC.md)) |
 | Workflow runner | Executes validated native and catalog DAGs; independent branches share configured run limits |
 | Migrated catalog | 151 tool contracts and 57 typed workflows; searchable by source, category, input type and readiness |
 | CLI adapters | 141 application-owned, shell-free adapters with executable preflight, typed files/stdin and scalar fan-out |
@@ -103,7 +104,7 @@ A useful assessment platform needs more than a canvas that launches commands and
 
 The ten context-restricted entries concern account/cluster scope, callbacks, notifications or arbitrary command strings. Preflight reports these restrictions; installing a binary does not remove them. See the [complete migration matrix](docs/CATALOG-MIGRATION.md).
 
-Burp/burpaderp and Strix adapters and broad real-binary version validation remain unfinished.
+Native HTTP supports local Burp-compatible routing and retained exchanges. Live Burp/burpaderp extension synchronization, Strix adapters and broad real-binary version validation remain unfinished. CLI capture coverage is explicit in preflight.
 
 ## Quick start
 

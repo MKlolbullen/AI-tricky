@@ -88,6 +88,7 @@ A useful assessment platform needs more than a canvas that launches commands and
 | Native inventory | Domain resolution, bounded TCP connect checks, and scoped HTTP GET evidence collection |
 | Web recon | Explicit `*.example.com` scope, discovery → httprobe → katana starter, optional wordlist-bound path fuzzing, and bounded JS/TS/chunk/source-map capture manifests ([details](docs/WEB-RECON.md)) |
 | Support data | Bundled Nuclei HTTP templates, Trickest resolvers and starter wordlists; pinned full Nuclei/Jaeles downloads with typed input bindings ([setup](docs/SUPPORT-DATA.md)) |
+| Supplied payload lists | LFI, RCE, SQLi, SSTI and XSS text collections with original bytes, checksums and registered-input usage ([payloads](payloads/README.md)) |
 | Specialist teams | Per-role primary/complex-task/fallback model routes, staged evidence handoffs, PoC validation plans and recorded usage ([routing](docs/TEAM-MODEL-ROUTING.md)) |
 | HTTP traffic | Direct or local Burp-compatible proxy routing; always-on native request/response history, binary body downloads, HAR pages and Burp saved-items XML import ([details](docs/HTTP-TRAFFIC.md)) |
 | Workflow runner | Executes validated native and catalog DAGs; independent branches share configured run limits |

@@ -1,5 +1,7 @@
 # Templates, resolvers and other support files
 
+User-supplied LFI, RCE, SQLi, SSTI and XSS lists live in [`payloads/`](../payloads/README.md), with checksums and instructions for selecting a registered wordlist. They are separate from installed support packs and the pinned mini-tricky payload source; adding these files does not select them for a workflow.
+
 Use **Local workspace → Inputs → Templates, resolvers and wordlists** to install the bundled files or download pinned upstream packs. The same bundled installer is available in workflow Run setup. **Use installed support files** fills missing compatible bindings on the canvas; it preserves existing references and connected wordlists. It does not start an assessment.
 
 The CLI uses the same data directory and input registry as the API:

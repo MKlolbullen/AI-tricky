@@ -16,6 +16,7 @@ from .scope import ScopeError, network_hosts, parse_target
 from .store import now
 from .workflows import validate_workflow
 from . import verification
+from .http_routing import HTTPRouting, routing_binding
 
 SCHEMA = 'ai-tricky.proposal-execution/v1'
 REVIEW_SECONDS = 900
@@ -31,6 +32,7 @@ class ExecutionOptions(BaseModel):
     input_refs: dict[str, Annotated[str, StringConstraints(pattern=r'^[A-Za-z0-9_-]{1,64}$')]] = Field(default_factory=dict, max_length=1)
     verification_profile: Literal['repeat_get', 'cors_origin'] | None = None
     finding_id: str | None = Field(default=None, min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
+    http_routing: HTTPRouting = Field(default_factory=HTTPRouting)
 
 
 class SnapshotAction(BaseModel):
@@ -109,7 +111,7 @@ class ProposalExecutions:
                 path = registered_path(self.store, identifier, kind)
                 pins[identifier] = {'kind': kind, 'sha256': input_fingerprint(path, kind)}
         return {'cli_binaries': ready['cli_binaries'], 'input_snapshots': ready['input_snapshots'],
-                'proposal_input_pins': pins}
+                'proposal_input_pins': pins,'http_routing_binding':routing_binding(config.get('http_routing'),self.store)}
 
     def eligible_findings(self, plan_id, proposal_id):
         _, proposal = self._proposal(plan_id, proposal_id)

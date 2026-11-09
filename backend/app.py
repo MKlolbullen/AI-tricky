@@ -5,6 +5,8 @@ import json
 import os
 import hashlib
 import uuid
+import threading
+import http.client
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -25,6 +27,8 @@ from .catalog_execution import preflight as catalog_preflight
 from .cli_runner import pause_processes, snapshot_folder
 from .support_data import SupportData
 from .team_routing import ModelRoute, validate_routes, execute_route
+from .http_routing import HTTPRouting, resolve_routing, routing_binding
+from .http_journal import HTTPJournal, request_message
 from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
@@ -74,12 +78,18 @@ class RunInput(BaseModel):
     team_profile: Literal['classic','specialist'] = 'classic'
     team_task_level: Literal['standard','complex'] = 'standard'
     team_routes: dict[str, ModelRoute] = Field(default_factory=dict, max_length=9)
+    http_routing: HTTPRouting = Field(default_factory=HTTPRouting)
 
 
 class InputRegistration(BaseModel):
     name: str = Field(min_length=1,max_length=120)
     path: str | None = Field(default=None,max_length=4096)
     content: str | None = Field(default=None,max_length=10_000_000)
+
+
+class BurpImport(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    xml: str = Field(min_length=1,max_length=10_000_000)
 
 
 class CatalogImport(BaseModel):
@@ -165,12 +175,14 @@ class RunControl:
         self.model = None
         self.team_routes = {}
         self.team_task_level = 'standard'
+        self.http_routing = None
         self.task = None
 
 
 def create_app(data_dir=None, assessor=None, passive_http=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
     support_data = SupportData(store)
+    http_journal = HTTPJournal(store)
     evidence = EvidenceIndex(store)
     asset_graph = AssetGraph(store)
     passive_ingestor = PassiveIngestor(store, asset_graph)
@@ -753,6 +765,28 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         except KeyError:
             raise HTTPException(404, 'Artifact not found.')
 
+    @app.get('/api/http-history')
+    def http_history(run_id: str | None=None,q: str='',limit: int=50,offset: int=0):
+        if run_id:get_run(run_id)
+        if not 1<=limit<=100 or offset<0 or len(q)>500:raise HTTPException(422,'Invalid HTTP history page.')
+        return http_journal.history(run_id=run_id,q=q,limit=limit,offset=offset)
+
+    @app.get('/api/http-history/har')
+    def export_http_har(run_id: str | None=None,q: str='',limit: int=100,offset: int=0):
+        if run_id:get_run(run_id)
+        if not 1<=limit<=100 or offset<0 or len(q)>500:raise HTTPException(422,'Invalid HAR page.')
+        return http_journal.har(run_id=run_id,q=q,limit=limit,offset=offset)
+
+    @app.get('/api/http-history/{exchange_id}')
+    def http_exchange(exchange_id: str):
+        try:return http_journal.get(exchange_id)
+        except KeyError:raise HTTPException(404,'HTTP exchange not found.') from None
+
+    @app.post('/api/runs/{rid}/http-history/import')
+    async def import_burp_history(rid: str,body: BurpImport):
+        get_run(rid)
+        return await asyncio.to_thread(http_journal.import_burp_xml,rid,body.xml)
+
     async def execute(rid, config, ctl):
         target_scope = [parse_target(t) for t in config['targets']]
         store.status(rid, 'running' if ctl.gate.is_set() else 'paused')
@@ -783,19 +817,42 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                     store.event(rid, 'http.admitted', {'url': url, 'request_number': number, 'node_id': node_id,
                                                     **({'verification_role': request['role']} if request else {})})
                     break
+            routing=config.get('http_routing',{'mode':'direct'})
+            exchange_id=http_journal.begin(rid,node_id,number,url,routing,request_message(url))
+            capture_started=threading.Event()
+            capture_cancelled=threading.Event()
+            capture_lock=threading.Lock()
+            def capture():
+                try:
+                    with capture_lock:
+                        if capture_cancelled.is_set():raise ScopeError('Cancelled before HTTP dispatch.')
+                        capture_started.set()
+                    response=fetch_scoped(url,target_scope,
+                        allowed=lambda:not ctl.cancelled and ctl.gate.is_set() and (node_id is None or node_id in ctl.active_nodes),
+                        routing=ctl.http_routing,on_request=lambda message:http_journal.prepared(exchange_id,message),
+                        **({'controlled_headers':request['headers']} if request else {}))
+                    if request:response['verification_request']=request
+                    response['http_exchange_id']=exchange_id
+                    aid=store.artifact(rid,f'http-{number}.json',response,node_id=node_id)
+                    http_journal.finish(exchange_id,response=response['http_exchange']['response'],artifact_id=aid,route=response['http_exchange']['route'])
+                    store.event(rid,'http.response',{'url':url,'status':response['status'],'artifact_id':aid,
+                        'connected_ip':response['connected_ip'],'node_id':node_id,'exchange_id':exchange_id})
+                    return {**{k:v for k,v in response.items() if k!='http_exchange'},'body':response['body'][:16000],'artifact_id':aid}
+                except BaseException as exc:
+                    http_journal.finish(exchange_id,error=type(exc).__name__)
+                    raise
             try:
                 async with ctl.network_slots:
-                    response = await asyncio.to_thread(fetch_scoped, url, target_scope, allowed=lambda:not ctl.cancelled and ctl.gate.is_set() and (node_id is None or node_id in ctl.active_nodes),
-                                                       **({'controlled_headers': request['headers']} if request else {}))
-                if request:
-                    response['verification_request'] = request
-                aid = store.artifact(rid, f'http-{number}.json', response, node_id=node_id)
-                store.event(rid, 'http.response', {'url': url, 'status': response['status'], 'artifact_id': aid, 'connected_ip': response['connected_ip'], 'node_id': node_id})
-                # Bound the amount of untrusted target text sent to the local model.
-                return {**response, 'body': response['body'][:16000], 'artifact_id': aid}
-            except (OSError, ValueError, TimeoutError) as exc:
+                    return await asyncio.to_thread(capture)
+            except asyncio.CancelledError:
+                http_journal.cancelled(exchange_id)
+                with capture_lock:
+                    capture_cancelled.set()
+                    if not capture_started.is_set():http_journal.finish(exchange_id,error='CancelledBeforeDispatch')
+                raise
+            except (OSError, ValueError, TimeoutError, http.client.HTTPException) as exc:
                 store.event(rid, 'http.error', {'url': url, 'reason': type(exc).__name__, 'node_id': node_id})
-                return {'error': type(exc).__name__}
+                return {'error': type(exc).__name__,'http_exchange_id':exchange_id}
 
         async def probe(value, ports, *, node_id=None):
             if not config['allow_http']:
@@ -992,6 +1049,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                 raise HTTPException(409, 'CAI SDK is not installed at the supported version. See local setup instructions.')
             model_base_url(os.environ.get('CAI_MODEL_BASE_URL', 'http://127.0.0.1:11434/v1'), os.environ.get('CAI_ALLOW_REMOTE_MODEL') == '1')
         config = {**body.model_dump(), 'targets': list(dict.fromkeys(known[tid]['url'] for tid in body.target_ids))}
+        config['http_routing_binding']=routing_binding(config['http_routing'],store)
         allowed_keys={key for tool in TOOLS.values() for key in tool.get('secrets',[]) if key not in MODEL_VARS}
         if any(key not in allowed_keys for key in body.cli_credential_keys):raise HTTPException(422,'Select only catalog-declared credential variable names.')
         if body.engine in ('inventory','workflow','team') and body.allow_http:
@@ -1034,6 +1092,14 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     def start_run(run, model=None, credentials=None):
         usage.start_run(run['id'])
         ctl = RunControl()
+        try:
+            ctl.http_routing=resolve_routing(run['config'].get('http_routing'),store)
+            expected=run['config'].get('http_routing_binding')
+            if expected and {**ctl.http_routing.config,'ca_sha256':ctl.http_routing.ca_sha256}!=expected:
+                raise ScopeError('HTTP routing or CA trust changed after preparation.')
+        except (ValueError,ScopeError):
+            store.status(run['id'],'failed',{'error':'HTTP routing or CA trust changed before dispatch.'})
+            return
         ctl.model = model.get('default') if model and 'routes' in model else model
         ctl.team_routes = model.get('routes',{}) if model else {}
         ctl.team_task_level = run['config'].get('team_task_level','standard')

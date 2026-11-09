@@ -109,3 +109,11 @@ Added recovery API/coordinator tests covering preserved source runs, reuse witho
 - All 18 real CAI SDK cases passed in the supported optional interpreter, including in-process and isolated-worker availability fallback, separate attempt IDs, retained failed usage, OpenAI completion limits and default sampling. Fixtures are loopback-only; no paid provider was queried.
 - Production build, 12 JavaScript checks and the pinned catalog check pass. Team settings and route history load separately, keeping the main bundle below 500 kB.
 - Added browser checks for mixed providers, exact model IDs, complex-task overrides, availability fallback configuration and handoff inspection. The browser suite contains 24 cases. Local execution remains blocked by the missing Playwright binary; GitHub CI verifies interactions.
+
+
+## HTTP routing and retained exchanges — 2026-11-09
+
+- Full local backend suite: 601 passed, 18 optional SDK cases skipped. Targeted transport/history tests also pass after the cancellation race refinement. Loopback fixtures cover direct/proxy HTTP, trusted/untrusted HTTPS CONNECT with original SNI, binary bodies/duplicate headers, capture limits, no redirect following, no direct fallback, strict settings, CA approval binding, restart/cancellation retention, model tool output boundaries and scoped/idempotent Burp XML import without replay or finding changes.
+- CLI executable fixtures check owned proxy flags, independent capture accounting and absence of ambient proxy variables; broad upstream binary compatibility is not claimed.
+- Added three Chromium regressions for routing payloads, persisted native request/response inspection, binary downloads/HAR and idempotent XML import. Local system Chromium still fails at process socket creation (Operation not permitted); Playwright execution and CI results are recorded in the PR.
+- No external assessment targets, paid model calls or running Burp instance were used. Proxy behavior is validated against an HTTP/CONNECT loopback fixture. CLI full exchanges require external proxy export/import; there is no live extension synchronization.

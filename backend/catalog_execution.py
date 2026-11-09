@@ -9,6 +9,7 @@ from urllib.parse import quote
 from .catalog import CATALOG, CATALOG_KINDS, ROOT, TOOLS, registered_path, scoped_lines
 from .cli_runner import execute_cli, pin_binary
 from .scope import ScopeError, parse_target
+from .http_routing import cli_routing, CLI_PROXY_FLAGS, DIRECT_NETWORK_TOOLS
 
 
 def incoming_streams(graph,nid,outputs):
@@ -58,7 +59,7 @@ def source_values(data,config):
 
 
 def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),node_ids=None):
-    issues=[];binaries={};snapshots={}
+    issues=[];binaries={};snapshots={};coverage=[]
     for n in graph['nodes']:
         if node_ids is not None and n['id'] not in node_ids:continue
         data=n['data'];kind=data['kind'];reason=[]
@@ -71,6 +72,9 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
             except ScopeError as exc:reason.append(str(exc))
         if kind=='catalog_tool':
             tool=TOOLS[data['toolId']]
+            coverage.append({'node_id':n['id'],'tool_id':tool['id'],'http_capture':'not_http' if tool['id'] in DIRECT_NETWORK_TOOLS or tool['adapter']['traffic'] in ('offline','passive') else 'external_proxy_history' if (config.get('http_routing') or {}).get('mode')=='proxy' and tool['id'] in CLI_PROXY_FLAGS else 'tool_output_only'})
+            try:cli_routing(tool,config)
+            except ScopeError as exc:reason.append(str(exc))
             if tool['adapter']['mode']=='blocked':reason.append(tool['adapter']['reason'])
             for key in tool.get('secrets',[]):
                 if key not in config.get('cli_credential_keys',[]) or key not in credentials:reason.append(f'Configure and select the provider credential variable {key}.')
@@ -90,7 +94,7 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
                 try:binaries[tool['id']]=pin_binary(tool)
                 except ScopeError as exc:reason.append(str(exc))
         if reason:issues.append({'node_id':n['id'],'reasons':list(dict.fromkeys(reason))})
-    return {'ready':not issues,'issues':issues,'cli_binaries':binaries,'input_snapshots':snapshots,'catalog_tools':len({n['data']['toolId'] for n in graph['nodes'] if n['data']['kind']=='catalog_tool' and (node_ids is None or n['id'] in node_ids)}),'accounting':'Native operations count HTTP/TCP admissions. CLI operations count process launches; tool-internal network requests are not measured or limited by the native request cap.'}
+    return {'capture_coverage':coverage,'ready':not issues,'issues':issues,'cli_binaries':binaries,'input_snapshots':snapshots,'catalog_tools':len({n['data']['toolId'] for n in graph['nodes'] if n['data']['kind']=='catalog_tool' and (node_ids is None or n['id'] in node_ids)}),'accounting':'Native operations count HTTP/TCP admissions. CLI operations count process launches; tool-internal network requests are not measured or limited by the native request cap.'}
 
 
 async def execute_catalog_node(rid,nid,data,streams,config,ctl,store):

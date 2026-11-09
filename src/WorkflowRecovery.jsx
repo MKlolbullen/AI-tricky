@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {api, downloadJSON} from './api.mjs';
+const HTTPRoutingSettings=React.lazy(()=>import('./HTTPRoutingSettings'));
 
 export default function WorkflowRecovery({run, onRun, onArtifact}) {
   const [open, setOpen] = useState(false), [info, setInfo] = useState(null);
@@ -8,7 +9,7 @@ export default function WorkflowRecovery({run, onRun, onArtifact}) {
   const [approved, setApproved] = useState(false), [clock, setClock] = useState(Date.now());
   const [options, setOptions] = useState({allow_cli: !!run.config.allow_cli,
     max_requests: run.config.max_requests || 256, max_cli_invocations: run.config.max_cli_invocations || 64,
-    max_hosts: run.config.max_hosts || 64, max_seconds: run.config.max_seconds || 240});
+    http_routing:run.config.http_routing||{mode:'direct',proxy_url:'http://127.0.0.1:8080',ca_input_id:null}, max_hosts: run.config.max_hosts || 64, max_seconds: run.config.max_seconds || 240});
   useEffect(() => {
     if (!open) return;
     let alive = true;
@@ -74,7 +75,7 @@ export default function WorkflowRecovery({run, onRun, onArtifact}) {
         Other branches stay in the source run. Preparation makes no target requests or model calls.</p>
       <form onSubmit={prepare}>
         <fieldset disabled={busy || pending || !info} className="execution-options">
-          <legend>Recovery settings</legend>
+          <legend>Recovery settings</legend><React.Suspense fallback={null}><HTTPRoutingSettings value={options.http_routing||review?.snapshot.config.http_routing} onChange={v=>setOptions(s=>({...s,http_routing:v}))}/></React.Suspense>
           <div className="recovery-node-list" role="group" aria-label="Retry roots">
             {info?.nodes.map(n => <label key={n.id} className="http-toggle">
               <input type="checkbox" aria-label={`Retry ${n.title}`} checked={selected.includes(n.id)}

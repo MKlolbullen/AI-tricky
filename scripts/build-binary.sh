@@ -20,11 +20,13 @@ cd -- "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." >/dev/null 2>&1 && pwd)"
 
 PYINSTALLER_VERSION="6.11.1"
 BUILD_VENV=".venv-build"
+# Virtual-env executable directory: Scripts on Windows, bin elsewhere.
+VENV_BIN="bin"; [[ "${OS:-}" == "Windows_NT" ]] && VENV_BIN="Scripts"
 NO_UI_BUILD=0
 for arg in "$@"; do
   case "$arg" in
     --no-ui-build) NO_UI_BUILD=1 ;;
-    -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) awk 'NR>1{ if(/^#/){sub(/^# ?/,"");print} else exit }' "$0"; exit 0 ;;
     *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -33,6 +35,8 @@ say() { printf '==> %s\n' "$*"; }
 
 # ---- 1. built UI -------------------------------------------------------------
 if [[ "$NO_UI_BUILD" == 0 || ! -f dist/client/index.html ]]; then
+  # A clean checkout has no local vite; install UI deps so npm run build works.
+  [[ -d node_modules/vite ]] || { say "Installing UI dependencies (npm ci)"; npm ci; }
   say "Building the UI (npm run build)"
   npm run build
 fi
@@ -41,8 +45,8 @@ fi
 # ---- 2. build environment ----------------------------------------------------
 say "Preparing build environment ($BUILD_VENV) with PyInstaller $PYINSTALLER_VERSION"
 [[ -d "$BUILD_VENV" ]] || python3 -m venv "$BUILD_VENV"
-"./$BUILD_VENV/bin/python" -m pip install --quiet --upgrade pip
-"./$BUILD_VENV/bin/python" -m pip install --quiet -r requirements.txt "pyinstaller==${PYINSTALLER_VERSION}"
+"./$BUILD_VENV/$VENV_BIN/python" -m pip install --quiet --upgrade pip
+"./$BUILD_VENV/$VENV_BIN/python" -m pip install --quiet -r requirements.txt "pyinstaller==${PYINSTALLER_VERSION}"
 
 # ---- 3. bundle data (ROOT-relative paths resolve inside the bundle) ----------
 # PyInstaller's --add-data separator is ':' on POSIX and ';' on Windows.
@@ -56,14 +60,16 @@ DATA=(
   "${ROOT}/src/native-registry.json${SEP}src"
   "${ROOT}/src/templates.json${SEP}src"
   "${ROOT}/backend/gf-patterns.json${SEP}backend"
+  "${ROOT}/backend/cai_worker.py${SEP}backend"
   "${ROOT}/support-data/manifest.json${SEP}support-data"
+  "${ROOT}/support-data/bundled${SEP}support-data/bundled"
   "${ROOT}/third-party/mini-tricky/payloads${SEP}third-party/mini-tricky/payloads"
 )
 ADD_DATA=(); for d in "${DATA[@]}"; do ADD_DATA+=(--add-data "$d"); done
 
 # ---- 4. build ----------------------------------------------------------------
 say "Building the binary"
-"./$BUILD_VENV/bin/pyinstaller" --noconfirm --clean --onefile \
+"./$BUILD_VENV/$VENV_BIN/pyinstaller" --noconfirm --clean --onefile \
   --name ai-tricky \
   --distpath dist-bin --workpath .build-bin --specpath .build-bin \
   --paths "$ROOT" \

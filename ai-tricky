@@ -29,8 +29,10 @@ for arg in "$@"; do
     *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
-if ! [[ "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
-  echo "Invalid --port: $PORT" >&2; exit 2
+# Validate as a 1–5 digit decimal before any arithmetic so an oversized value
+# cannot overflow Bash's 64-bit arithmetic, and a leading zero is not read as octal.
+if ! [[ "$PORT" =~ ^[1-9][0-9]{0,4}$ ]] || (( PORT > 65535 )); then
+  echo "Invalid --port: $PORT (use 1-65535)" >&2; exit 2
 fi
 export AI_TRICKY_PORT="$PORT"
 
@@ -44,8 +46,9 @@ for m in ('fastapi', 'uvicorn', 'httpx'):
     importlib.import_module(m)
 PY
 fi
-# Production mode also needs the built UI; dev mode builds it live with Vite.
+# Production mode also needs the built UI; dev mode needs the Vite dev server.
 if [[ "$DEV" == 0 && ! -f dist/client/index.html ]]; then need_setup=1; fi
+if [[ "$DEV" == 1 && ! -f node_modules/vite/bin/vite.js ]]; then need_setup=1; fi
 
 if [[ "$need_setup" == 1 ]]; then
   echo "First-time setup (runs once)…"

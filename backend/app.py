@@ -308,6 +308,11 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                 return JSONResponse({'detail': 'Loopback clients only.'}, 403)
         origin = request.headers.get('origin')
         allowed = {'http://127.0.0.1:8787', 'http://localhost:8787', 'http://127.0.0.1:5173', 'http://localhost:5173'}
+        # Honour a configured non-default loopback port (AI_TRICKY_PORT) so the UI
+        # served there is same-origin with the API; the bind stays loopback-only.
+        configured_port = os.environ.get('AI_TRICKY_PORT', '')
+        if configured_port.isdigit() and 1 <= int(configured_port) <= 65535:
+            allowed |= {f'http://127.0.0.1:{configured_port}', f'http://localhost:{configured_port}'}
         if preview:
             allowed.add('http://terminal.local:4173')
         if origin and origin not in allowed:

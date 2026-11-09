@@ -127,7 +127,7 @@ Build the binary yourself from a checkout (needs Python + Node once, only to bui
 ./scripts/build-binary.sh          # produces dist-bin/ai-tricky (not committed to git)
 ```
 
-The binary is platform-specific; distribute it via GitHub Releases. The optional CAI SDK and external CLI tools install separately (below); native assessment runs without them.
+The binary is platform-specific; distribute it via GitHub Releases. It runs **native** assessment; the optional CAI analyst (a pinned older SDK in a separate interpreter) is not available from the binary — use the source install with `.venv-cai` for CAI. External CLI tools install separately (below).
 
 **One command from source.** With Python 3.12 and Node present, the `ai-tricky` launcher sets up on first run (creates the venv and builds the UI) and then launches; later runs start instantly:
 

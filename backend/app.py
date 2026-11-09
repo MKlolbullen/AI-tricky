@@ -312,7 +312,9 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         # served there is same-origin with the API; the bind stays loopback-only.
         configured_port = os.environ.get('AI_TRICKY_PORT', '')
         if configured_port.isdigit() and 1 <= int(configured_port) <= 65535:
-            allowed |= {f'http://127.0.0.1:{configured_port}', f'http://localhost:{configured_port}'}
+            # Normalize (e.g. "09000" -> 9000) so the origin matches the bound port.
+            bound = int(configured_port)
+            allowed |= {f'http://127.0.0.1:{bound}', f'http://localhost:{bound}'}
         if preview:
             allowed.add('http://terminal.local:4173')
         if origin and origin not in allowed:

@@ -4,9 +4,10 @@
 #
 # Produces a single self-contained binary at dist-bin/ai-tricky that bundles the
 # FastAPI backend, the built UI and the runtime data files (catalog, native
-# registry, payloads). It needs no Python or Node at runtime. The optional CAI
-# SDK stays external (set CAI_PYTHON to an interpreter that has cai-framework);
-# native assessment and the whole platform run without it.
+# registry, payloads). It needs no Python or Node at runtime and runs native
+# assessment. The optional CAI analyst is NOT available from the binary: it uses
+# a pinned older SDK in a separate interpreter (CAI_PYTHON) that also needs the
+# backend source, so run CAI from the source install (.venv + .venv-cai).
 #
 # The binary is platform-specific (built here for this OS/arch) and large, so it
 # is NOT committed to git — distribute it via GitHub Releases. Run from a clean
@@ -60,7 +61,6 @@ DATA=(
   "${ROOT}/src/native-registry.json${SEP}src"
   "${ROOT}/src/templates.json${SEP}src"
   "${ROOT}/backend/gf-patterns.json${SEP}backend"
-  "${ROOT}/backend/cai_worker.py${SEP}backend"
   "${ROOT}/support-data/manifest.json${SEP}support-data"
   "${ROOT}/support-data/bundled${SEP}support-data/bundled"
   "${ROOT}/third-party/mini-tricky/payloads${SEP}third-party/mini-tricky/payloads"

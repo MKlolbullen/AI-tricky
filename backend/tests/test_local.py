@@ -118,6 +118,18 @@ def test_local_boundary_and_invalid_targets(tmp_path):
         assert c.post('/api/runs',json={'target_ids':['unknown']}).status_code == 422
 
 
+def test_configured_port_origin_is_allowed(tmp_path, monkeypatch):
+    # A UI served on the configured loopback port is same-origin with the API.
+    # The port is normalized, so a leading-zero value (bound as 9000) matches :9000.
+    monkeypatch.setenv('AI_TRICKY_PORT', '09000')
+    with TestClient(create_app(tmp_path)) as c:
+        ok = c.get('/api/runtime', headers={'Origin': 'http://127.0.0.1:9000'})
+        default = c.get('/api/runtime', headers={'Origin': 'http://127.0.0.1:8787'})
+        foreign = c.get('/api/runtime', headers={'Origin': 'http://127.0.0.1:1234'})
+        assert ok.status_code == 200 and default.status_code == 200
+        assert foreign.status_code == 403
+
+
 def test_pause_cancel_prevents_next_dispatch(tmp_path,target_server):
     base,handler=target_server
     async def fake_cai(targets,goal,fetch):

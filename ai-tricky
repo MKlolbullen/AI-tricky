@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# ai-tricky — one command to set up (once) and launch the local platform.
+#
+#   ./ai-tricky                 # set up on first run if needed, then serve
+#   ./ai-tricky --port=9000     # serve on a different loopback port
+#   ./ai-tricky --dev           # developer mode (Vite UI + backend, hot reload)
+#   ./ai-tricky --setup         # only run first-time setup, do not launch
+#   ./ai-tricky --help          # this help
+#
+# The server binds to 127.0.0.1 only (loopback); it is never exposed off-host.
+# First-time setup creates the Python venv and builds the UI via installation.sh
+# (platform only — it installs no external CLI tools and contacts no target).
+# Prefer the standalone binary (scripts/build-binary.sh) when you want no
+# Python/Node toolchain at all.
+set -Eeuo pipefail
+cd -- "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+umask 077
+
+PORT="${AI_TRICKY_PORT:-8787}"
+DEV=0
+SETUP_ONLY=0
+for arg in "$@"; do
+  case "$arg" in
+    --dev)        DEV=1 ;;
+    --setup)      SETUP_ONLY=1 ;;
+    --port=*)     PORT="${arg#*=}" ;;
+    -h|--help)    awk 'NR>1{ if(/^#/){sub(/^# ?/,"");print} else exit }' "$0"; exit 0 ;;
+    *) echo "Unknown option: $arg (try --help)" >&2; exit 2 ;;
+  esac
+done
+# Validate as a 1–5 digit decimal before any arithmetic so an oversized value
+# cannot overflow Bash's 64-bit arithmetic, and a leading zero is not read as octal.
+if ! [[ "$PORT" =~ ^[1-9][0-9]{0,4}$ ]] || (( PORT > 65535 )); then
+  echo "Invalid --port: $PORT (use 1-65535)" >&2; exit 2
+fi
+export AI_TRICKY_PORT="$PORT"
+
+# ---- bootstrap on first run --------------------------------------------------
+need_setup=0
+[[ -x .venv/bin/python ]] || need_setup=1
+if [[ "$need_setup" == 0 ]]; then
+  .venv/bin/python - <<'PY' 2>/dev/null || need_setup=1
+import importlib
+for m in ('fastapi', 'uvicorn', 'httpx'):
+    importlib.import_module(m)
+PY
+fi
+# Production mode also needs the built UI; dev mode needs the Vite dev server.
+if [[ "$DEV" == 0 && ! -f dist/client/index.html ]]; then need_setup=1; fi
+if [[ "$DEV" == 1 && ! -f node_modules/vite/bin/vite.js ]]; then need_setup=1; fi
+
+if [[ "$need_setup" == 1 ]]; then
+  echo "First-time setup (runs once)…"
+  if [[ ! -x ./installation.sh ]]; then chmod +x ./installation.sh 2>/dev/null || true; fi
+  setup_args=(--project-only --yes)
+  [[ "$DEV" == 1 ]] && setup_args+=(--no-build)
+  ./installation.sh "${setup_args[@]}"
+fi
+
+if [[ "$SETUP_ONLY" == 1 ]]; then
+  echo "Setup complete. Run ./ai-tricky to launch."
+  exit 0
+fi
+
+# ---- launch ------------------------------------------------------------------
+if [[ "$DEV" == 1 ]]; then
+  echo "AI-tricky (dev) → Vite UI + backend, hot reload. Ctrl-C to stop."
+  exec npm run dev
+fi
+echo "AI-tricky → http://127.0.0.1:${PORT}   (Ctrl-C to stop)"
+exec .venv/bin/python -m backend

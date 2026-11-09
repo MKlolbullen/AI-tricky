@@ -2,6 +2,9 @@ node_modules/
 dist/
 .venv/
 .venv-cai/
+.venv-build/
+dist-bin/
+.build-bin/
 local-data/
 __pycache__/
 .pytest_cache/

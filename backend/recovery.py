@@ -9,6 +9,7 @@ import hmac
 import json
 import secrets
 import uuid
+import inspect
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
@@ -48,7 +49,7 @@ def artifact_references(value):
             refs.update(artifact_references(item))
     elif isinstance(value, dict):
         for key, item in value.items():
-            if key == 'artifact_id' and isinstance(item, str):
+            if key in ('artifact_id','handoff_artifact_id','report_artifact_id') and isinstance(item, str):
                 refs.add(item)
             elif key in ('evidence_ids', 'invocation_artifact_ids') and isinstance(item, list):
                 refs.update(v for v in item if isinstance(v, str))
@@ -69,7 +70,7 @@ def remap_references(value, mapping):
         return value  # response bodies, headers and free text are not rewritten
     out = {}
     for key, item in value.items():
-        if key == 'artifact_id' and isinstance(item, str):
+        if key in ('artifact_id','handoff_artifact_id','report_artifact_id') and isinstance(item, str):
             out[key] = mapping.get(item, item)
         elif key in ('evidence_ids', 'invocation_artifact_ids') and isinstance(item, list):
             out[key] = [mapping.get(v, v) if isinstance(v, str) else v for v in item]
@@ -277,9 +278,17 @@ class WorkflowRecoveries:
             except KeyError:
                 raise ExecutionError('Checkpoint evidence is unavailable. Include that node in the retry.') from None
         needs_model = any(n['id'] in rerun and n['data']['kind'] in ('native_cai', 'native_team') for n in subgraph['nodes'])
-        model = self.model_config() if needs_model and self.model_config else None
-        model_binding = ({'base_url': model.get('base_url'), 'model': model.get('model'),
-                          'credential_tag': self._secret_tag(model.get('api_key'))} if model else None)
+        for field in ('provider','model','team_routes','team_profile','team_task_level','roles','synthesize','adaptive'):
+            if field in original:config[field]=original[field]
+        model = (self.model_config(config) if inspect.signature(self.model_config).parameters else self.model_config()) if needs_model and self.model_config else None
+        def bind_model(value):
+            if not value:return None
+            if 'routes' in value:
+                return {'default':bind_model(value['default']),
+                        'routes':{role:{part:bind_model(choice) for part,choice in route.items()} for role,route in value['routes'].items()}}
+            return {'base_url':value.get('base_url'),'model':value.get('model'),
+                    'credential_tag':self._secret_tag(value.get('api_key'))}
+        model_binding = bind_model(model)
         return ({'source_run_id': rid, 'source_hash': digest({'config': original, 'status': source['status'], 'nodes': list(states.values())}),
                  'options': options, 'selected_ids': selected, 'rerun_ids': [nid for nid in order if nid in rerun],
                  'checkpoints': {nid: healthy[nid]['id'] for nid in order if nid in reuse},

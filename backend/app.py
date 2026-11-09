@@ -24,6 +24,7 @@ from .catalog import CATALOG as MINI_CATALOG, CATALOG_KINDS, TOOLS, convert_mini
 from .catalog_execution import preflight as catalog_preflight
 from .cli_runner import pause_processes, snapshot_folder
 from .support_data import SupportData
+from .team_routing import ModelRoute, validate_routes, execute_route
 from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
@@ -70,6 +71,9 @@ class RunInput(BaseModel):
     adaptive: bool = False
     provider: str | None = Field(default=None, max_length=40)
     model: str | None = Field(default=None, max_length=120)
+    team_profile: Literal['classic','specialist'] = 'classic'
+    team_task_level: Literal['standard','complex'] = 'standard'
+    team_routes: dict[str, ModelRoute] = Field(default_factory=dict, max_length=9)
 
 
 class InputRegistration(BaseModel):
@@ -159,6 +163,8 @@ class RunControl:
         # Resolved model config (base_url, api_key, model) for a team run. Lives
         # only on the control object, never in the persisted run.
         self.model = None
+        self.team_routes = {}
+        self.team_task_level = 'standard'
         self.task = None
 
 
@@ -179,7 +185,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         # Catalog credential variables that currently resolve to a value.
         return frozenset(key for key in catalog_secret_names if vault.effective(key))
 
-    def resolve_model(provider_id=None, model_name=None):
+    def resolve_model(provider_id=None, model_name=None, credential_snapshot=None):
         # Resolve the model config for a selected provider. 'local' (or none) uses
         # the configured local endpoint. A remote provider resolves only when its
         # key is stored AND remote model use is enabled — the gate that keeps
@@ -193,7 +199,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         mp = MODEL_PROVIDERS.get(provider_id)
         if not mp:
             raise HTTPException(422, 'Unknown model provider.')
-        key = vault.effective(mp['key'])
+        key = credential_snapshot.get(mp['key']) if credential_snapshot is not None else vault.effective(mp['key'])
         if not key:
             raise HTTPException(409, f"Store the {mp['name']} API key in Credentials before selecting it for planning.")
         try:
@@ -210,16 +216,23 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             providers.append({'id': pid, 'name': mp['name'], 'is_remote': True,
                               'configured': bool(vault.effective(mp['key']))})
         return providers
+
+    def resolve_team_models(config):
+        snapshot=vault.snapshot(MODEL_VARS)
+        inherited=resolve_model(config.get('provider'),config.get('model'),snapshot) if assessor is None or config.get('provider') not in (None,'local') else None
+        routes={role:{part:resolve_model(choice['provider'],choice['model'],snapshot) for part,choice in route.items() if choice is not None}
+                for role,route in config.get('team_routes',{}).items()}
+        return {'default':inherited,'routes':routes} if routes else inherited
     proposal_planner = ProposalPlanner(store, evidence)
     proposal_executions = ProposalExecutions(store, proposal_planner)
     controls = {}
-    def recovery_model_config():
-        if assessor is not None:
+    def recovery_model_config(config=None):
+        if assessor is not None and not (config or {}).get('team_routes'):
             return None  # injected test analyst, no SDK or provider request
-        if cai_adapter.installed_version() != cai_adapter.SUPPORTED_CAI:
+        if assessor is None and cai_adapter.installed_version() != cai_adapter.SUPPORTED_CAI:
             raise ExecutionError('Install the supported CAI SDK before recovering an analyst node.')
         try:
-            return resolve_model()
+            return resolve_team_models(config or {})
         except HTTPException as exc:
             raise ExecutionError(str(exc.detail), exc.status_code) from None
     recoveries = WorkflowRecoveries(store, credential=vault.effective, model_config=recovery_model_config,
@@ -234,6 +247,20 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             run_id=usage_run_id, related_run_id=usage_related_run_id, node_id=usage_node_id,
             role=usage_role, purpose=usage_purpose,
             execution_mode='injected' if assessor is not None else None, **kwargs)
+
+    async def role_assess(ctl, rid, role, *args, **kwargs):
+        if role not in ctl.team_routes:
+            if ctl.model is not None:kwargs.setdefault('model',ctl.model)
+            return await assess(*args,**kwargs)
+        inherited=kwargs.pop('model',None) or ctl.model
+        allowance=kwargs.pop('max_turns',12)
+        async def call(model,limit):
+            await ctl.gate.wait()
+            if ctl.cancelled:raise asyncio.CancelledError()
+            return await assess(*args,**kwargs,model=model,max_turns=limit)
+        return await execute_route(call,role=role,allowance=allowance,inherited=inherited,
+            route=ctl.team_routes.get(role),task_level=ctl.team_task_level,
+            on_event=lambda kind,data:store.event(rid,kind,data))
     preview = (os.environ.get('AI_TRICKY_PREVIEW') or os.environ.get('OFFSECS_U_AI_PREVIEW') or os.environ.get('RECONFORGE_PREVIEW')) == '1'
 
     @asynccontextmanager
@@ -321,6 +348,8 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                 'catalog_tools':len(TOOLS),'catalog_workflows':len(MINI_CATALOG['workflows']),
                 'cli_credential_variables':[{'name':key,'configured':bool(vault.effective(key))} for key in sorted({key for t in TOOLS.values() for key in t.get('secrets',[])}) if key not in MODEL_VARS],
                 'model_providers':model_provider_status(),
+                'team_roles':[{'key':k,'name':v['name'],'evidence_only':v.get('evidence_only',False)} for k,v in team_leader.ROLES.items()],
+                'team_profiles':{'classic':team_leader.DEFAULT_ROLES,'specialist':team_leader.SPECIALIST_ROLES},
                 'passive_providers':passive_provider_status()}
 
     @app.get('/api/credentials')
@@ -835,21 +864,20 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         try:
             async with asyncio.timeout(config.get('max_seconds',240)):
                 if config['engine']=='workflow':
-                    async def analyze(values, role_instructions=None, max_turns=None, node_id=None):
+                    async def analyze(values, role_instructions=None, max_turns=None, node_id=None, goal_override=None, role_override=None):
                         async def disabled(url):
                             return {'error': 'Evidence-only analysis has no target access.'}
                         # Bounded evidence is untrusted input. No target or network tools attached.
-                        goal = analysis_goal(config['goal'], values)
+                        goal = goal_override or analysis_goal(config['goal'], values)
                         extra = {} if role_instructions is None else {'role_instructions': role_instructions}
                         if max_turns is not None:
                             extra['max_turns'] = max_turns
                         if ctl.model is not None:
                             extra['model'] = ctl.model
-                        extra.update(usage_run_id=rid, usage_node_id=node_id, usage_purpose='workflow_analysis',
-                                     usage_role=next((key for key, role in team_leader.ROLES.items() if role['focus']==role_instructions), 'analyst'))
-                        if assessor is not None:
-                            return await assess([], goal, disabled, **extra)
-                        return await assess([], goal, disabled, evidence_only=True, **extra)
+                        extra.update(usage_run_id=rid, usage_node_id=node_id, usage_purpose='team_synthesis' if role_override=='lead' else 'workflow_analysis',
+                                     usage_role=role_override or next((key for key, role in team_leader.ROLES.items() if role['focus']==role_instructions), 'analyst'))
+                        if assessor is None:extra['evidence_only']=True
+                        return await role_assess(ctl,rid,extra['usage_role'],[],goal,disabled,**extra)
                     result=await execute_workflow(rid,config,ctl,store,fetch,probe,analyze,asset_graph=asset_graph)
                 elif config['engine']=='inventory':
                     result=await inventory()
@@ -862,13 +890,11 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                         # it gets no target access and never confirms a finding.
                         async def disabled(url):
                             return {'error': 'Team synthesis has no target access.'}
-                        if assessor is not None:
-                            return await assess([], prompt, disabled, max_turns=max_turns, usage_run_id=rid, usage_role='lead', usage_purpose='team_synthesis')
-                        return await assess([], prompt, disabled, evidence_only=True, model=ctl.model, max_turns=max_turns,
-                                            usage_run_id=rid, usage_role='lead', usage_purpose='team_synthesis')
+                        return await role_assess(ctl,rid,'lead',[],prompt,disabled,evidence_only=True,
+                            max_turns=max_turns,usage_run_id=rid,usage_role='lead',usage_purpose='team_synthesis')
                     async def team_assess(*args, **kwargs):
                         role = next((key for key, spec in team_leader.ROLES.items() if spec['focus']==kwargs.get('role_instructions')), 'analyst')
-                        return await assess(*args, usage_run_id=rid, usage_role=role, usage_purpose='team_member', **kwargs)
+                        return await role_assess(ctl,rid,role,*args,usage_run_id=rid,usage_role=role,usage_purpose='team_member',**kwargs)
                     # Adaptive selection (opt-in, no explicit roles): gather the
                     # entered scope's existing observations and asset-graph entities
                     # so the deterministic leader can narrow the roles. No evidence
@@ -887,7 +913,10 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                                                        adaptive=team_adaptive, evidence=team_evidence,
                                                        asset_entities=team_assets, max_workers=config.get('member_workers'),
                                                        team_max_turns=config.get('team_max_turns',team_leader.DEFAULT_TEAM_TURNS),
-                                                       on_budget=lambda budget: store.event(rid, 'team.turn_budget', budget))
+                                                       on_budget=lambda budget: store.event(rid, 'team.turn_budget', budget),
+                                                       profile=config.get('team_profile','classic'),
+                                                       on_handoff=lambda packet:store.artifact(rid,'team-handoff-'+packet['recipient']+'.json',packet),
+                                                       on_member=lambda result:store.artifact(rid,'team-member-'+result['role']+'.json',result))
                 elif assessor is None:
                     result=await assess(config['targets'],config['goal'],fetch,network_tool=probe, usage_run_id=rid)
                 else:
@@ -944,11 +973,17 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         if not body.target_ids and body.engine!='workflow':raise HTTPException(422,'Select at least one entered target.')
         if body.engine == 'workflow':
             validate_workflow(body.workflow, live=True)
-        if body.engine == 'team':
+        if body.engine in ('team','workflow'):
             try:
                 team_leader.resolve_roles(body.roles)
             except ValueError as exc:
                 raise HTTPException(422, str(exc))
+        try:
+            validate_routes({k:v.model_dump(exclude_none=True) for k,v in body.team_routes.items()},[*team_leader.ROLES,'lead'])
+        except ValueError as exc:
+            raise HTTPException(422,str(exc)) from None
+        if body.team_routes and body.engine not in ('team','workflow'):
+            raise HTTPException(422,'Per-role model routes require a team or analyst workflow.')
         needs_model = body.engine in ('cai','team') or (body.engine == 'workflow' and body.allow_http and any(n['data']['kind'] in ('native_cai','native_team') for n in body.workflow['nodes']))
         if assessor is None and needs_model:
             if cai_adapter.installed_version() != cai_adapter.SUPPORTED_CAI:
@@ -967,6 +1002,8 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     @app.post('/api/runs/preflight')
     async def preflight_run(body: RunInput):
         config=prepare_config(body)
+        if body.engine in ('team','workflow') and (body.engine=='team' or body.team_routes or body.provider or body.model):
+            resolve_team_models(config)
         if body.engine!='workflow':return {'ready':True,'issues':[]}
         result=catalog_preflight(body.workflow,config,store,check_binaries=body.allow_http,credentials=configured_secret_keys())
         return {k:v for k,v in result.items() if k not in ('cli_binaries','input_snapshots')}
@@ -983,7 +1020,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             # Resolve the selected model for a team run in the request path so the
             # provider gate (409/422) applies before the run is created. The
             # resolved config (with its key) is passed to the control object only.
-            resolved_model = resolve_model(body.provider, body.model) if (body.engine=='team' and assessor is None) else None
+            resolved_model = resolve_team_models(config) if body.engine=='team' or (body.engine=='workflow' and (body.team_routes or body.provider or body.model)) else None
             run = store.new_run(config)
             start_run(run, model=resolved_model)
         return run
@@ -995,7 +1032,9 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     def start_run(run, model=None, credentials=None):
         usage.start_run(run['id'])
         ctl = RunControl()
-        ctl.model = model
+        ctl.model = model.get('default') if model and 'routes' in model else model
+        ctl.team_routes = model.get('routes',{}) if model else {}
+        ctl.team_task_level = run['config'].get('team_task_level','standard')
         # Snapshot the selected credentials once, server-side, for the whole run
         # so a concurrent settings change cannot alter an in-flight run. The
         # snapshot lives only on the control object, never in the persisted run.

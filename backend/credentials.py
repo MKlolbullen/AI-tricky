@@ -265,6 +265,12 @@ class CredentialVault:
     def effective(self, name: str) -> str | None:
         return self._store.get(name) or os.environ.get(name)
 
+    def snapshot(self, names):
+        # set_many publishes a new dict only after the complete batch is saved.
+        # Keep one dict generation and one ambient snapshot across all roles.
+        stored, ambient = self._store, dict(os.environ)
+        return {name:stored.get(name) or ambient.get(name) for name in names}
+
     # -- mutation -------------------------------------------------------------
     def set_many(self, updates: dict) -> bool:
         """Apply {name: value}. An empty/None value clears the stored key.

@@ -6,6 +6,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend.cai_adapter import assess_local
+from backend.model_errors import ProviderUnavailable
 
 MAX_FRAME = 2_000_000
 
@@ -52,6 +53,9 @@ if __name__ == '__main__':
     sys.stdout = sys.stderr
     try:
         asyncio.run(main())
+    except ProviderUnavailable:
+        emit({'type': 'error', 'code': 'provider_unavailable'})
+        raise SystemExit(1)
     except Exception:
         emit({'type': 'error'})
         raise SystemExit(1)

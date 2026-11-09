@@ -8,6 +8,7 @@ import inspect
 import json
 import os
 import uuid
+from .model_errors import ProviderUnavailable, transient_provider_error
 
 from .observations import encoded
 from .store import now
@@ -55,9 +56,11 @@ async def tracked_completion(client, callback, sequence, **request):
         await callback({'sequence': sequence, 'phase': 'started'})
     try:
         response = await client.chat.completions.create(**request)
-    except BaseException:
+    except BaseException as exc:
         if callback:
             await callback({'sequence': sequence, 'phase': 'failed'})
+        if transient_provider_error(exc):
+            raise ProviderUnavailable() from None
         raise
     if callback:
         await callback({'sequence': sequence, 'phase': 'response', 'tokens': provider_tokens(_field(response, 'usage'))})
@@ -196,6 +199,8 @@ class ModelUsage:
                                     **({'usage_callback': record} if supported else {}))
         except BaseException as exc:
             self.finish(identifier, 'cancelled' if isinstance(exc, asyncio.CancelledError) else 'failed')
+            if isinstance(exc, ProviderUnavailable):
+                exc.model_usage_id = identifier
             raise
         self.finish(identifier, 'completed')
         return {**result, 'model_usage_id': identifier, 'model_usage': self.summary(invocation_id=identifier)}

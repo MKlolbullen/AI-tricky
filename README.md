@@ -97,6 +97,9 @@ A useful assessment platform needs more than a canvas that launches commands and
 | Provider credentials | Store API keys locally: passive data sources (Shodan, Censys, ProjectDiscovery, SecurityTrails, Netlas, urlscan, VirusTotal, BinaryEdge, GitHub, FOFA) injected only into tools that declare them, plus model providers (Anthropic, OpenAI, xAI/Grok, Gemini, Venice.ai) for agents and template planning |
 | Agent desk | Native/catalog workflow planning plus persisted, evidence-guided follow-up proposals using rules or a model; choose the model provider (local endpoint or a configured remote provider) for model-backed planning |
 | Evidence review | Optional CAI analysis of captured HTTP evidence with structured candidates, references and coverage limits |
+| Multi-agent CAI team | A deterministic, model-free leader fans one scoped run across five role analysts (surface, transport, authz, injection, logic) sharing a single budget/scope/credential snapshot; optional evidence-guided adaptive role selection, an optional labelled lead-synthesizer pass, and per-member interpreter isolation with a worker ceiling. Candidates only; nothing auto-confirmed |
+| Asset graph | A deterministic, provenance-bound typed entity/edge attack-surface graph (hosts, IPs, services, technologies, files, netblocks, certificates, vulnerabilities, contacts) from captured artifacts and opt-in passive sources; run-to-run diffing and a read-only canvas node. Observed facts and third-party claims, never findings |
+| Passive enrichment | Opt-in, key-gated, allowlisted enrichment from Shodan, Censys, VirusTotal, Netlas, FOFA, BeVigil, Hunter.io, ZoomEye and Intelligence X into the asset graph; bounded pagination, quota handling and a response cache. Source-tagged third-party claims, distinct from captured facts |
 | Evidence workbench | Structured observations, persistent candidate IDs, operator review history and run comparisons |
 | Run controls | Pause/resume, cancellation, node deadlines, separate native-operation and CLI-launch budgets |
 | Artifact routing | Named multi-output sockets, same-run file references, merge/dedupe, payload sources and collectors |
@@ -107,6 +110,34 @@ The ten context-restricted entries concern account/cluster scope, callbacks, not
 Native HTTP supports local Burp-compatible routing and retained exchanges. Live Burp/burpaderp extension synchronization, Strix adapters and broad real-binary version validation remain unfinished. CLI capture coverage is explicit in preflight.
 
 ## Quick start
+
+### Fastest start
+
+**Standalone binary — no Python or Node needed.** The release build bundles the UI, API and catalog into one self-contained executable that serves everything on loopback:
+
+```bash
+chmod +x ai-tricky
+./ai-tricky                        # http://127.0.0.1:8787
+AI_TRICKY_PORT=9000 ./ai-tricky    # a different loopback port
+```
+
+Build the binary yourself from a checkout (needs Python + Node once, only to build it):
+
+```bash
+./scripts/build-binary.sh          # produces dist-bin/ai-tricky (not committed to git)
+```
+
+The binary is platform-specific; distribute it via GitHub Releases. The optional CAI SDK and external CLI tools install separately (below); native assessment runs without them.
+
+**One command from source.** With Python 3.12 and Node present, the `ai-tricky` launcher sets up on first run (creates the venv and builds the UI) and then launches; later runs start instantly:
+
+```bash
+git clone https://github.com/MKlolbullen/AI-tricky.git
+cd AI-tricky
+./ai-tricky                        # first run installs, then serves on 127.0.0.1:8787
+./ai-tricky --dev                  # developer mode (Vite UI + backend, hot reload)
+./ai-tricky --help                 # all options
+```
 
 ### Automated setup
 
@@ -243,6 +274,20 @@ The **CAI evidence analyst** and **evidence-guided proposal planner** have no ta
 
 The separate CAI assessment preset uses application-owned scoped HTTP/TCP tools. No arbitrary CAI shell or browser tools are attached.
 
+### Multi-agent CAI team
+
+Run **Local workspace → Run setup → Multi-agent team** to fan one scoped assessment across five role-specialised CAI analysts behind a deterministic, model-free leader. Every member shares the run's scoped HTTP/TCP tools, so they draw on one budget ledger, scope enforcement and credential snapshot; the leader adds no target access of its own. Members are assessed independently with per-role provenance and report candidates only — nothing is auto-confirmed. Three options, all opt-in and clearly labelled:
+
+- **Adaptive role selection** — the leader deterministically selects which roles the captured evidence and asset graph warrant instead of always running all five. A role that is not selected is recorded as an explicit coverage note, and absent or ambiguous evidence runs every role. No model is used for selection.
+- **Lead synthesizer pass** — a final model pass reviews the completed per-role reports only, with no target access, and emits a labelled, candidates-only narrative that never changes any finding's state.
+- **Per-member worker isolation** — with `CAI_PYTHON` set, each member runs in its own isolated interpreter; a bounded worker ceiling caps concurrent SDK processes independently of HTTP parallelism.
+
+The same five-role review over captured evidence with no target tools is also available as the **CAI team analyst** workflow node.
+
+### Asset graph and passive enrichment
+
+**Local workspace → Asset graph** shows a deterministic, provenance-bound graph of the observed attack surface: typed entities (hosts, IPs, services, technologies, files, netblocks, certificates, vulnerabilities, contacts) and typed relationships extracted from captured artifacts. It records observed facts only — never findings, never model assertions — and initiates no target traffic. Opt-in **passive enrichment** (`AI_TRICKY_ALLOW_PASSIVE=1`, per-provider keys in Credentials) adds source-tagged third-party claims from Shodan, Censys, VirusTotal, Netlas, FOFA, BeVigil, Hunter.io, ZoomEye and Intelligence X through a single gated, allowlisted client; passive vulnerabilities are labelled third-party claims, never verified findings. Compare two runs to see new / not-observed / unchanged entities and edges — absence means "not observed", never resolution. A read-only **Asset graph** canvas node reads the scoped graph back into a workflow as data, never as live-probe targets.
+
 ## Architecture
 
 ```mermaid
@@ -264,7 +309,11 @@ flowchart TD
 | `backend/workflows.py` | DAG validation, scheduling, node state and evidence linkage |
 | `backend/cli_runner.py` | Argument construction, process lifecycle and bounded CLI artifacts |
 | `backend/catalog*.py` | Catalog contracts, import, preflight and capability planning |
-| `backend/cai_adapter.py` | Explicit-endpoint CAI SDK integration |
+| `backend/cai_adapter.py` | Explicit-endpoint CAI SDK integration; in-process or isolated-interpreter worker |
+| `backend/team.py` | Deterministic multi-agent leader: role fan-out, adaptive selection, synthesizer and worker ceiling |
+| `backend/asset_graph.py` | Typed asset/attack-surface graph: extractors, provenance, scoped subgraph and run diffing |
+| `backend/passive_sources.py`, `backend/passive_ingest.py` | Gated, allowlisted passive-source adapters and ingestor |
+| `ai-tricky`, `scripts/build-binary.sh` | One-command launcher and the PyInstaller standalone-binary build |
 | `third-party/mini-tricky/` | Pinned MIT source catalog, attribution and wordlists |
 | `scripts/migrate-catalog.py` | Reproducible offline conversion and drift checks |
 | `backend/tests/`, `tests/` | Python integration and JavaScript contract/build tests |
@@ -358,7 +407,8 @@ including isolated CAI workers. See [counter definitions and API](docs/MODEL-USA
 | Variable | Purpose |
 | --- | --- |
 | `AI_TRICKY_DATA_DIR` | Override the local database, input and evidence directory |
-| `CAI_PYTHON` | Python executable in the separate optional CAI environment |
+| `AI_TRICKY_PORT` | Loopback port for the server (default 8787); the bind stays 127.0.0.1 |
+| `CAI_PYTHON` | Python executable in the separate optional CAI environment; enables per-member isolated-interpreter workers |
 | `CAI_MODEL_BASE_URL` | Explicit local or permitted remote model endpoint |
 | `CAI_MODEL` | Model identifier at that endpoint |
 | `CAI_MODEL_API_KEY` | Optional server-side provider credential |

@@ -43,6 +43,25 @@ def seed(store, fixture_url):
     store.node_status('qa-recovery', 'r2', 'skipped', {'reason': 'Upstream capture interrupted'})
     async def fixture_analyst(*args, **kwargs):
         return {'report': 'Browser fixture candidate review; no model or target access.'}
+    # A staged-team result from the real coordinator, with captured synthetic
+    # evidence and injected JSON reports. No provider or target call is made.
+    specialist_config={'engine':'team','team_profile':'specialist','targets':[fixture_url+'/'],
+                       'max_requests':1,'max_cli_invocations':0}
+    with store.connect() as c:
+        c.execute('INSERT INTO runs VALUES(?,?,?,?,?,?)',('qa-specialists','completed',now(),now(),json.dumps(specialist_config),None))
+    capture={'url':fixture_url+'/','status':200,'body':'Previously captured browser fixture','headers':{}}
+    evidence_id=store.artifact('qa-specialists','http-1.json',capture)
+    async def specialist_fixture(*args,**kwargs):
+        from backend.team import ROLES
+        role=next(k for k,v in ROLES.items() if v['focus']==kwargs['role_instructions'])
+        body={'summary':'Fixture review','coverage_limits':[],**({'validations':[]} if role=='poc' else {'candidates':[]})}
+        return {'report':json.dumps(body),'model':'fixture-model','model_attempts':[
+            {'provider':'local','model':'fixture-model','max_turns':8,'status':'completed','fallback':False}]}
+    specialist_result=asyncio.run(run_team([fixture_url+'/'],'Review recorded evidence',None,None,specialist_fixture,
+        profile='specialist',evidence=[{**capture,'artifact_id':evidence_id}],
+        on_handoff=lambda packet:store.artifact('qa-specialists','handoff-'+packet['recipient']+'.json',packet),
+        on_member=lambda member:store.artifact('qa-specialists','member-'+member['role']+'.json',member)))
+    store.status('qa-specialists','completed',specialist_result)
     # Real deterministic coordinator output, with injected evidence-only fixture
     # analysts. Seed before the existing runs so comparison defaults stay stable.
     budget_result = asyncio.run(run_team([], 'Fixture review', None, None, fixture_analyst, team_max_turns=2))

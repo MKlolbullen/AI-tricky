@@ -137,8 +137,12 @@ async def assess_local(targets, goal, request_tool, *, network_tool=None, timeou
                     raise RuntimeError('Unsupported model input item.')
             tool_defs = [{'type':'function','function':{'name':t.name,'description':t.description,'parameters':t.params_json_schema}} for t in tools]
             self.sequence += 1
+            # Reasoning models can reject the legacy max_tokens/temperature
+            # combination. Leave sampling at the provider default and use the
+            # selected provider's completion-limit spelling.
+            token_limit={'max_completion_tokens':2048} if (cfg.get('provider') or os.environ.get('CAI_MODEL_PROVIDER'))=='openai' else {'max_tokens':2048}
             response = await tracked_completion(self.client, usage_callback, self.sequence, model=model_name, messages=messages,
-                         tools=tool_defs or None, max_tokens=2048, temperature=0.1)
+                         tools=tool_defs or None, **token_limit)
             message = response.choices[0].message
             output = []
             if message.content:

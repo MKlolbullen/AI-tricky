@@ -49,11 +49,20 @@ ROLES: dict[str, dict] = {
                  'Report observations and candidates with the evidence that supports them.',
     },
 }
+ROLES.update({
+    'analyst': {'name':'Evidence analyst','network':False,'evidence_only':True,'stage':1,
+                'focus':'Correlate captured evidence and recon reports. Separate observations from hypotheses; cite original capture IDs.'},
+    'vulnerability': {'name':'Vulnerability specialist','network':False,'evidence_only':True,'stage':2,
+                      'focus':'Assess vulnerability hypotheses from captured evidence and upstream analysis. Explain prerequisites and counterevidence; candidates only.'},
+    'poc': {'name':'PoC / validation specialist','network':False,'evidence_only':True,'stage':3,
+            'focus':'Produce reproducible validation plans tied to captured evidence. Include expected and negative signals. You have no target tools; proposals require separate execution review.'},
+})
+SPECIALIST_ROLES = ['surface','analyst','vulnerability','poc']
 
 DEFAULT_ROLES: list[str] = ['surface', 'transport', 'authz', 'injection', 'logic']
 MAX_ROLES = len(ROLES)
 DEFAULT_TEAM_TURNS = 48  # five members at eight turns, plus an optional synthesis
-MAX_TEAM_TURNS = 144  # six SDK passes at the adapter's 24-turn maximum
+MAX_TEAM_TURNS = 144  # aggregate ceiling, independent of the selected role count
 SYNTHESIS_MAX_TURNS = 8
 
 
@@ -62,8 +71,8 @@ def allocate_turns(roles, total, member_cap, *, synthesis=False):
 
     Round-robin allocation gives each selected role one turn before allocating
     additional turns (the optional synthesis is last). Reservations are never
-    recycled after failure/early completion: actual SDK usage is not measured,
-    and concurrent passes must never spend the same allowance twice.
+    recycled after failure/early completion. Usage is recorded separately; concurrent
+    passes must never spend the same reserved allowance twice.
     """
     for name, value, maximum in (('team_max_turns', total, MAX_TEAM_TURNS),
                                   ('member_max_turns', member_cap, 24)):
@@ -80,7 +89,7 @@ def allocate_turns(roles, total, member_cap, *, synthesis=False):
     return {'limit': total, 'reserved': total - remaining, 'unallocated': remaining,
             'member_limits': dict(zip(roles, limits[:len(roles)])),
             'synthesis_limit': limits[-1] if synthesis else 0,
-            'accounting': 'Reserved SDK turn ceilings; actual usage is not measured.'}
+            'accounting': 'Reserved SDK turn ceilings; actual usage is recorded separately when metering is available.'}
 
 
 def resolve_roles(roles):
@@ -208,7 +217,8 @@ def synthesis_prompt(goal, members):
 async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=None,
                    member_max_turns=8, timeout=180, concurrency=3, synthesize=None,
                    adaptive=False, evidence=None, asset_entities=None, max_workers=None,
-                   team_max_turns=DEFAULT_TEAM_TURNS, on_budget=None):
+                   team_max_turns=DEFAULT_TEAM_TURNS, on_budget=None, profile='classic',
+                   on_handoff=None, on_member=None):
     """Dispatch one scoped run across the selected roles and aggregate reports.
 
     `assess` is the adapter's assess callable; `fetch`/`probe` are the run's own
@@ -226,6 +236,8 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
     selection_reasons = None
     if roles:
         selected = resolve_roles(roles)
+    elif profile=='specialist':
+        selected = list(SPECIALIST_ROLES)
     elif adaptive:
         selected, selection_reasons = select_roles(evidence, asset_entities)
     else:
@@ -240,6 +252,14 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
     # the run's HTTP parallelism. Never exceeds the number of selected roles.
     worker_ceiling = max(1, min(int(max_workers or concurrency), len(selected)))
     semaphore = asyncio.Semaphore(worker_ceiling)
+    captured=list(evidence or [])
+    members=[]
+    async def shared_fetch(*args,**kwargs):
+        result=await fetch(*args,**kwargs)
+        if isinstance(result,dict):captured.append(result)
+        return result
+    async def disabled(*args,**kwargs):
+        return {'error':'This specialist reviews captured evidence only; validation requires separate execution approval.'}
 
     async def member(key):
         spec = ROLES[key]
@@ -249,23 +269,40 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
             return {**metadata, 'status': 'skipped', 'reason': 'No model turns allocated by the team budget.'}
         async with semaphore:
             role_goal = f'{goal}\n\nYour assigned focus on this cooperating team: {spec["name"]}.'
+            from .team_contracts import handoff_packet, specialist_goal, validate_specialist
+            packet=handoff_packet(key, targets, captured, members)
+            if on_handoff:metadata['handoff_artifact_id']=on_handoff(packet)
+            if spec.get('evidence_only'):
+                role_goal=specialist_goal(role_goal,key,packet)
             try:
-                result = await assess(targets, role_goal, fetch,
+                extra={'evidence_only':True} if spec.get('evidence_only') else {}
+                result = await assess([] if spec.get('evidence_only') else targets, role_goal,
+                                      disabled if spec.get('evidence_only') else shared_fetch,
                                       network_tool=probe if spec['network'] else None,
                                       role_instructions=spec['focus'], model=model,
-                                      max_turns=allowance, timeout=timeout)
+                                      max_turns=allowance, timeout=timeout, **extra)
+                analysis=validate_specialist(result['report'],key,packet) if spec.get('evidence_only') else result.get('analysis')
                 return {**metadata, 'status': 'ok',
                         'report': str(result.get('report', '')),
                         'model': result.get('model'), 'engine': result.get('engine'),
                         'model_usage_id': result.get('model_usage_id'),
+                        'model_attempts': result.get('model_attempts',[]),
+                        **({'analysis':analysis,'summary':analysis['summary']} if analysis is not None else {}),
                         'sdk_execution': result.get('sdk_execution', 'in-process')}
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001 - surface as a coverage gap, no secrets
                 reason = str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
-                return {**metadata, 'status': 'failed', 'reason': reason[:300]}
+                return {**metadata, 'status': 'failed', 'reason': reason[:300],
+                        'model_attempts':getattr(exc,'attempts',[])}
 
-    members = await asyncio.gather(*(member(key) for key in selected))
+    # Server-owned stage ordering. Classic roles retain parallel execution;
+    # review specialists see only completed prior stages, never peer scratchpads.
+    for stage in sorted({ROLES[k].get('stage',0) for k in selected}):
+        batch=await asyncio.gather(*(member(k) for k in selected if ROLES[k].get('stage',0)==stage))
+        for result in batch:
+            if on_member:result['report_artifact_id']=on_member(result)
+        members.extend(batch)
     completed = [m for m in members if m['status'] == 'ok']
     coverage_limits = [f'{m["name"]} role did not complete: {m["reason"]}'
                        for m in members if m['status'] != 'ok']
@@ -278,6 +315,7 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
         try:
             out = await synthesize(synthesis_prompt(goal, members), max_turns=turn_budget['synthesis_limit'])
             synthesis = {'report': str(out.get('report', '')), 'model': out.get('model'),
+                         'model_attempts':out.get('model_attempts',[]),'model_usage_id':out.get('model_usage_id'),
                          'max_turns': turn_budget['synthesis_limit'],
                          'label': 'CAI MODEL SYNTHESIS · CANDIDATES', 'model_called': True, 'confirmed': False}
         except asyncio.CancelledError:
@@ -301,6 +339,7 @@ async def run_team(targets, goal, fetch, probe, assess, *, roles=None, model=Non
         'evidence_status': 'CANDIDATE',
         'team': True,
         'leader': 'deterministic',
+        'profile':profile,
         'adaptive': adapted,
         'roles_requested': selected,
         'role_selection': selection_reasons,

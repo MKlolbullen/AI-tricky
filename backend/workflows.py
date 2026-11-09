@@ -71,9 +71,15 @@ def validate_workflow(graph, *, live=False):
         if type(data.get('retries', 0)) is not int or (live and data.get('retries', 0) != 0):
             raise ScopeError('Native DAG retries must be zero; rerun explicitly to repeat traffic.')
         if kind == 'native_team':
-            from .team import allocate_turns
+            from .team import allocate_turns, resolve_roles
             try:
                 allocate_turns([], data.get('team_max_turns', 60), data.get('member_max_turns', 12))
+                roles=data.get('roles',[])
+                if not isinstance(roles,list) or len(roles)>8 or not all(isinstance(r,str) for r in roles):
+                    raise ValueError('Team roles must be a bounded list of supported role names.')
+                resolve_roles(roles)
+                if data.get('team_profile','classic') not in ('classic','specialist'):
+                    raise ValueError('Unknown team profile.')
             except ValueError as exc:
                 raise ScopeError(str(exc)) from exc
             workers = data.get('max_workers', 3)
@@ -219,57 +225,33 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
                        f'({breakdown}). Observed data and third-party claims, not confirmed findings.')
             return [{'report': summary, 'asset_graph': sub, 'evidence_status': 'OBSERVATION'}]
         if kind == 'native_team':
-            # Evidence-only multi-role review. Each role analyses the same captured
-            # evidence with no target tools; results are aggregated per role and a
-            # role failure becomes a coverage gap, not a node failure. Nothing is
-            # auto-confirmed.
             from .intelligence import validate_analysis
             from . import team as team_leader
-            # Bound concurrent members: each review runs its own isolated interpreter
-            # when a worker runtime is configured, so this caps concurrent SDK workers.
-            worker_ceiling = max(1, min(int(by_id[nid]['data'].get('max_workers') or 3), team_leader.MAX_ROLES))
-            node_sem = asyncio.Semaphore(worker_ceiling)
-            async def member(key):
-                spec = team_leader.ROLES[key]
-                allowance = turn_budget['member_limits'][key]
-                metadata = {'role': key, 'name': spec['name'], 'max_turns': allowance}
-                if not allowance:
-                    return {**metadata, 'status': 'skipped', 'reason': 'No model turns allocated by the team budget.'}
-                async with node_sem:
-                    try:
-                        out = await analyze(values, role_instructions=spec['focus'], max_turns=allowance, node_id=nid)
-                        analysis = validate_analysis(out['report'], values)
-                        return {**metadata, 'status': 'ok', 'summary': analysis['summary'],
-                                'analysis': analysis, 'sdk_execution': out.get('sdk_execution', 'in-process'),
-                                'model_usage_id': out.get('model_usage_id')}
-                    except Exception as exc:  # individual SDK failures remain coverage gaps
-                        reason = str(exc) if isinstance(exc, (ScopeError, RuntimeError)) else type(exc).__name__
-                        return {**metadata, 'status': 'failed', 'reason': reason[:300]}
-            # Opt-in deterministic adaptive selection: narrow the roles to those the
-            # captured evidence (these observations + the scoped asset graph) warrants.
-            selection_reasons = None
-            if by_id[nid]['data'].get('adaptive'):
-                entities = ((await asyncio.to_thread(asset_graph.scope_subgraph, config['targets']))['entities']
-                            if asset_graph else [])
-                selected, selection_reasons = team_leader.select_roles(values, entities)
-            else:
-                selected = list(team_leader.DEFAULT_ROLES)
-            turn_budget = team_leader.allocate_turns(selected, by_id[nid]['data'].get('team_max_turns', 60),
-                                                      by_id[nid]['data'].get('member_max_turns', 12))
-            store.event(rid, 'team.turn_budget', {'node_id': nid, **turn_budget})
-            members = list(await asyncio.gather(*(member(k) for k in selected)))
-            completed = [m for m in members if m['status'] == 'ok']
-            coverage = team_leader._selection_coverage(selection_reasons) + \
-                [f'{m["name"]} role did not complete: {m["reason"]}' for m in members if m['status'] != 'ok']
-            adapted = selection_reasons is not None
-            isolated = sum(m.get('sdk_execution') == 'isolated-interpreter' for m in completed)
-            isolation = {'worker_ceiling': worker_ceiling, 'isolated': isolated, 'in_process': len(completed) - isolated}
-            summary = (f'CAI team evidence review: {len(completed)}/{len(members)} '
-                       f'{"adaptively selected " if adapted else ""}roles completed. Candidates only; nothing auto-confirmed.')
-            return [{'report': summary, 'team': True, 'adaptive': adapted, 'members': members,
-                     'role_selection': selection_reasons, 'isolation': isolation,
-                     'model_turn_budget': turn_budget,
-                     'coverage_limits': coverage, 'evidence_status': 'CANDIDATE'}]
+            data=by_id[nid]['data']
+            async def evidence_pass(targets,role_goal,request_tool,**kwargs):
+                role=next(k for k,v in team_leader.ROLES.items() if v['focus']==kwargs['role_instructions'])
+                out=await analyze(values,role_instructions=kwargs['role_instructions'],
+                    max_turns=kwargs['max_turns'],node_id=nid,
+                    **({'goal_override':role_goal} if team_leader.ROLES[role].get('evidence_only') else {}))
+                if not team_leader.ROLES[role].get('evidence_only'):
+                    out['analysis']=validate_analysis(out['report'],values)
+                return out
+            async def synthesize(prompt, *, max_turns):
+                return await analyze(values,node_id=nid,max_turns=max_turns,goal_override=prompt,role_override='lead')
+            entities=((await asyncio.to_thread(asset_graph.scope_subgraph, config['targets']))['entities']
+                      if asset_graph and data.get('adaptive',config.get('adaptive')) else [])
+            result=await team_leader.run_team(config['targets'],config['goal'],None,None,evidence_pass,
+                roles=data.get('roles',config.get('roles')),profile=data.get('team_profile',config.get('team_profile','classic')),
+                adaptive=data.get('adaptive',config.get('adaptive',False)),asset_entities=entities,
+                evidence=values,member_max_turns=data.get('member_max_turns',12),
+                team_max_turns=data.get('team_max_turns',60),max_workers=data.get('max_workers',3),
+                synthesize=synthesize if data.get('synthesize',config.get('synthesize')) else None,
+                on_budget=lambda budget:store.event(rid,'team.turn_budget',{'node_id':nid,**budget}),
+                on_handoff=lambda packet:store.artifact(rid,'team-handoff-'+packet['recipient']+'.json',packet,node_id=nid),
+                on_member=lambda member:store.artifact(rid,'team-member-'+member['role']+'.json',member,node_id=nid))
+            result['engine']='cai-team-evidence'
+            result['report']='CAI team evidence review. '+result['report']
+            return [result]
         open_ports = sum(v.get('state') == 'open' for v in values)
         responses = sum('status' in v and 'url' in v for v in values)
         errors = sum('error' in v or v.get('state') in ('blocked', 'budget_exhausted') for v in values)

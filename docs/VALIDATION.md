@@ -102,3 +102,10 @@ Added recovery API/coordinator tests covering preserved source runs, reuse witho
 - The support-data suite passes 21 tests: offline/idempotent installation, pinned data tampering, exact archive hash checks, safe extraction limits, helpers/licenses, private Nuclei home, automatic binding preservation, PureDNS regular/trusted resolvers, rooted paths, and binding metadata version changes.
 - Verified the complete pinned Nuclei and Jaeles archives through the installer using locally cached upstream ZIPs. Nuclei produces 18 bounded HTTP category inputs with helpers; Jaeles produces one separate signatures input. No assessment target was contacted.
 - All 12 JavaScript checks, production build, and the unchanged pinned catalog migration check pass. Two support-data browser regressions are included. Local browser attempts are blocked: the Playwright download is absent and system Chromium cannot create a process socket (Operation not permitted). GitHub CI is the browser validation source.
+
+## Role model routing and specialist handoffs — 2026-11-09
+
+- Full local backend suite passed 578 cases with 18 optional SDK cases skipped before the last checkpoint-remapping regression. Targeted routing/credential cases pass after that addition.
+- All 18 real CAI SDK cases passed in the supported optional interpreter, including in-process and isolated-worker availability fallback, separate attempt IDs, retained failed usage, OpenAI completion limits and default sampling. Fixtures are loopback-only; no paid provider was queried.
+- Production build, 12 JavaScript checks and the pinned catalog check pass. Team settings and route history load separately, keeping the main bundle below 500 kB.
+- Added browser checks for mixed providers, exact model IDs, complex-task overrides, availability fallback configuration and handoff inspection. The browser suite contains 24 cases. Local execution remains blocked by the missing Playwright binary; GitHub CI verifies interactions.

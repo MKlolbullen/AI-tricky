@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .scope import model_base_url
 from .model_usage import validate_event
+from .model_errors import ProviderUnavailable
 
 MAX_FRAME = 2_000_000
 WORKER_PATH = Path(__file__).with_name('cai_worker.py')
@@ -38,6 +39,7 @@ async def assess_worker(targets, goal, request_tool, *, network_tool=None, timeo
     if cfg.get('model'):
         env['CAI_MODEL'] = cfg['model']
     env['CAI_MODEL_BASE_URL'] = base
+    env['CAI_MODEL_PROVIDER'] = cfg.get('provider','local')
     env['PYTHONUNBUFFERED'] = '1'
     proc = None
     try:
@@ -59,6 +61,8 @@ async def assess_worker(targets, goal, request_tool, *, network_tool=None, timeo
                 if not isinstance(frame, dict):
                     raise RuntimeError('CAI worker returned an invalid message.')
                 if frame.get('type') == 'error':
+                    if set(frame)=={'type','code'} and frame['code']=='provider_unavailable':
+                        raise ProviderUnavailable()
                     raise RuntimeError('CAI SDK worker failed; check the selected runtime and model endpoint.')
                 if frame.get('type') == 'result':
                     if usage_callback is not None and (not sequence or pending is not None):

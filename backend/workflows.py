@@ -1,5 +1,6 @@
 """Validated, application-owned DAG adapters. Never interpret graph data as commands."""
 import asyncio
+import contextlib
 import json
 import math
 import re
@@ -71,11 +72,11 @@ def validate_workflow(graph, *, live=False):
         if type(data.get('retries', 0)) is not int or (live and data.get('retries', 0) != 0):
             raise ScopeError('Native DAG retries must be zero; rerun explicitly to repeat traffic.')
         if kind == 'native_team':
-            from .team import allocate_turns, resolve_roles
+            from .team import allocate_turns, resolve_roles, MAX_ROLES
             try:
                 allocate_turns([], data.get('team_max_turns', 60), data.get('member_max_turns', 12))
                 roles=data.get('roles',[])
-                if not isinstance(roles,list) or len(roles)>8 or not all(isinstance(r,str) for r in roles):
+                if not isinstance(roles,list) or len(roles)>MAX_ROLES or not all(isinstance(r,str) for r in roles):
                     raise ValueError('Team roles must be a bounded list of supported role names.')
                 resolve_roles(roles)
                 if data.get('team_profile','classic') not in ('classic','specialist'):
@@ -88,6 +89,12 @@ def validate_workflow(graph, *, live=False):
         if kind == 'native_web_assets':
             from .web_recon import limits
             limits(data)
+        if kind in ('native_identity_collect','native_identity_paths'):
+            from .identity_graph import validate_node
+            validate_node(data)
+            if kind=='native_identity_collect':
+                from .identity_tools import validate_collection
+                validate_collection(data)
         specs[n['id']] = (inputs, data['outputs'] if kind in CATALOG_KINDS else [output])
         by_id[n['id']], incoming[n['id']] = n, []
     edge_ids, pairs = set(), set()
@@ -153,6 +160,18 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
             return await execute_catalog_node(rid,nid,by_id[nid]['data'],streams,config,ctl,store)
         if kind == 'native_scope':
             return [{'target': t, 'kind': parse_target(t).kind} for t in config['targets']]
+        if kind=='native_identity_collect':
+            from .identity_tools import collect
+            return await collect(rid,nid,by_id[nid]['data'],config,ctl,store)
+        if kind=='native_identity_paths':
+            from .identity_graph import execute_paths
+            worker=asyncio.create_task(asyncio.to_thread(execute_paths,rid,nid,by_id[nid]['data'],values,config,store))
+            try:return await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                # Keep the run active until bounded file work has stopped, so
+                # recovery cannot race late source-artifact writes.
+                with contextlib.suppress(Exception):await worker
+                raise
         if kind == 'native_tcp':
             rows = []
             for entry in values:

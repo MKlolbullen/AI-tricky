@@ -1,0 +1,37 @@
+{
+  "schema": "ai-tricky.identity-graph/v1",
+  "scope": {
+    "platform": "ad",
+    "domain": "corp.test",
+    "tenant_id": ""
+  },
+  "nodes": [
+    {
+      "id": "user",
+      "label": "Fixture user",
+      "kind": "user"
+    },
+    {
+      "id": "group",
+      "label": "Privileged group",
+      "kind": "group"
+    },
+    {
+      "id": "goal",
+      "label": "Fixture goal",
+      "kind": "group"
+    }
+  ],
+  "edges": [
+    {
+      "source": "user",
+      "target": "group",
+      "kind": "GenericAll"
+    },
+    {
+      "source": "group",
+      "target": "goal",
+      "kind": "MemberOf"
+    }
+  ]
+}

@@ -63,6 +63,23 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
     for n in graph['nodes']:
         if node_ids is not None and n['id'] not in node_ids:continue
         data=n['data'];kind=data['kind'];reason=[]
+        if kind in ('native_identity_collect','native_identity_paths'):
+            from .identity_graph import check_scope
+            try:
+                check_scope(data,config)
+                if kind=='native_identity_collect':
+                    from .identity_tools import preflight_node
+                    profile,pin,identity_inputs=preflight_node(data,config,store,check_binaries=check_binaries)
+                    if pin:binaries[profile['id']]=pin
+                    snapshots.update(identity_inputs)
+                    coverage.append({'node_id':n['id'],'tool_id':profile['id'],'http_capture':'external_proxy_history' if profile['platform']=='entra' and (config.get('http_routing') or {}).get('mode')=='proxy' else 'tool_output_only'})
+                else:
+                    identifier=data.get('inputRefs',{}).get('graph')
+                    if identifier:
+                        registered_path(store,identifier,'file');snapshots[identifier]=store.input(identifier)
+                    elif not any(e['target']==n['id'] and (e.get('sourceHandle')=='out:file' or next(x for x in graph['nodes'] if x['id']==e['source'])['data']['output']=='file') for e in graph['edges']):
+                        raise ScopeError('Bind an identity graph export or connect a file-producing source/collector.')
+            except ScopeError as exc:reason.append(str(exc))
         if kind=='catalog_source':
             try:
                 source_values(data,config)

@@ -1,0 +1,37 @@
+{
+  "schema": "ai-tricky.identity-graph/v1",
+  "scope": {
+    "platform": "entra",
+    "domain": "corp.onmicrosoft.com",
+    "tenant_id": "11111111-1111-1111-1111-111111111111"
+  },
+  "nodes": [
+    {
+      "id": "user",
+      "label": "Fixture user",
+      "kind": "user"
+    },
+    {
+      "id": "group",
+      "label": "Privileged group",
+      "kind": "group"
+    },
+    {
+      "id": "goal",
+      "label": "Fixture goal",
+      "kind": "group"
+    }
+  ],
+  "edges": [
+    {
+      "source": "user",
+      "target": "group",
+      "kind": "MemberOf"
+    },
+    {
+      "source": "group",
+      "target": "goal",
+      "kind": "HasRole"
+    }
+  ]
+}

@@ -77,7 +77,7 @@ class RunInput(BaseModel):
     model: str | None = Field(default=None, max_length=120)
     team_profile: Literal['classic','specialist'] = 'classic'
     team_task_level: Literal['standard','complex'] = 'standard'
-    team_routes: dict[str, ModelRoute] = Field(default_factory=dict, max_length=9)
+    team_routes: dict[str, ModelRoute] = Field(default_factory=dict, max_length=len(team_leader.ROLES)+1)
     http_routing: HTTPRouting = Field(default_factory=HTTPRouting)
 
 
@@ -478,6 +478,11 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     @app.get('/api/targets')
     async def targets():
         return [{**t,'kind':parse_target(t['url']).kind} for t in store.targets()]
+
+    @app.get('/api/identity/catalog')
+    def identity_catalog():
+        from .identity_tools import catalog_status
+        return catalog_status()
 
     @app.post('/api/agent/plan')
     async def agent_plan(body: PlanInput):
@@ -1059,7 +1064,9 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         config['http_routing_binding']=routing_binding(config['http_routing'],store)
         allowed_keys={key for tool in TOOLS.values() for key in tool.get('secrets',[]) if key not in MODEL_VARS}
         if any(key not in allowed_keys for key in body.cli_credential_keys):raise HTTPException(422,'Select only catalog-declared credential variable names.')
-        if body.engine in ('inventory','workflow','team') and body.allow_http:
+        from .identity_graph import identity_workflow
+        identity_only=body.engine=='workflow' and identity_workflow(body.workflow)
+        if body.engine in ('inventory','workflow','team') and body.allow_http and not identity_only:
             entered=[parse_target(t) for t in config['targets']]
             for target in entered:
                 if target.kind not in ('url','wildcard'):

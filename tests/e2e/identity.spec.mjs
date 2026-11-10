@@ -13,6 +13,7 @@ test('identity import runs offline and retained path evidence stays a candidate'
  const w=await workspace(page);
  await w.getByLabel('Domain, wildcard, IP, CIDR or HTTP(S) URL').fill('corp.test');await w.getByRole('button',{name:'Add target',exact:true}).click();
  await w.locator('.local-tabs').getByRole('button',{name:'Identity',exact:true}).click();
+ await expect(w).toContainText('CLI contract tested with 0.13.1');
  await w.getByRole('textbox',{name:'Identity domain',exact:true}).fill('corp.test');
  await w.getByRole('combobox',{name:'Identity graph export',exact:true}).selectOption(input.id);
  await w.getByRole('textbox',{name:'Start object IDs',exact:true}).fill('user');await w.getByRole('textbox',{name:'Goal object IDs',exact:true}).fill('goal');

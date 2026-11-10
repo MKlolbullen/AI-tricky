@@ -125,3 +125,10 @@ Added recovery API/coordinator tests covering preserved source runs, reuse witho
 - Identity tests cover candidate/provenance boundaries, explicit endpoints/depth, cycles, foreign scopes, BloodHound ZIP membership and paired replication rights, AzureHound v5 nested membership and active tenant-wide role assignments, excluded PIM/narrow scopes, malformed JSON/ZIP, token tenant/audience/expiry, private credentials and redaction, fixed argv/environment, shared launch accounting, input/executable changes, offline agent handoffs, recovery and cancellation cleanup.
 - All 12 JavaScript checks, the unchanged 151-tool/57-workflow catalog check and the production build pass locally. Identity UI modules load separately; the main bundle remains below 500 kB. Two Chromium regressions cover offline import/path inspection and explicit Entra canvas configuration without dispatch.
 - Local Playwright lacks its browser binary; system Chromium fails creating a process socket (Operation not permitted). GitHub CI is used for browser interaction results, recorded in the PR. No live AD/Entra environment, real credential, external collection or paid model was used. Executable fixtures do not establish broad upstream binary compatibility.
+
+
+## Identity CLI compatibility and producer diagnostics — 2026-11-10
+
+- Tested the actual Impacket 0.13.1 commands and checksummed AzureHound 3.1.3 release with their owned argv plus help. Seven real-tool tests pass: four command contracts and three guarded Impacket zero-exit failures. No directory/tenant was contacted.
+- Coverage regressions exercise fatal and partial Impacket output, structured AzureHound errors/warnings, unknown stderr, Graph application-ID audience rejection and diagnostic propagation into saved analysis and bounded agent evidence.
+- A dedicated CI job installs isolated test tools and repeats real command checks; these results do not establish live authentication, upstream scope enforcement or complete collection.

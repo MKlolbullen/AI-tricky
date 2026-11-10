@@ -1,0 +1,101 @@
+{
+  "schema": "ai-tricky.identity-tools/v1",
+  "profiles": [
+    {
+      "id": "impacket-ad-users",
+      "name": "Impacket \u00b7 AD user inventory",
+      "platform": "ad",
+      "binary": "impacket-GetADUsers",
+      "aliases": [
+        "GetADUsers.py"
+      ],
+      "mode": "collection",
+      "description": "Kerberos-authenticated LDAP user inventory; no password/hash inputs.",
+      "source": "https://github.com/fortra/impacket/blob/master/examples/GetADUsers.py"
+    },
+    {
+      "id": "impacket-spns",
+      "name": "Impacket \u00b7 SPN inventory",
+      "platform": "ad",
+      "binary": "impacket-GetUserSPNs",
+      "aliases": [
+        "GetUserSPNs.py"
+      ],
+      "mode": "collection",
+      "description": "LDAP SPN enumeration only; ticket/hash requests are not enabled.",
+      "source": "https://github.com/fortra/impacket/blob/master/examples/GetUserSPNs.py"
+    },
+    {
+      "id": "impacket-delegation",
+      "name": "Impacket \u00b7 delegation inventory",
+      "platform": "ad",
+      "binary": "impacket-findDelegation",
+      "aliases": [
+        "findDelegation.py"
+      ],
+      "mode": "collection",
+      "description": "Query delegation configuration; no delegation changes or impersonation.",
+      "source": "https://github.com/fortra/impacket/blob/master/examples/findDelegation.py"
+    },
+    {
+      "id": "azurehound-entra",
+      "name": "AzureHound \u00b7 Entra directory collection",
+      "platform": "entra",
+      "binary": "azurehound",
+      "aliases": [],
+      "mode": "collection",
+      "description": "Tenant-bound az-ad collection with an existing Graph access token; no refresh-token or login flow.",
+      "source": "https://github.com/SpecterOps/AzureHound"
+    }
+  ],
+  "references": [
+    {
+      "id": "bloodhound-ce",
+      "name": "BloodHound CE / BloodHound.py CE",
+      "platform": "ad",
+      "mode": "external",
+      "description": "Collect relationship/ACL exports externally; import JSON or a bounded ZIP for local path analysis.",
+      "source": "https://github.com/dirkjanm/BloodHound.py/tree/bloodhound-ce"
+    },
+    {
+      "id": "netexec",
+      "name": "NetExec",
+      "platform": "ad",
+      "mode": "external",
+      "description": "Operator-led SMB/LDAP assessment; no general module, execution or credential-spraying adapter.",
+      "source": "https://github.com/Pennyw0rth/NetExec"
+    },
+    {
+      "id": "certipy",
+      "name": "Certipy",
+      "platform": "ad",
+      "mode": "external",
+      "description": "AD CS assessment and certificate-template review; enrollment/relay/account-change actions need a dedicated future contract.",
+      "source": "https://github.com/ly4k/Certipy"
+    },
+    {
+      "id": "linwinpwn",
+      "name": "linWinPwn",
+      "platform": "ad",
+      "mode": "external",
+      "description": "Operator-led AD orchestration. Its broad wrapper is not dispatched by the agent; use the fixed collection profiles here.",
+      "source": "https://github.com/lefayjey/linWinPwn"
+    },
+    {
+      "id": "roadtools",
+      "name": "ROADtools / ROADrecon",
+      "platform": "entra",
+      "mode": "external",
+      "description": "Operator-led Entra exploration; database/token workflows are separate from the AzureHound JSON adapter.",
+      "source": "https://github.com/dirkjanm/ROADtools"
+    },
+    {
+      "id": "sharphound",
+      "name": "SharpHound",
+      "platform": "ad",
+      "mode": "external",
+      "description": "Windows collection for BloodHound; supported exported JSON/ZIP can be analyzed locally.",
+      "source": "https://github.com/SpecterOps/SharpHound"
+    }
+  ]
+}

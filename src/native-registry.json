@@ -6,5 +6,7 @@
   "native_summary": {"name":"Evidence summary","inputs":["services","observations","report"],"output":"report","description":"Observation counts and coverage limits"},
   "native_cai": {"name":"CAI evidence analyst","inputs":["observations"],"output":"report","description":"Analyze captured evidence; no target tools"},
   "native_team": {"name":"CAI team analyst","inputs":["observations"],"output":"report","description":"Five-role CAI team reviews captured evidence; no target tools"},
-  "native_asset_graph": {"name":"Asset graph","inputs":["targets"],"output":"report","description":"Current asset graph for the entered scope (hosts, services, tech, vulns, contacts); observed data, no target traffic"}
+  "native_asset_graph": {"name":"Asset graph","inputs":["targets"],"output":"report","description":"Current asset graph for the entered scope (hosts, services, tech, vulns, contacts); observed data, no target traffic"},
+  "native_identity_collect": {"name":"Identity directory collector","inputs":["targets"],"output":"file","description":"Fixed Impacket / AzureHound collection profiles with explicit domain/DC/tenant and registered authentication inputs; shared CLI budget"},
+  "native_identity_paths": {"name":"AD / Entra candidate paths","inputs":["targets","file"],"output":"observations","description":"Offline bounded BloodHound, AzureHound or normalized graph analysis with explicit start/goal IDs; evidence for agent review, no exploitation"}
 }

@@ -117,3 +117,11 @@ Added recovery API/coordinator tests covering preserved source runs, reuse witho
 - CLI executable fixtures check owned proxy flags, independent capture accounting and absence of ambient proxy variables; broad upstream binary compatibility is not claimed.
 - Added three Chromium regressions for routing payloads, persisted native request/response inspection, binary downloads/HAR and idempotent XML import. Local system Chromium still fails at process socket creation (Operation not permitted); Playwright execution and CI results are recorded in the PR.
 - No external assessment targets, paid model calls or running Burp instance were used. Proxy behavior is validated against an HTTP/CONNECT loopback fixture. CLI full exchanges require external proxy export/import; there is no live extension synchronization.
+
+
+## AD and Entra identity workflows — 2026-11-10
+
+- Full backend suite passed 623 cases with 18 optional SDK cases skipped before the final recovery/cancellation/credential-file regressions. The targeted identity suite passes after those refinements.
+- Identity tests cover candidate/provenance boundaries, explicit endpoints/depth, cycles, foreign scopes, BloodHound ZIP membership and paired replication rights, AzureHound v5 nested membership and active tenant-wide role assignments, excluded PIM/narrow scopes, malformed JSON/ZIP, token tenant/audience/expiry, private credentials and redaction, fixed argv/environment, shared launch accounting, input/executable changes, offline agent handoffs, recovery and cancellation cleanup.
+- All 12 JavaScript checks, the unchanged 151-tool/57-workflow catalog check and the production build pass locally. Identity UI modules load separately; the main bundle remains below 500 kB. Two Chromium regressions cover offline import/path inspection and explicit Entra canvas configuration without dispatch.
+- Local Playwright lacks its browser binary; system Chromium fails creating a process socket (Operation not permitted). GitHub CI is used for browser interaction results, recorded in the PR. No live AD/Entra environment, real credential, external collection or paid model was used. Executable fixtures do not establish broad upstream binary compatibility.

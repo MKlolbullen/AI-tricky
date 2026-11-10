@@ -59,6 +59,13 @@ ROLES.update({
 })
 SPECIALIST_ROLES = ['surface','analyst','vulnerability','poc']
 
+ROLES.update({
+    'ad_identity': {'name':'Active Directory path specialist','network':False,'evidence_only':True,'stage':1,
+        'focus':'Review imported AD identity evidence: membership, effective ACLs, delegation, AD CS prerequisites and domain boundaries. Use fixed Impacket collection profiles or imported BloodHound evidence as appropriate. Explain each candidate path prerequisite and remediation; never infer credential possession, execute commands or claim compromise.'},
+    'entra_identity': {'name':'Entra identity path specialist','network':False,'evidence_only':True,'stage':1,
+        'focus':'Review tenant-bound Entra evidence: active versus eligible roles, application and service-principal ownership, group rights, PIM, consent, conditional access and hybrid trust boundaries. AzureHound collection is distinct from exploitation. Cite evidence, identify missing coverage and propose separately reviewed validation; no target tools or token acquisition.'},
+})
+
 DEFAULT_ROLES: list[str] = ['surface', 'transport', 'authz', 'injection', 'logic']
 MAX_ROLES = len(ROLES)
 DEFAULT_TEAM_TURNS = 48  # five members at eight turns, plus an optional synthesis

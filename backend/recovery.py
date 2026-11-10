@@ -221,8 +221,9 @@ class WorkflowRecoveries:
         known = {t['url']: t['id'] for t in self.store.targets()}
         if not scope or any(t not in known for t in scope):
             raise ExecutionError('Restore the original entered scope before preparing a recovery.')
+        from .identity_graph import identity_workflow
         for target in map(parse_target, scope):
-            if target.kind not in ('url', 'wildcard'):
+            if target.kind not in ('url', 'wildcard') and not identity_workflow(subgraph):
                 network_hosts(target.url, [parse_target(t) for t in scope], options['max_hosts'])
         tools = [TOOLS[n['data']['toolId']] for n in subgraph['nodes']
                  if n['id'] in rerun and n['data']['kind'] == 'catalog_tool']

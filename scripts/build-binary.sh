@@ -59,6 +59,7 @@ DATA=(
   "${ROOT}/dist/client${SEP}dist/client"
   "${ROOT}/src/mini-tricky-catalog.json${SEP}src"
   "${ROOT}/src/native-registry.json${SEP}src"
+  "${ROOT}/src/identity-tools.json${SEP}src"
   "${ROOT}/src/templates.json${SEP}src"
   "${ROOT}/backend/gf-patterns.json${SEP}backend"
   "${ROOT}/support-data/manifest.json${SEP}support-data"

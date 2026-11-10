@@ -21,10 +21,16 @@ class PoCReport(BaseModel):
 
 
 def handoff_packet(role, scope, values, members):
+    from .intelligence import evidence_record
     evidence=[]
     for row in values or []:
         if not isinstance(row,dict):continue
         row=row['data'] if isinstance(row.get('data'),dict) else row
+        if row.get('kind')=='identity_evidence':
+            record=evidence_record(row)
+            if record is not None:evidence.append(record)
+            if len(evidence)==12:break
+            continue
         if not row.get('artifact_id') or type(row.get('status')) is not int:continue
         headers=row.get('headers') if isinstance(row.get('headers'),dict) else {}
         evidence.append({k:row[k] for k in ('artifact_id','url','status','connected_ip') if k in row} | {

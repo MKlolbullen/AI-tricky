@@ -35,7 +35,7 @@ RULES={
  'AllowedToAct':('Resource-based delegation configuration is reported.','Verify effective principals, SPNs and Kerberos prerequisites; no impersonation performed.'),
  'AllowedToDelegate':('Constrained delegation configuration is reported.','Verify service SPNs, protocol transition and authentication prerequisites.'),
  'AdminTo':('Administrative access is reported by the collector.','Verify current access without assuming credentials or sessions.'),
- 'Owns':('Entra ownership is reported.','Verify object type, role restrictions and effective permissions; ownership alone is not a proven compromise.'),
+ 'Owns':('Object ownership is reported.','Verify object type, platform-specific owner rights, role restrictions and effective permissions; ownership alone is not a proven compromise.'),
  'HasRole':('An active directory role assignment is reported.','Verify active state, directory scope, role permissions, PIM and access policies.'),
  'DCSync':('Both directory replication rights are reported for the same principal.','Verify effective ACLs and domain scope. No replication or credential extraction is performed.'),
 }

@@ -24,7 +24,8 @@ AUTH_KEYS={'username','dc_host','dc_ip'}
 
 
 def validate_collection(data):
-    if data.get('profile_id','impacket-ad-users') not in PROFILES:raise ScopeError('Unknown identity collection profile.')
+    profile=data.get('profile_id','impacket-ad-users')
+    if not isinstance(profile,str) or profile not in PROFILES:raise ScopeError('Unknown identity collection profile.')
     auth=data.get('identity_auth',{})
     if not isinstance(auth,dict) or set(auth)-AUTH_KEYS or any(not isinstance(v,str) or len(v)>253 or any(ord(c)<32 for c in v) for v in auth.values()):
         raise ScopeError('Identity authentication accepts only username, DC hostname and DC IP metadata; bind credentials as registered files.')

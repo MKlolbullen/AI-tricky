@@ -298,3 +298,10 @@ def test_identity_model_candidates_can_cite_only_the_supplied_analysis_artifact(
     assert validate_analysis(json.dumps(report),values)['confirmed'] is False
     report['candidates'][0]['evidence_ids']=['unavailable']
     with pytest.raises(RuntimeError):validate_analysis(json.dumps(report),values)
+
+
+def test_non_string_collection_profile_is_rejected_at_graph_validation():
+    from backend.workflows import validate_workflow
+    workflow=graph(profile='impacket-ad-users',auth_id='fixture-input')
+    workflow['nodes'][1]['data']['profile_id']=['impacket-ad-users']
+    with pytest.raises(ScopeError):validate_workflow(workflow,live=True)

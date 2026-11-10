@@ -61,7 +61,7 @@ Search requires explicit start and goal object IDs. Empty endpoints yield an inv
 | GenericAll, WriteDacl, WriteOwner, AddMember, ForceChangePassword | Reported object rights; effective ACLs, denies and protected-object restrictions still need checking |
 | AllowedToAct, AllowedToDelegate | Reported delegation; SPNs, effective principals and protocol prerequisites still need checking |
 | AdminTo | Reported administrative access; current usable access is not assumed |
-| Owns | Reported Entra ownership; object/role restrictions and permissions matter |
+| Owns | Reported object ownership; platform-specific owner rights, role restrictions and permissions matter |
 | HasRole | Active tenant-wide assignment only; verify role permissions, PIM and policy |
 | DCSync | Both GetChanges and GetChangesAll on the same AD domain are required to derive this candidate; no replication is attempted |
 

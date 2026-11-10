@@ -59,7 +59,9 @@ jobs:
         env:
           AI_TRICKY_IMPACKET_BIN: ${{ github.workspace }}/.venv-identity/bin
           AI_TRICKY_AZUREHOUND_BIN: ${{ github.workspace }}/.identity-ci-tools/azurehound
-      - run: PATH="$PWD/.venv-identity/bin:$PWD/.identity-ci-tools:$PATH" python scripts/check-identity-tools.py
+      - run: |
+          identity_check_python="$(command -v python)"
+          PATH="$PWD/.venv-identity/bin:$PWD/.identity-ci-tools:$PATH" "$identity_check_python" scripts/check-identity-tools.py
 
   optional-cai:
     if: github.event_name == 'workflow_dispatch' && inputs.cai_sdk

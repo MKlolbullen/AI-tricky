@@ -1,6 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {api,downloadJSON} from './api.mjs';
-import {AnalysisPreview} from './AgentPlanner';
+import {AnalysisPreview} from './AnalysisPreview';
 export default function NativeEvidence({nodeId,live}){
  const [artifact,setArtifact]=useState(null),[error,setError]=useState('');
  const result=live?.nodes?.find(n=>n.node_id===nodeId);

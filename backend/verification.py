@@ -145,6 +145,18 @@ async def execute_pair(rid, node_id, config, urls, fetch, store):
         interruption = type(exc).__name__
         raise
     finally:
+        # The transport worker persists before returning to this coroutine.
+        # Cancellation can land in that gap; retain captures already committed
+        # to this run/node while keeping the stopped comparison inconclusive.
+        if interruption:
+            for artifact in store.artifacts(rid):
+                if not artifact['name'].startswith('http-') or artifact['node_id'] != node_id:
+                    continue
+                data = store.content(artifact['id'])
+                request = data.get('verification_request') if isinstance(data, dict) else None
+                if request in binding['requests'] and not any(c['request'] == request for c in captures):
+                    captures.append(capture_summary(store, {'artifact_id': artifact['id']}, request, rid, node_id))
+            captures.sort(key=lambda c: binding['requests'].index(c['request']))
         comparison = {**evaluate(binding, captures, interruption=interruption), 'run_id': rid,
                       'approval': config['proposal_execution']}
         aid = store.artifact(rid, 'verification-comparison.json', comparison, node_id=node_id)

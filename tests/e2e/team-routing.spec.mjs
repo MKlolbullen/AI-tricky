@@ -19,13 +19,18 @@ test('mixed-provider profile sends explicit per-role models and fallback binding
  await w.getByRole('button',{name:'Use mixed-provider routing',exact:true}).click();
  await expect(w.getByRole('combobox',{name:'Team profile',exact:true})).toHaveValue('specialist');
  const names=['Surface & recon','Evidence analyst','Vulnerability specialist','PoC / validation specialist','Lead synthesis'];
- for(let i=0;i<names.length;i++)await w.getByRole('textbox',{name:names[i]+' primary model',exact:true}).fill('fixture-'+i);
+ for(let i=0;i<names.length;i++){
+  await w.getByRole('combobox',{name:names[i]+' primary model',exact:true}).selectOption('__custom__');
+  await w.getByRole('textbox',{name:names[i]+' primary model custom ID',exact:true}).fill('fixture-'+i);
+ }
  await w.getByRole('checkbox',{name:'Surface & recon availability fallback',exact:true}).check();
  await w.getByRole('combobox',{name:'Surface & recon fallback provider',exact:true}).selectOption('openai');
- await w.getByRole('textbox',{name:'Surface & recon fallback model',exact:true}).fill('backup-fixture');
+ await w.getByRole('combobox',{name:'Surface & recon fallback model',exact:true}).selectOption('__custom__');
+ await w.getByRole('textbox',{name:'Surface & recon fallback model custom ID',exact:true}).fill('backup-fixture');
  await w.getByRole('checkbox',{name:'Surface & recon complex-task override',exact:true}).check();
  await w.getByRole('combobox',{name:'Surface & recon complex-task provider',exact:true}).selectOption('openai');
- await w.getByRole('textbox',{name:'Surface & recon complex-task model',exact:true}).fill('complex-fixture');
+ await w.getByRole('combobox',{name:'Surface & recon complex-task model',exact:true}).selectOption('__custom__');
+ await w.getByRole('textbox',{name:'Surface & recon complex-task model custom ID',exact:true}).fill('complex-fixture');
  await w.getByRole('combobox',{name:'Task complexity',exact:true}).selectOption('complex');
  await w.getByRole('button',{name:'Generate assessment plan',exact:true}).click();
  await expect.poll(()=>sent?.team_profile).toBe('specialist');

@@ -2,12 +2,13 @@ import React, {useEffect, useState} from 'react';
 import {api, downloadJSON} from './api.mjs';
 import {EvidenceViewer} from './EvidenceWorkbench';
 import ProposalExecution from './ProposalExecution';
+import ProviderModelSelector from './ModelSelector';
 
-export default function EvidencePlanner({runtime, runs, onPlan, onRun}) {
+export default function EvidencePlanner({runtime, runs, onPlan, onRun, modelChoice, setModelChoice}) {
   const [runId, setRunId] = useState(''), [goal, setGoal] = useState('Identify the next useful evidence collection step and explain what it would establish.');
   const [page, setPage] = useState({items: [], total: 0}), [offset, setOffset] = useState(0), [q, setQ] = useState('');
   const [selected, setSelected] = useState({}), [useModel, setUseModel] = useState(false), [maxRisk, setMaxRisk] = useState('low');
-  const [provider, setProvider] = useState('local'), [modelName, setModelName] = useState('');
+  const {provider, model: modelName} = modelChoice;
   const [plan, setPlan] = useState(null), [history, setHistory] = useState([]), [refresh, setRefresh] = useState(0);
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(false), [error, setError] = useState(''), [capture, setCapture] = useState(null);
   useEffect(() => {setRunId(value => value || runs[0]?.id || '');}, [runs]);
@@ -37,7 +38,7 @@ export default function EvidencePlanner({runtime, runs, onPlan, onRun}) {
   const generate = async event => {
     event.preventDefault(); setBusy(true); setError(''); setCapture(null);
     try {
-      const result = await api('/agent/proposals', {run_id: runId, observation_ids: Object.keys(selected), goal, use_model: useModel, max_risk: maxRisk, provider: useModel ? provider : undefined, model: useModel && provider !== 'local' ? modelName : undefined});
+      const result = await api('/agent/proposals', {run_id: runId, observation_ids: Object.keys(selected), goal, use_model: useModel, max_risk: maxRisk, provider: useModel ? provider : undefined, model: useModel && modelName ? modelName : undefined});
       setPlan(result); setRefresh(value => value + 1);
     } catch (e) {setError(e.message);} finally {setBusy(false);}
   };
@@ -72,7 +73,7 @@ export default function EvidencePlanner({runtime, runs, onPlan, onRun}) {
       <label className="field-label">Follow-up objective<textarea disabled={busy} required maxLength={4000} rows={3} value={goal} onChange={e => setGoal(e.target.value)}/></label>
       <label className="http-toggle"><input type="checkbox" checked={useModel} disabled={busy || !runtime?.sdk_ready} onChange={e => setUseModel(e.target.checked)}/>
         <span><strong>Use the configured CAI model for follow-ups</strong><small>{runtime?.remote_model_enabled ? 'Selected URLs and normalized metadata go to the configured remote provider.' : 'Uses the configured local model endpoint.'} Raw bodies and registered files are excluded. Off uses explicitly labelled rules.</small></span></label>
-      {useModel && <div className="model-select"><label className="field-label">Model provider<select disabled={busy} value={provider} onChange={e => setProvider(e.target.value)}>{(runtime?.model_providers || [{id: 'local', name: 'Local endpoint', is_remote: false, configured: true}]).map(mp => <option key={mp.id} value={mp.id} disabled={mp.is_remote && (!mp.configured || !runtime?.remote_model_enabled)}>{mp.name}{mp.is_remote ? (!mp.configured ? ' · add key in Credentials' : (!runtime?.remote_model_enabled ? ' · enable remote model use' : '')) : ''}</option>)}</select></label>{provider !== 'local' && <label className="field-label">Model name<input disabled={busy} value={modelName} onChange={e => setModelName(e.target.value)} placeholder="e.g. gpt-4o-mini, grok-2, gemini-2.0-flash" maxLength={120}/></label>}<small className="model-note">{provider === 'local' ? 'Uses the configured local model endpoint.' : 'Routes planning to this provider over HTTPS. Requires a stored key and remote model use enabled; platform hosting stays local.'}</small></div>}
+      {useModel && <ProviderModelSelector runtime={runtime} value={modelChoice} onChange={setModelChoice} disabled={busy}/>}
       <p className="proposal-boundary">Planning sends no target traffic. Load a proposal on the canvas, or review its exact execution snapshot and approve it once.</p>
       <button className="primary" disabled={busy || !runId || !count || !goal.trim() || useModel && !runtime?.sdk_ready || useModel && provider !== 'local' && !modelName.trim()}>{busy ? 'Preparing follow-ups…' : 'Propose follow-up tests'}</button>
     </form>

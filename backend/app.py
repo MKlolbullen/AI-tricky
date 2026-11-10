@@ -20,6 +20,8 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from . import cai_adapter
 from .scope import ScopeError, parse_target, authorize, fetch_scoped, model_base_url, network_hosts, resolve_target, host_matches
 from .store import Store
+from .agent_settings import AgentPresets, PresetInput, PresetRevision, SettingsConflict
+from .model_catalog import model_catalog
 from .workflows import REGISTRY, validate_workflow, execute_workflow
 from .intelligence import analysis_goal, plan_workflow
 from .catalog import CATALOG as MINI_CATALOG, CATALOG_KINDS, TOOLS, convert_mini, tool_readiness, blocked_flag
@@ -183,6 +185,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
     support_data = SupportData(store)
     http_journal = HTTPJournal(store)
+    agent_presets = AgentPresets(store)
     evidence = EvidenceIndex(store)
     asset_graph = AssetGraph(store)
     passive_ingestor = PassiveIngestor(store, asset_graph)
@@ -369,6 +372,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                 'catalog_tools':len(TOOLS),'catalog_workflows':len(MINI_CATALOG['workflows']),
                 'cli_credential_variables':[{'name':key,'configured':bool(vault.effective(key))} for key in sorted({key for t in TOOLS.values() for key in t.get('secrets',[])}) if key not in MODEL_VARS],
                 'model_providers':model_provider_status(),
+                'model_catalog':model_catalog(),
                 'team_roles':[{'key':k,'name':v['name'],'evidence_only':v.get('evidence_only',False)} for k,v in team_leader.ROLES.items()],
                 'team_profiles':{'classic':team_leader.DEFAULT_ROLES,'specialist':team_leader.SPECIALIST_ROLES},
                 'passive_providers':passive_provider_status()}
@@ -390,6 +394,41 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     @app.get('/api/workflows')
     async def workflows():
         return store.workflows()
+
+    @app.get('/api/agent-settings')
+    async def agent_settings_index():
+        return agent_presets.index()
+
+    @app.get('/api/agent-settings/{identifier}')
+    async def agent_settings_get(identifier: str):
+        try:
+            return agent_presets.get(identifier)
+        except KeyError:
+            raise HTTPException(404, 'Agent preset not found.')
+
+    @app.post('/api/agent-settings', status_code=201)
+    async def agent_settings_create(body: PresetInput):
+        try:
+            return agent_presets.save(body)
+        except SettingsConflict as exc:
+            raise HTTPException(409, str(exc))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc))
+
+    @app.post('/api/agent-settings/{identifier}')
+    async def agent_settings_save(identifier: str, body: PresetInput):
+        try:
+            return agent_presets.save(body, identifier)
+        except SettingsConflict as exc:
+            raise HTTPException(409, str(exc))
+
+    @app.post('/api/agent-settings/{identifier}/delete')
+    async def agent_settings_delete(identifier: str, body: PresetRevision):
+        try:
+            agent_presets.delete(identifier, body.revision)
+        except SettingsConflict as exc:
+            raise HTTPException(409, str(exc))
+        return {'deleted': True}
 
     @app.get('/api/workflow-starters/web-recon')
     async def web_recon_starter(fuzz: bool = False):

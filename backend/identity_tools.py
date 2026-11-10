@@ -16,6 +16,7 @@ import time
 from .catalog import ROOT, registered_path
 from .cli_runner import digest, stop_process, pause_processes, close_pipes
 from .identity_graph import bound_input, check_scope, scope_value, strict_json
+from .identity_contracts import collection_command, collection_health, TESTED_RELEASES
 from .scope import ScopeError, parse_target, host_matches
 
 CATALOG=json.loads((ROOT/'src/identity-tools.json').read_text())
@@ -50,6 +51,8 @@ def graph_token(raw,tenant):
         if claims.get('aud') not in ('https://graph.microsoft.com','https://graph.microsoft.com/','00000003-0000-0000-c000-000000000000'):raise ValueError()
         if type(claims.get('exp')) is not int or claims['exp']<=time.time()+30:raise ValueError()
     except (ValueError,UnicodeError,AttributeError,TypeError):raise ScopeError('Provide an unexpired Microsoft Graph access-token JWT for the explicit tenant. Claim checks are not signature verification; the service authenticates the token.') from None
+    if claims['aud']=='00000003-0000-0000-c000-000000000000':
+        raise ScopeError('This Graph application-ID audience is unsupported by the AzureHound profile. Use a Graph URL-audience token; token claims are never rewritten.')
     return text
 
 
@@ -90,7 +93,7 @@ def catalog_status():
     for profile in CATALOG['profiles']:
         try:pin_profile(profile);state='binary_found'
         except ScopeError:state='missing_binary'
-        rows.append({**profile,'readiness':state,'context_required':True,'compatibility_verified':False})
+        rows.append({**profile,'readiness':state,'context_required':True,'compatibility_verified':False,'cli_contract_tested_release':TESTED_RELEASES['impacket' if profile['platform']=='ad' else 'azurehound']})
     return {**CATALOG,'profiles':rows,'boundary':'Fixed collection profiles only. Graph reachability is candidate evidence; no automatic exploitation or credential extraction.'}
 
 
@@ -107,11 +110,11 @@ async def collect(rid,nid,data,config,ctl,store):
         secret=None;output=work/'collection.json'
         if scope['platform']=='ad':
             cache=work/'auth.ccache';cache.write_bytes(raw);cache.chmod(0o600);env['KRB5CCNAME']=str(cache)
-            argv=[pin['path'],*(['-all'] if profile['id']=='impacket-ad-users' else []),'-k','-no-pass','-dc-ip',auth['dc_ip'],'-dc-host',auth['dc_host'],scope['domain']+'/'+auth['username']]
+            argv=collection_command(profile,pin['path'],scope,auth,cache,output)
         else:
             secret=graph_token(raw,scope['tenant_id'])
             private=work/'auth.json';private.write_text(json.dumps({'jwt':secret}));private.chmod(0o600)
-            argv=[pin['path'],'list','az-ad','--tenant',scope['tenant_id'],'--config',str(private),'--output',str(output)]
+            argv=collection_command(profile,pin['path'],scope,auth,private,output)
             routing=config.get('http_routing') or {}
             if routing.get('mode')=='proxy':argv+=['--proxy',routing['proxy_url']]
             if routing.get('ca_input_id'):
@@ -169,17 +172,22 @@ async def collect(rid,nid,data,config,ctl,store):
                     if not task.done():task.cancel()
                 await asyncio.gather(*tasks,return_exceptions=True)
                 await close_pipes(proc);ctl.processes.pop(proc.pid,None)
-            record={'tool_id':profile['id'],'command':argv,'exit_code':exit_code,'error':error,'scope':scope,
-                'stdout':redact(bytes(buffers['stdout'][:2_000_000]).decode(errors='replace')),
-                'stderr':redact(bytes(buffers['stderr'][:2_000_000]).decode(errors='replace')),
+            captured_stdout=redact(bytes(buffers['stdout'][:2_000_000]).decode(errors='replace'))
+            captured_stderr=redact(bytes(buffers['stderr'][:2_000_000]).decode(errors='replace'))
+            health=collection_health(profile,captured_stdout,captured_stderr,exit_code)
+            if error:health['status']='failed'
+            if health['status']=='failed' and not error:error='CollectorReportedFailure'
+            record={'schema':'ai-tricky.identity-invocation/v1','collection_health':health,'tool_id':profile['id'],'command':argv,'exit_code':exit_code,'error':error,'scope':scope,
+                'stdout':captured_stdout,'stderr':captured_stderr,
                 'native_requests_counted':False,'http_capture':'external_proxy_history' if scope['platform']=='entra' and (config.get('http_routing') or {}).get('mode')=='proxy' else 'tool_output_only'}
             aid=store.artifact(rid,f'cli-{number}-{profile["id"]}.json',record,node_id=nid)
             store.event(rid,'cli.finished',{'node_id':nid,'tool_id':profile['id'],'artifact_id':aid,'exit_code':exit_code,'error':error})
-        if exit_code!=0:raise ScopeError('Identity collector exited unsuccessfully; inspect its retained CLI artifact.')
+        if health['status']=='failed':raise ScopeError('Identity collector reported a failure; inspect its retained CLI artifact even when the process exit code is zero.')
         if scope['platform']=='entra':
             if not output.is_file() or output.is_symlink() or output.stat().st_size>10_000_000:raise ScopeError('AzureHound must produce a regular JSON export under 10 MB.')
             payload=redact(output.read_text()).encode()
             strict_json(payload)
         else:payload=json.dumps({'schema':'ai-tricky.identity-collection/v1','scope':scope,'profile_id':profile['id'],'stdout':record['stdout'],'invocation_artifact_id':aid}).encode()
         fid=store.artifact(rid,'identity-'+nid+'.json',{'encoding':'base64','bytes':base64.b64encode(payload).decode(),'size':len(payload),'identity_scope':scope,'source_artifact_id':aid},node_id=nid)
-        return [{'catalog_streams':{'file':['artifact:'+fid]},'artifact_id':fid,'identity_scope':scope,'evidence_status':'OBSERVATION','collection_profile':profile['id']}]
+        return [{'catalog_streams':{'file':['artifact:'+fid]},'artifact_id':fid,'identity_scope':scope,'evidence_status':'OBSERVATION','collection_profile':profile['id'],'collection_health':health,
+                 **({'error':'Collector reported partial coverage; inspect the linked invocation diagnostics.'} if health['status']=='partial' else {})}]

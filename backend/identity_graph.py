@@ -248,7 +248,7 @@ def analyze_exports(exports,scope,start_ids=(),goal_ids=(),max_depth=4):
 
 
 def execute_paths(rid,nid,data,values,config,store):
-    scope=check_scope(data,config);references=[];exports=[];imports=[]
+    scope=check_scope(data,config);references=[];exports=[];imports=[];collection_coverage=[]
     if data.get('inputRefs',{}).get('graph'):references.append('input:'+data['inputRefs']['graph'])
     for row in values:
         references.extend(row.get('catalog_streams',{}).get('file',[]))
@@ -268,12 +268,31 @@ def execute_paths(rid,nid,data,values,config,store):
                 content=checked_reused_content(store,aid)
                 if meta['run_id']!=rid or content.get('encoding')!='base64':raise ValueError()
                 raw=base64.b64decode(content['bytes'],validate=True)
+                if content.get('source_artifact_id'):
+                    from .identity_tools import PROFILES
+                    from .identity_contracts import collection_health
+                    source_id=content['source_artifact_id'];source_meta=store.artifact_metadata(source_id)
+                    source=checked_reused_content(store,source_id)
+                    if source_meta['run_id']!=rid or source.get('schema') not in (None,'ai-tricky.identity-invocation/v1') or source.get('scope')!=scope or source.get('tool_id') not in PROFILES:raise ValueError()
+                    if source.get('schema') is None:
+                        health={'schema':'ai-tricky.collection-health/v1','status':'unavailable','error_count':None,'warning_count':None,'coverage_verified':False,
+                                'note':'Historical invocation has no recorded health contract; completeness remains unknown.'}
+                    else:
+                        health=collection_health(PROFILES[source['tool_id']],source.get('stdout',''),source.get('stderr',''),source.get('exit_code'))
+                        if source.get('error'):health['status']='failed'
+                    collection_coverage.append({'artifact_id':source_id,'profile_id':source['tool_id'],**health})
             except (KeyError,ValueError,AttributeError):raise ScopeError('Identity artifact must be a same-run captured file.') from None
         else:raise ScopeError('Identity evidence requires registered inputs or same-run artifacts.')
         total+=len(raw)
         if total>MAX_EXPANDED:raise ScopeError('Combined identity exports exceed 25 MB.')
         exports.append((aid,raw))
     result=analyze_exports(exports,scope,data.get('start_ids',[]),data.get('goal_ids',[]),data.get('max_depth',4))
+    result['collection_coverage']=collection_coverage
+    if collection_coverage:
+        for health in collection_coverage:
+            detail='historical diagnostic counts unavailable' if health['status']=='unavailable' else f'{health["error_count"]} reported error(s), {health["warning_count"]} warning(s)'
+            result['coverage_limits'].insert(0,f'{health["profile_id"]}: collector health {health["status"]}; {detail}. Complete collection and absence of risk are not established.')
+    else:result['coverage_limits'].insert(0,'Producer diagnostics are unavailable for imported files; collection completeness is unknown.')
     replacements={}
     # Validate the entire import before persisting raw files. A credential file
     # accidentally selected as a graph must not become an evidence artifact.
@@ -283,8 +302,8 @@ def execute_paths(rid,nid,data,values,config,store):
         row['evidence_ids']=[replacements.get(value,value) for value in row['evidence_ids']]
     for row in result['enumerations']:row['evidence_id']=replacements.get(row['evidence_id'],row['evidence_id'])
     aid=store.artifact(rid,'identity-analysis-'+nid+'.json',result,node_id=nid)
-    preview={'scope':scope,'objects':len(result['nodes']),'relationships':len(result['edges']),'paths':result['paths'][:5],
-             'objects_preview':result['nodes'][:20],'enumerations':result['enumerations'][:1],'coverage_limits':result['coverage_limits'],
+    preview={'scope':scope,'collection_coverage':collection_coverage,'coverage_limits':result['coverage_limits'],'objects':len(result['nodes']),'relationships':len(result['edges']),'paths':result['paths'][:5],
+             'objects_preview':result['nodes'][:20],'enumerations':result['enumerations'][:1],
              'preview_limit':'Full graph, paths and provenance are retained in the linked analysis artifact; agent previews are bounded.'}
     return [{'kind':'identity_evidence','artifact_id':aid,'identity_scope':scope,'body':json.dumps(preview)[:16000],
              'report':f'Identity evidence: {len(result["nodes"])} objects, {len(result["edges"])} relationships, {len(result["paths"])} candidate paths. No paths were executed.',

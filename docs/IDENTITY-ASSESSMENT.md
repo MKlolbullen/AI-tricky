@@ -35,7 +35,7 @@ The three Impacket profiles enumerate LDAP data. SPN inventory does not request 
 
 ## Entra scope and authentication
 
-Enter/select an exact tenant domain and supply the explicit tenant UUID. Register a file containing an existing Microsoft Graph access-token JWT, either plain text or `{"access_token":"…"}`, then select it in the collector. The application checks the token's tenant, Graph audience and expiry locally; these claim checks are not signature verification. Microsoft authenticates the token when the collector uses it. No password, refresh-token, token-acquisition or consent flow is launched.
+Enter/select an exact tenant domain and supply the explicit tenant UUID. Register a file containing an existing Microsoft Graph access-token JWT, either plain text or `{"access_token":"…"}`, then select it in the collector. The application checks the token's tenant, Graph audience and expiry locally; these claim checks are not signature verification. Microsoft authenticates the token when the collector uses it. No password, refresh-token, token-acquisition or consent flow is launched. The current AzureHound profile requires a Graph URL audience (`https://graph.microsoft.com`, with an optional trailing slash). A Graph application-ID audience may be valid for Microsoft Graph, but AzureHound 3.1.3 rejects it; preflight reports that limitation without modifying or re-signing token claims.
 
 The token is written to a private 0600 AzureHound configuration file, never argv. Ambient Azure/identity/proxy credentials are not inherited. Literal token values are redacted from retained tool streams. Only the declared JSON export and sanitized invocation output become artifacts; private authentication files are cleaned with the job. Available Graph permissions and the upstream collector determine completeness. Partial/unsupported data must not be read as absence of risk.
 
@@ -80,3 +80,29 @@ Candidate analysis and validation plans do not become tool execution. Fixed coll
 ## Sources and compatibility
 
 The registry links to primary sources: [Impacket](https://github.com/fortra/impacket), [AzureHound](https://github.com/SpecterOps/AzureHound), [BloodHound.py CE](https://github.com/dirkjanm/BloodHound.py/tree/bloodhound-ce), [SharpHound](https://github.com/SpecterOps/SharpHound), [NetExec](https://github.com/Pennyw0rth/NetExec), [Certipy](https://github.com/ly4k/Certipy), [linWinPwn](https://github.com/lefayjey/linWinPwn) and [ROADtools](https://github.com/dirkjanm/ROADtools). AzureHound's export/config structures were inspected at commit `b02d4577731f69c729a53055a09c44673689eefd`; the parser is an independently written bounded subset. Tool code and binaries are not vendored. Tests use local executable/JSON fixtures, not a live AD domain or Entra tenant.
+
+
+## Real CLI contracts and collection health — 2026-11-10
+
+The tested command-line contract is Impacket **0.13.1** and AzureHound **3.1.3** (the official Linux x86_64 archive is verified against SHA-256 `b814116a9850658ef36be54c3f8e2d1560a0560ca377052206defac064e5a68d`). Identity cards display the release used for argument-contract tests; this does not verify the installed binary's authentication behavior or network scope.
+
+With the tools available on PATH, run the explicit diagnostic:
+
+```bash
+.venv/bin/python scripts/check-identity-tools.py
+.venv/bin/python scripts/check-identity-tools.py --profile impacket-ad-users
+```
+
+It probes the same owned argv as collection, adds `--help`, strips ambient credentials and uses a private temporary HOME. Output contains binary/help-contract metadata, recognized versions and missing flags; raw help text is not persisted. This is a help-only diagnostic, not a sandbox for an untrusted executable and not a live authentication/collection test. The version marker is not a cryptographic identity guarantee.
+
+The `identity-cli` CI job installs Impacket 0.13.1 into a separate interpreter and downloads the checksummed AzureHound release. Seven real-tool cases validate the owned CLI arguments and Impacket's failure behavior under a Python networking-denial guard. The main dependency environment is unchanged. To run those tests locally, select the separate tool paths:
+
+```bash
+AI_TRICKY_IMPACKET_BIN=/absolute/path/to/impacket-venv/bin \
+AI_TRICKY_AZUREHOUND_BIN=/absolute/path/to/azurehound \
+.venv/bin/python -m pytest backend/tests/test_identity_cli_real.py -q
+```
+
+Impacket's examples may print an error and exit zero. Invocation artifacts now carry `collection_health`; a reported error without usable table rows fails the branch despite exit zero. Errors accompanying retained table rows produce partial coverage. AzureHound is invoked with structured JSON logs; reported errors/warnings and unclassified stderr become coverage gaps even if it writes JSON and exits zero. Lack of reported errors remains **unverified**, never complete coverage or proof of no risk.
+
+Health counts and invocation-artifact references follow collected exports into `identity-analysis-*.json` and the bounded agent preview. Imported files without producer diagnostics explicitly retain unknown completeness. Original streams stay available in the invocation artifact, with existing token redaction. Historical artifacts are preserved; no health verification is invented for old or externally supplied evidence.

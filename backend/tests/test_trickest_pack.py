@@ -69,12 +69,15 @@ def test_candidate_boundaries_are_checked_before_downstream_use():
 
 
 def test_generator_writes_bounded_wordlist_into_the_run_workdir(tmp_path):
-    # The bounded wordlist is written into this run's work dir, never beside the
-    # registered input, so the inputs area is untouched and concurrent runs do
-    # not share the file. context['wordlist_file'] points at the work-dir copy.
+    # The bounded wordlist must land in this run's work dir, never beside the
+    # registered input. Keep the source OUTSIDE work so a regression that derives
+    # the output path from the input's location (e.g. Path(...).with_name) is
+    # actually caught, not masked by the source happening to live under work.
     work = tmp_path / 'work'
     work.mkdir()
-    source = work / 'wordlist.input'  # the copy cli_runner places under work
+    inputs = tmp_path / 'inputs'
+    inputs.mkdir()
+    source = inputs / 'wordlist.input'
     source.write_text('api\ndev\napi\n')  # duplicate entry to exercise dedupe
     context = {'wordlist_file': str(source)}
     returned = prepare_generator('mksub', context, ['example.test'], {'targets': ['example.test']}, work)
@@ -82,9 +85,10 @@ def test_generator_writes_bounded_wordlist_into_the_run_workdir(tmp_path):
     assert context['wordlist_file'] == str(bounded) and bounded.exists()
     assert bounded.read_text() == 'api\ndev\n'  # bounded and de-duplicated
     assert returned == ['example.test'] and context['domain'] == 'example.test'
-    # The input copy is left intact and nothing is written next to it.
+    # Nothing is written beside the registered input; the input is left intact.
     assert source.read_text() == 'api\ndev\napi\n'
-    assert sorted(p.name for p in work.iterdir()) == ['bounded-trickest-wordlist.txt', 'wordlist.input']
+    assert sorted(p.name for p in inputs.iterdir()) == ['wordlist.input']
+    assert sorted(p.name for p in work.iterdir()) == ['bounded-trickest-wordlist.txt']
 
 
 def test_preflight_requires_a_bound_wordlist(tmp_path):

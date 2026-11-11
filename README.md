@@ -1,441 +1,271 @@
-<p align="center">
-  <img src="docs/assets/ai-tricky-banner.svg" alt="AI-tricky — Local-first AI-assisted security workflows" width="100%" />
-</p>
+<div align="center">
 
-<p align="center">
-  <a href="https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml/badge.svg" /></a>
-  <img alt="Version 0.8.0" src="https://img.shields.io/badge/version-0.8.0-02d0e5" />
-  <img alt="Python 3.12" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&amp;logoColor=white" />
-  <img alt="React and React Flow" src="https://img.shields.io/badge/React-React_Flow-61DAFB?logo=react&amp;logoColor=111827" />
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-b66cf3" /></a>
-</p>
+<img src="https://raw.githubusercontent.com/MKlolbullen/AI-tricky/main/docs/assets/ai-tricky-banner.svg" alt="AI-tricky banner" width="100%">
 
-**AI-tricky is a locally hosted workbench for authorized penetration testing, ethical bug bounty work, and evidence-driven security assessment.** Build typed visual workflows, run native checks or installed CLI tools, and use an optional CAI analyst to plan assessments and review captured evidence.
+# AI-tricky
+### The local-first, evidence-driven security assessment workbench.
 
-The interface, API, SQLite history and execution jobs run on your machine. Assessment targets can be remote domains, IPs, CIDRs or HTTP(S) URLs. Model inference is configured separately: use a local OpenAI-compatible endpoint or explicitly enable a remote provider.
+**Visual workflows · Specialist AI agents · Reconnaissance · HTTP evidence · Identity attack-path analysis**
 
-> **Current stage: functional beta.** The migrated catalog contains 151 tool contracts and 57 workflows. 141 entries have CLI adapters; ten require additional context contracts. External binaries are not bundled, and a migrated adapter is not a claim of compatibility with every upstream release.
+[![CI](https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml/badge.svg)](https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml)
+![Beta](https://img.shields.io/badge/status-functional_beta-00c2a8)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![React](https://img.shields.io/badge/React-React_Flow-61DAFB?logo=react&logoColor=black)
+[![License](https://img.shields.io/badge/license-MIT-purple)](LICENSE)
+![Local](https://img.shields.io/badge/hosting-local--first-151515)
 
-[Quick start](#quick-start) · [What works](#what-works) · [Interface tour](#interface-tour) · [AI integration](#ai-integration) · [Execution boundaries](#execution-boundaries) · [Development](#development) · [Roadmap](#roadmap)
+**[Quick start](#-quick-start) · [Features](#-what-you-can-do) · [Screenshots](#-inside-the-workbench) · [Architecture](#-architecture) · [Limitations](#-current-limitations) · [Roadmap](#-roadmap)**
 
-## Interface tour
+</div>
 
-<p align="center">
-  <img src="docs/assets/screenshots/01-design-overview.png" alt="AI-tricky workflow studio: typed DAG canvas, node library, evidence inspector and run console" width="100%" />
-</p>
-<p align="center"><em>Workflow studio — typed DAG canvas, node library, evidence inspector and run console.</em></p>
+---
 
-Selected views and tabs from v0.8.0 are shown below. Canvas output is explicit fixture simulation; the local workspace reflects real backend-backed state (shown here with sample scope and no recorded runs).
+> [!IMPORTANT]
+> **Functional beta, not a magic exploit button.** AI-tricky runs locally and requires explicit authorized scope. AI output is a hypothesis until supported by evidence and reviewed. External CLI tools are installed separately; compatibility depends on installed versions.
 
-<details>
-<summary><strong>Workflow studio — views, inspector and console</strong></summary>
+## ⚡ Why this exists
 
-<br/>
+Security assessments generate a ridiculous amount of disconnected output. Reconnaissance lives in one terminal, HTTP traffic in another, model suggestions in a chat window, and the evidence you actually need is buried in files.
 
-| | |
-| --- | --- |
-| <img src="docs/assets/screenshots/06-runs-view.png" alt="Runs view" width="100%" /><br/><sub>**Runs** view — read-only run mode</sub> | <img src="docs/assets/screenshots/02-inspector-configure.png" alt="Inspector Configure tab" width="100%" /><br/><sub>Inspector — **Configure** tab</sub> |
-| <img src="docs/assets/screenshots/03-inspector-evidence.png" alt="Inspector Evidence tab" width="100%" /><br/><sub>Inspector — **Evidence** tab (candidate finding)</sub> | <img src="docs/assets/screenshots/04-dock-artifacts.png" alt="Console dock Artifacts tab" width="100%" /><br/><sub>Console dock — **Artifacts** tab</sub> |
-| <img src="docs/assets/screenshots/05-dock-findings.png" alt="Console dock Findings tab" width="100%" /><br/><sub>Console dock — **Findings** tab</sub> | |
+**AI-tricky connects the pieces without pretending that a model's confidence is proof.**
 
-</details>
+Design a typed workflow. Execute bounded checks. Preserve the request/response trail. Let specialist agents examine the captured evidence. Compare runs and decide what deserves investigation.
 
-<details>
-<summary><strong>Dialogs &amp; actions</strong></summary>
+**Local-first means the application, database, workflow engine and evidence store run on your machine.** Targets can be remote systems you are authorized to test. Remote AI inference and passive enrichment are optional, explicitly configured integrations.
 
-<br/>
+## 🧰 What you can do
 
-| | |
-| --- | --- |
-| <img src="docs/assets/screenshots/11-templates.png" alt="Template and tool catalog" width="100%" /><br/><sub>**Templates** — workflow &amp; tool catalog</sub> | <img src="docs/assets/screenshots/07-preview-run.png" alt="Preview run dialog" width="100%" /><br/><sub>**Preview run** — dry-run plan</sub> |
-| <img src="docs/assets/screenshots/12-review-request.png" alt="Review proposed request dialog" width="100%" /><br/><sub>**Review request** — proposed replay (not dispatched)</sub> | <img src="docs/assets/screenshots/13-artifact-viewer.png" alt="Artifact viewer dialog" width="100%" /><br/><sub>**Artifact** viewer</sub> |
-| <img src="docs/assets/screenshots/08-run-history.png" alt="Run history dialog" width="100%" /><br/><sub>**Run history**</sub> | <img src="docs/assets/screenshots/09-runtime-settings.png" alt="Runtime settings dialog" width="100%" /><br/><sub>**Runtime settings** — adapter readiness</sub> |
-| <img src="docs/assets/screenshots/10-workflow-actions.png" alt="Workflow actions dialog" width="100%" /><br/><sub>**Workflow actions**</sub> | |
+| Capability | What it does |
+|:--|:--|
+| 🧩 **Visual workflow studio** | Build typed, directed acyclic graphs with named sockets, registered inputs, preflight checks and per-node artifacts. |
+| 🛰️ **Recon & discovery** | Work with domains, IPs, CIDRs and URLs; use native DNS/TCP/HTTP checks and installed CLI adapters. |
+| 🌐 **Web reconnaissance** | Explicit wildcard scope, subdomain discovery, probing, crawling and bounded JS/TS/chunk/source-map collection. |
+| 🤖 **Specialist agent teams** | Evidence handoffs across recon, analysis, vulnerability review and PoC *planning*, with per-role model routing. |
+| 🎛️ **Saved agent presets** | Persist team settings, model choices, worker/turn limits and defaults in local SQLite. |
+| 🔌 **Provider choice** | Configure local model endpoints or supported remote providers, including OpenAI, Anthropic, Gemini, xAI and Venice. |
+| 🧪 **HTTP evidence journal** | Retain native requests/responses, errors, cancellations, binary captures and HAR exports. |
+| 🟠 **Burp-compatible routing** | Route supported HTTP traffic through a local proxy and import saved Burp XML items. |
+| 🕸️ **Asset graph** | Explore typed hosts, services, technologies, files and other entities with provenance and run-to-run diffs. |
+| 🛡️ **AD & Entra review** | Scoped identity collection profiles, graph imports and bounded candidate-path analysis; not automated exploitation. |
+| 📋 **Findings workbench** | Durable observations, candidate findings, review decisions and comparisons between assessment runs. |
+| ⏯️ **Run controls** | Separate native/CLI budgets, deadlines, pause/resume, cancellation and checkpoint-aware recovery. |
 
-</details>
+**Catalog:** 151 tool contracts, 57 workflows and 141 CLI adapters in the migrated catalog. Ten entries remain context-restricted. Catalog presence **does not** mean an external binary is installed or tested against every upstream version.
 
-<details>
-<summary><strong>Local workspace — all 11 tabs</strong></summary>
+## 🖥️ Inside the workbench
 
-<br/>
+<div align="center">
 
-| | |
-| --- | --- |
-| <img src="docs/assets/screenshots/14-local-targets.png" alt="Local workspace Targets tab" width="100%" /><br/><sub>**Targets** — entered scope</sub> | <img src="docs/assets/screenshots/15-local-assets.png" alt="Local workspace Assets tab" width="100%" /><br/><sub>**Assets** — observed inventory</sub> |
-| <img src="docs/assets/screenshots/16-local-observations.png" alt="Local workspace Observations tab" width="100%" /><br/><sub>**Observations**</sub> | <img src="docs/assets/screenshots/17-local-findings.png" alt="Local workspace Findings tab" width="100%" /><br/><sub>**Findings** workbench</sub> |
-| <img src="docs/assets/screenshots/18-local-compare-runs.png" alt="Local workspace Compare runs tab" width="100%" /><br/><sub>**Compare runs**</sub> | <img src="docs/assets/screenshots/19-local-inputs.png" alt="Local workspace Inputs tab" width="100%" /><br/><sub>**Inputs** manager</sub> |
-| <img src="docs/assets/screenshots/26-local-credentials-providers.png" alt="Local workspace Credentials tab" width="100%" /><br/><sub>**Credentials** — passive sources &amp; model providers</sub> | <img src="docs/assets/screenshots/20-local-workflows.png" alt="Local workspace Workflows tab" width="100%" /><br/><sub>**Workflows** — saved graphs</sub> |
-| <img src="docs/assets/screenshots/21-local-agent-desk.png" alt="Local workspace Agent desk tab" width="100%" /><br/><sub>**Agent desk** — planning &amp; proposals</sub> | <img src="docs/assets/screenshots/22-local-run-setup.png" alt="Local workspace Run setup tab" width="100%" /><br/><sub>**Run setup** — engine, scope &amp; budgets</sub> |
-| <img src="docs/assets/screenshots/23-local-runs.png" alt="Local workspace Runs tab" width="100%" /><br/><sub>**Runs** — local run detail</sub> | |
+<img src="docs/assets/screenshots/01-design-overview.png" alt="Visual workflow studio" width="100%">
 
-</details>
+*Workflow studio — visual DAG, node configuration, evidence and execution console.*
 
-## Why AI-tricky?
+</div>
 
-A useful assessment platform needs more than a canvas that launches commands and a chat box that sounds confident. AI-tricky gives each assessment an explicit graph, an immutable scope snapshot, bounded execution and inspectable evidence.
+| Run inspection | Findings and evidence |
+|:--:|:--:|
+| <img src="docs/assets/screenshots/06-runs-view.png" alt="Runs view"> | <img src="docs/assets/screenshots/17-local-findings.png" alt="Findings workbench"> |
+| **Run state and history** | **Reviewable findings** |
 
-- **Typed workflow studio:** drag nodes, connect named sockets, configure adapters and inspect node output.
-- **Local execution:** FastAPI, SQLite and private job directories; no Docker, Redis, hosted account or cloud deployment is required.
-- **Broad catalog:** the complete MIT-licensed tool/workflow catalog from [mini-tricky](https://github.com/MKlolbullen/mini-tricky), with provenance and explicit readiness states.
-- **AI-assisted reasoning:** optional CAI workflow planning and structured evidence review, alongside clearly labelled deterministic capability planning.
-- **Durable run history:** saved graph/scope snapshots, per-node states, events, CLI invocation records and evidence artifacts.
-- **Honest evidence handling:** model candidates must cite supplied artifact IDs; suggested follow-up tests are proposals, not automatic dispatch or confirmed vulnerabilities.
+| Agent workspace | Run comparisons |
+|:--:|:--:|
+| <img src="docs/assets/screenshots/21-local-agent-desk.png" alt="Agent desk"> | <img src="docs/assets/screenshots/18-local-compare-runs.png" alt="Compare runs"> |
+| **Evidence-guided agent proposals** | **What changed between runs?** |
 
-## What works
+> [!NOTE]
+> Some screenshots use fixture/sample data. A simulated canvas preview is not a live assessment result.
 
-| Surface | Current behavior |
-| --- | --- |
-| Native inventory | Domain resolution, bounded TCP connect checks, and scoped HTTP GET evidence collection |
-| Web recon | Explicit `*.example.com` scope, discovery → httprobe → katana starter, optional wordlist-bound path fuzzing, and bounded JS/TS/chunk/source-map capture manifests ([details](docs/WEB-RECON.md)) |
-| Support data | Bundled Nuclei HTTP templates, Trickest resolvers and starter wordlists; pinned full Nuclei/Jaeles downloads with typed input bindings ([setup](docs/SUPPORT-DATA.md)) |
-| Supplied payload lists | LFI, RCE, SQLi, SSTI and XSS text collections with original bytes, checksums and registered-input usage ([payloads](payloads/README.md)) |
-| Specialist teams | Per-role primary/complex-task/fallback model routes, staged evidence handoffs, PoC validation plans and recorded usage ([routing](docs/TEAM-MODEL-ROUTING.md)) |
-| AD and Entra | Fixed Impacket/AzureHound collection profiles, scoped graph imports, bounded candidate paths and identity-specialist agent review ([coverage](docs/IDENTITY-ASSESSMENT.md)) |
-| HTTP traffic | Direct or local Burp-compatible proxy routing; always-on native request/response history, binary body downloads, HAR pages and Burp saved-items XML import ([details](docs/HTTP-TRAFFIC.md)) |
-| Workflow runner | Executes validated native and catalog DAGs; independent branches share configured run limits |
-| Migrated catalog | 151 tool contracts and 57 typed workflows; searchable by source, category, input type and readiness |
-| CLI adapters | 141 application-owned, shell-free adapters with executable preflight, typed files/stdin and scalar fan-out |
-| Registered inputs | Local files/folders, uploaded text inputs, wordlists, SBOMs, resolver lists and reviewed template/signature folders |
-| Provider credentials | Store API keys locally: passive data sources (Shodan, Censys, ProjectDiscovery, SecurityTrails, Netlas, urlscan, VirusTotal, BinaryEdge, GitHub, FOFA) injected only into tools that declare them, plus model providers (Anthropic, OpenAI, xAI/Grok, Gemini, Venice.ai) for agents and template planning |
-| Agent desk | Native/catalog workflow planning plus persisted, evidence-guided follow-up proposals using rules or a model; choose the model provider (local endpoint or a configured remote provider) for model-backed planning |
-| Agent settings | Named local presets for team roles, model routes, turn/worker limits and the shared planning model; restore a default on reopen, choose from reviewed provider model menus or retain custom IDs ([guide](docs/AGENT-SETTINGS.md)) |
-| Evidence review | Optional CAI analysis of captured HTTP evidence with structured candidates, references and coverage limits |
-| Multi-agent CAI team | A deterministic, model-free leader fans one scoped run across five role analysts (surface, transport, authz, injection, logic) sharing a single budget/scope/credential snapshot; optional evidence-guided adaptive role selection, an optional labelled lead-synthesizer pass, and per-member interpreter isolation with a worker ceiling. Candidates only; nothing auto-confirmed |
-| Asset graph | A deterministic, provenance-bound typed entity/edge attack-surface graph (hosts, IPs, services, technologies, files, netblocks, certificates, vulnerabilities, contacts) from captured artifacts and opt-in passive sources; run-to-run diffing and a read-only canvas node. Observed facts and third-party claims, never findings |
-| Passive enrichment | Opt-in, key-gated, allowlisted enrichment from Shodan, Censys, VirusTotal, Netlas, FOFA, BeVigil, Hunter.io, ZoomEye and Intelligence X into the asset graph; bounded pagination, quota handling and a response cache. Source-tagged third-party claims, distinct from captured facts |
-| Evidence workbench | Structured observations, persistent candidate IDs, operator review history and run comparisons |
-| Run controls | Pause/resume, cancellation, node deadlines, separate native-operation and CLI-launch budgets |
-| Artifact routing | Named multi-output sockets, same-run file references, merge/dedupe, payload sources and collectors |
-| Canvas preview | Explicit fixture simulation, separate from real execution |
+## 🚀 Quick start
 
-The ten context-restricted entries concern account/cluster scope, callbacks, notifications or arbitrary command strings. Preflight reports these restrictions; installing a binary does not remove them. See the [complete migration matrix](docs/CATALOG-MIGRATION.md).
+### Option A — one-command source launcher
 
-Native HTTP supports local Burp-compatible routing and retained exchanges. Live Burp/burpaderp extension synchronization, Strix adapters and broad real-binary version validation remain unfinished. CLI capture coverage is explicit in preflight.
-
-## Quick start
-
-### Fastest start
-
-**Standalone binary — no Python or Node needed.** The release build bundles the UI, API and catalog into one self-contained executable that serves everything on loopback:
-
-```bash
-chmod +x ai-tricky
-./ai-tricky                        # http://127.0.0.1:8787
-AI_TRICKY_PORT=9000 ./ai-tricky    # a different loopback port
-```
-
-Build the binary yourself from a checkout (needs Python + Node once, only to build it):
-
-```bash
-./scripts/build-binary.sh          # produces dist-bin/ai-tricky (not committed to git)
-```
-
-The binary is platform-specific; distribute it via GitHub Releases. It runs **native** assessment; the optional CAI analyst (a pinned older SDK in a separate interpreter) is not available from the binary — use the source install with `.venv-cai` for CAI. External CLI tools install separately (below).
-
-**One command from source.** With Python 3.12 and Node present, the `ai-tricky` launcher sets up on first run (creates the venv and builds the UI) and then launches; later runs start instantly:
+**Prerequisites:** Python 3.12, Node.js 20.19+ or 22.12+, npm.
 
 ```bash
 git clone https://github.com/MKlolbullen/AI-tricky.git
 cd AI-tricky
-./ai-tricky                        # first run installs, then serves on 127.0.0.1:8787
-./ai-tricky --dev                  # developer mode (Vite UI + backend, hot reload)
-./ai-tricky --help                 # all options
+./ai-tricky
 ```
 
-### Automated setup
-
-The `installation.sh` script sets up the platform and, optionally, the external
-CLI tools used by the catalog:
+Open **http://127.0.0.1:8787**. First launch bootstraps the local environment and UI build.
 
 ```bash
-git clone https://github.com/MKlolbullen/AI-tricky.git
-cd AI-tricky
-
-./installation.sh                 # platform + install all catalog tools
-./installation.sh --project-only  # just the UI + backend
-./installation.sh --with-cai      # also create the optional CAI SDK venv
-./start-local.sh                  # http://127.0.0.1:8787
+./ai-tricky --dev       # development / hot reload
+./ai-tricky --help      # launcher options
 ```
 
-The tool installer can also be run on its own and is idempotent, continues past
-individual failures, and prints a summary:
+### Option B — install with selected external tooling
 
 ```bash
-scripts/install-tools.sh --list              # show every tool and how it installs
-scripts/install-tools.sh --tools=recon,dns   # install by category
-scripts/install-tools.sh --tools=httpx,ffuf  # install specific tools
-scripts/install-tools.sh --skip-toolchains   # don't auto-install Go/Rust/pipx
-```
-
-It installs tools across their native ecosystems (Go, Rust, Python/pipx, Ruby,
-npm, system packages, Git builds and GitHub release binaries) into
-`~/.local/bin` by default. A small number of large or vendor-specific tools are
-reported as *manual* with a pointer rather than installed automatically. Review
-the script before running it on a shared host; it installs software only and
-never contacts an assessment target. After installing, add the locations to your
-`PATH` and use the Templates catalog or **Local workspace → Run setup → Check
-workflow readiness** to confirm which binaries are detected.
-
-The steps below show the equivalent manual setup.
-
-### Requirements
-
-- **Python 3.12**
-- **Node.js 20.19+ or 22.12+**; Node 22 is used in CI
-- npm
-- The external security binaries required by the CLI workflows you choose
-
-Linux/macOS:
-
-```bash
-git clone https://github.com/MKlolbullen/AI-tricky.git
-cd AI-tricky
-
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-npm ci
-npm run build
-
+./installation.sh --project-only  # app only
+./installation.sh --with-cai      # optional separate CAI environment
 ./start-local.sh
 ```
 
-Open **http://127.0.0.1:8787**. The Python backend intentionally binds to loopback. Run history, registered inputs and evidence are stored under `local-data/` by default, which is excluded from git.
-
-Native inventory works without installing the optional CAI SDK or any CLI scanners.
-
-### First workflow
-
-1. Open **Local workspace → Targets** and enter the authorized domains, IPs, CIDRs or URL path scopes.
-2. Choose **Workflow actions → Load runnable native workflow**, or load a migrated graph from **Templates → mini-tricky**.
-3. Register any required files/folders under **Local workspace → Inputs**, then bind them in the node inspector.
-4. Open **Run workflow**, select targets and limits, and run **Check workflow readiness**.
-5. Enable execution when ready. Catalog workflows also require the explicit CLI execution setting.
-6. Inspect **Runs**, node evidence, invocation logs and artifacts. A successful tool exit remains an observation, not proof of a vulnerability.
-
-Nuclei and Jaeles require a registered, reviewed template/signature folder. DNS adapters that require resolver files use registered resolver inputs. Missing binaries and missing context are reported before a live run starts.
-
-## Evidence workbench — 0.5.1
-
-Open **Local workspace → Observations**, **Findings** or **Compare runs** after recording assessments.
-
-- **Observations:** native HTTP/TCP captures and versioned parsers for the default outputs of httpx, dnsx, Naabu, Nmap, Katana and Nuclei. Every normalized record links to the original artifact, run and node. Unsupported formats remain raw evidence.
-- **Findings:** Nuclei matches and structured CAI evidence candidates receive durable IDs, deduplicated occurrences and first/last seen timestamps. Filter by run, title/asset, severity and review status. Severity, confidence and status remain independent.
-- **Review:** record candidate, triaged, verified, rejected or resolved decisions with an explanatory note. Verification requires an attached HTTP/CLI capture. Reviews are revision checked and retained in history; new scanner/model output preserves operator decisions and flags evidence captured after the latest review.
-- **Compare runs:** inspect new, changed, unchanged/recurring and not-observed records, with baseline/current values, evidence links and JSON export. Scope, configuration, partial captures and failed checks remain visible. Not observed does **not** mean resolved.
-
-Existing runs are indexed locally when these views or APIs are read; original artifacts remain intact. Parser generation 2 reindexes old captures, retains review history, and excludes superseded normalizations from observations and comparisons. New captures record capture timestamps; legacy artifacts explicitly use their run-start timestamp. Comparisons use recorded occurrence snapshots, so a later severity review does not rewrite what an earlier run reported. See [contracts and limits](docs/EVIDENCE-WORKBENCH.md).
-
-## Evidence-guided follow-ups and execution — 0.8
-
-Open **Local workspace → Agent desk → Evidence follow-ups**, select a run and supporting observations, then generate proposed tests. Each proposal explains its hypothesis, supporting captures, expected evidence, negative/inconclusive result, registered adapter, exact input and prerequisites.
-
-The optional CAI model selects from server-built actions with no target tools attached. Scope, risk and typed graph validation remain independent of the model. The rules mode is explicitly labelled. Plans persist across restarts, can be reopened/exported, and become stale when their evidence or adapter bindings change.
-
-The initial profiles cover 13 reviewed adapters. You can load a proposal onto the canvas for manual configuration, or choose **Review execution** to bind its exact workflow, scope, budgets, binary hashes and registered input contents. Preparation runs preflight without target traffic. Inspect the saved snapshot, explicitly approve it and start it once. Retries return the same run; changed/stale bindings, expired reviews and restarted runtimes require a new review. Pause, resume and cancel use the existing run controls.
-
-Plans, execution receipts and approval audit events persist locally. Approval applies to a server-built proposal execution, not later canvas edits; ordinary manual runs remain a separate flow. CLI-internal requests remain uncounted by the native budget. See [planning contracts](docs/EVIDENCE-PLANNING.md) and [execution bindings and limits](docs/PROPOSAL-EXECUTION.md).
-
-Native HTTP proposals also offer **Repeat GET stability** and **CORS response policy** profiles. Each binds a baseline and variant to the same URL, requires explicit approval for two native operations and retains both captures plus a versioned comparison. Runs and supported linked findings show the evidence, differences and coverage limits. A profile signal never automatically verifies or resolves a finding. See [controlled verification](docs/CONTROLLED-VERIFICATION.md).
-
-## AI integration
-
-Install the optional, pinned CAI dependency snapshot in a separate local interpreter:
+For CLI dependencies:
 
 ```bash
-python3 -m venv .venv-cai
-.venv-cai/bin/python -m pip install -r requirements-cai.lock
-export CAI_PYTHON="$PWD/.venv-cai/bin/python"
+scripts/install-tools.sh --list
+scripts/install-tools.sh --tools=recon,dns
+scripts/install-tools.sh --tools=httpx,ffuf
 ```
 
-CAI 0.5.10 pins an older OpenAI/LiteLLM/web dependency stack. Keeping it separate lets the API use its supported FastAPI/Starlette versions without dependency conflicts. The SDK worker opens no HTTP listener or proxy service. Model inference uses the configured endpoint; target HTTP/TCP calls are delegated back to the parent application's scope and budget checks. Worker messages and lifetime are bounded. This isolates dependencies, not operating-system network access.
+Review installation scripts before running them. Some binaries require manual installation; use **Run setup → Check workflow readiness** to see what's actually available.
 
-### Local model endpoint
+### Option C — standalone executable
 
-For a tool-capable model served through a local OpenAI-compatible API:
+A platform-specific binary can be built with:
 
 ```bash
-export CAI_MODEL_BASE_URL=http://127.0.0.1:11434/v1
-export CAI_MODEL=your-installed-model
-./start-local.sh
+./scripts/build-binary.sh
+./dist-bin/ai-tricky
 ```
 
-### Remote model endpoint
+The standalone binary bundles the native application, **not** external scanners or the optional CAI SDK. Building requires development dependencies; running the finished binary does not require Python or Node.
 
-Remote inference is a separate, explicit choice:
+### Your first assessment
 
-```bash
-export CAI_ALLOW_REMOTE_MODEL=1
-export CAI_MODEL_BASE_URL=https://your-provider.example/v1
-export CAI_MODEL=your-model-id
-# Set CAI_MODEL_API_KEY securely in your server-side environment if required.
-./start-local.sh
+1. Add your **authorized targets** under **Local workspace → Targets**.
+2. Load a native workflow or choose a catalog template.
+3. Register required wordlists, resolver lists or templates under **Inputs**.
+4. Check adapter readiness, scope and request/CLI budgets.
+5. Execute, inspect node artifacts and review the captured evidence.
+6. Use **Observations**, **Findings** and **Compare runs** to track results.
+
+## 🧠 Agents: evidence first, confidence second
+
+AI-tricky supports a deterministic team coordinator with specialist roles and bounded evidence handoffs. You can configure **primary**, **complex-task** and **fallback** model routes per role, plus saved local presets and curated model menus.
+
+```text
+Authorized scope + explicit budgets
+                │
+                ▼
+         Workflow / Recon
+                │
+        Captured artifacts
+                │
+                ▼
+       Evidence-bound analysis
+                │
+                ▼
+      Vulnerability candidates
+                │
+                ▼
+       PoC validation plans
+                │
+                ▼
+      Human review / approval
 ```
 
-When enabled, the configured provider receives the goal and selected evidence. Credentials remain server-side. Model names cannot silently route to another provider; the adapter uses the configured endpoint. SDK tracing is disabled.
+The classic five-role CAI analyst team and the staged specialist profile are distinct modes. Agent findings cite supplied captures; PoC plans are **not executed exploits**. Model failures, unavailable providers and incomplete evidence remain visible instead of being silently converted into success.
 
-The **CAI evidence analyst** and **evidence-guided proposal planner** have no target tools. The evidence analyst reviews at most 12 supplied HTTP records, with selected metadata and up to 1,200 body characters per record. Full captured responses remain in local artifacts. Schema validation and artifact-reference checks establish provenance, not the factual correctness of a model's claim.
+**Docs:** [Agent settings](docs/AGENT-SETTINGS.md) · [Model routing](docs/TEAM-MODEL-ROUTING.md) · [Team budgets](docs/TEAM-BUDGETS.md) · [Model usage](docs/MODEL-USAGE.md)
 
-The separate CAI assessment preset uses application-owned scoped HTTP/TCP tools. No arbitrary CAI shell or browser tools are attached.
+## 🔍 Scope is a contract
 
-### Multi-agent CAI team
+| Input | Meaning |
+|:--|:--|
+| `example.com` | Exact host |
+| `*.example.com` | Subdomains, **not** the apex |
+| `example.com` + `*.example.com` | Apex and subdomains |
+| `192.168.1.10` | Exact IP |
+| `10.10.0.0/24` | CIDR range, within configured limits |
+| `https://app.example.com/api` | Scoped URL origin and path subtree |
 
-Run **Local workspace → Run setup → Multi-agent team** to fan one scoped assessment across five role-specialised CAI analysts behind a deterministic, model-free leader. Every member shares the run's scoped HTTP/TCP tools, so they draw on one budget ledger, scope enforcement and credential snapshot; the leader adds no target access of its own. Members are assessed independently with per-role provenance and report candidates only — nothing is auto-confirmed. Three options, all opt-in and clearly labelled:
+Passive discoveries do not automatically authorize active probing. Native HTTP uses destination checks and does not automatically follow redirects. **External CLI processes have different network behavior and are not OS-sandboxed.**
 
-- **Adaptive role selection** — the leader deterministically selects which roles the captured evidence and asset graph warrant instead of always running all five. A role that is not selected is recorded as an explicit coverage note, and absent or ambiguous evidence runs every role. No model is used for selection.
-- **Lead synthesizer pass** — a final model pass reviews the completed per-role reports only, with no target access, and emits a labelled, candidates-only narrative that never changes any finding's state.
-- **Per-member worker isolation** — with `CAI_PYTHON` set, each member runs in its own isolated interpreter; a bounded worker ceiling caps concurrent SDK processes independently of HTTP parallelism.
+**Docs:** [Web recon](docs/WEB-RECON.md) · [HTTP traffic](docs/HTTP-TRAFFIC.md) · [Identity assessment](docs/IDENTITY-ASSESSMENT.md)
 
-The same five-role review over captured evidence with no target tools is also available as the **CAI team analyst** workflow node.
-
-### Asset graph and passive enrichment
-
-**Local workspace → Asset graph** shows a deterministic, provenance-bound graph of the observed attack surface: typed entities (hosts, IPs, services, technologies, files, netblocks, certificates, vulnerabilities, contacts) and typed relationships extracted from captured artifacts. It records observed facts only — never findings, never model assertions — and initiates no target traffic. Opt-in **passive enrichment** (`AI_TRICKY_ALLOW_PASSIVE=1`, per-provider keys in Credentials) adds source-tagged third-party claims from Shodan, Censys, VirusTotal, Netlas, FOFA, BeVigil, Hunter.io, ZoomEye and Intelligence X through a single gated, allowlisted client; passive vulnerabilities are labelled third-party claims, never verified findings. Compare two runs to see new / not-observed / unchanged entities and edges — absence means "not observed", never resolution. A read-only **Asset graph** canvas node reads the scoped graph back into a workflow as data, never as live-probe targets.
-
-## Architecture
+## 🏗️ Architecture
 
 ```mermaid
 flowchart TD
-    UI["React workflow studio"] --> API["Local FastAPI"]
-    API --> DAG["Validated DAG runner"]
-    DAG --> N["Native HTTP / TCP"]
-    DAG --> C["CLI adapters"]
-    DAG --> A["CAI evidence review"]
-    N --> DB["SQLite and artifacts"]
-    C --> DB
-    A --> DB
+    UI["React / React Flow UI"] --> API["Local FastAPI server"]
+    API --> SCOPE["Scope + run admission"]
+    API --> DB[("SQLite: runs, settings, reviews")]
+    SCOPE --> DAG["Typed DAG scheduler"]
+    DAG --> NATIVE["Native DNS / TCP / HTTP"]
+    DAG --> CLI["Installed CLI adapters"]
+    NATIVE --> EVID["Evidence + HTTP journal"]
+    CLI --> EVID
+    EVID --> GRAPH["Asset graph / observations"]
+    EVID --> AGENTS["Optional CAI specialists"]
+    GRAPH --> FIND["Findings + run diff"]
+    AGENTS --> FIND
+    FIND --> REVIEW["Operator review"]
 ```
 
-| Path | Purpose |
-| --- | --- |
-| `src/` | React UI, typed canvas, catalog browser, node inspector and agent desk |
-| `backend/app.py` | Local API, run admission, controls and native target tools |
-| `backend/workflows.py` | DAG validation, scheduling, node state and evidence linkage |
-| `backend/cli_runner.py` | Argument construction, process lifecycle and bounded CLI artifacts |
-| `backend/catalog*.py` | Catalog contracts, import, preflight and capability planning |
-| `backend/cai_adapter.py` | Explicit-endpoint CAI SDK integration; in-process or isolated-interpreter worker |
-| `backend/team.py` | Deterministic multi-agent leader: role fan-out, adaptive selection, synthesizer and worker ceiling |
-| `backend/asset_graph.py` | Typed asset/attack-surface graph: extractors, provenance, scoped subgraph and run diffing |
-| `backend/passive_sources.py`, `backend/passive_ingest.py` | Gated, allowlisted passive-source adapters and ingestor |
-| `ai-tricky`, `scripts/build-binary.sh` | One-command launcher and the PyInstaller standalone-binary build |
-| `third-party/mini-tricky/` | Pinned MIT source catalog, attribution and wordlists |
-| `scripts/migrate-catalog.py` | Reproducible offline conversion and drift checks |
-| `backend/tests/`, `tests/` | Python integration and JavaScript contract/build tests |
+No Docker, Redis or cloud hosting is required. By default the service binds to **127.0.0.1**, and evidence/history are kept under the local data directory.
 
-## Execution boundaries
+### Selected configuration
 
-### Scope
+| Variable | Purpose |
+|:--|:--|
+| `AI_TRICKY_DATA_DIR` | Local database and evidence location |
+| `AI_TRICKY_PORT` | Loopback port; default `8787` |
+| `CAI_PYTHON` | Optional CAI interpreter |
+| `CAI_MODEL_BASE_URL` | Explicit model endpoint |
+| `CAI_MODEL` | Model identifier |
+| `CAI_ALLOW_REMOTE_MODEL=1` | Permit remote HTTPS model inference |
+| `AI_TRICKY_ALLOW_PASSIVE=1` | Enable opt-in passive enrichment |
 
-| Entered target | Native authorization boundary |
-| --- | --- |
-| `example.com` | Exact host; discovered subdomains need separate active authorization |
-| `192.168.1.10` or an IPv6 address | Exact IP |
-| `10.10.0.0/24` | Addresses inside the CIDR, subject to host limits |
-| `https://app.example.com/api` | HTTPS, exact host/port, `/api` and descendants; no general port enumeration |
+Never commit credentials. Provider credentials and sensitive captures should remain outside source control.
 
-Native HTTP requests validate and pin the resolved destination, preserve Host/TLS naming and never automatically follow redirects. Special-use destinations such as metadata/link-local addresses are blocked. Explicit loopback and LAN labs are supported.
-
-### Native tools and external binaries have different accounting
-
-**`max_requests` counts native HTTP/TCP admissions. `max_cli_invocations` counts CLI process launches.** The native request cap does not count or constrain network requests inside a binary.
-
-CLI adapters screen inputs against the selected run scope and use application-owned argument vectors. They do not use the native pinned-address HTTP transport. A binary may resolve destinations, follow links, contact providers or update its own data internally. This is application-level control, **not an OS network sandbox**.
-
-Processes use private working directories, bounded stdout/stderr and file artifacts, node deadlines and executable hash checks. POSIX pause/resume and cleanup operate on process groups. Windows behavior and deliberately daemonized children have not been validated here; see the [migration notes](docs/CATALOG-MIGRATION.md).
-
-The local API checks loopback peers, Host, Origin and JSON writes. It has no multi-user authentication and is intended for a single-user machine. Publishing this source repository does not deploy the running service.
-
-## Development
+## 🧪 Development and verification
 
 ```bash
+python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
 npm ci
 
-npm run dev                       # Python API + Vite, local development
 .venv/bin/python -m pytest backend/tests -q
 .venv/bin/python scripts/migrate-catalog.py --check
 npm run build
 npm test
-npx playwright install chromium  # one-time browser test setup
-npm run test:browser             # disposable local fixture server
+npm run test:browser
 ```
 
-To regenerate the committed catalog after editing the pinned source descriptors:
+The browser suite requires Playwright Chromium installation. CI covers backend contracts, frontend builds and browser fixtures. Recent merged work reports passing automated suites; **this is not a claim of production readiness or successful live-target testing**.
 
-```bash
-.venv/bin/python scripts/migrate-catalog.py
-```
+See [validation records](docs/VALIDATION.md) and the [CI workflow](https://github.com/MKlolbullen/AI-tricky/actions/workflows/ci.yml).
 
-Runtime catalog reads use generated JSON; PyYAML is only needed for migration/development checks.
+## ⚠️ Current limitations
 
-### Verification status
+- The platform is a **functional beta**; real-binary compatibility and broader OS validation are incomplete.
+- External scanners must be installed independently and may make requests outside native HTTP accounting.
+- Burp-compatible proxy routing and saved-items import are supported; **live bidirectional Burp/burpaderp sync is not**.
+- AD/Entra paths are candidate relationships requiring validation; no automatic identity exploitation is claimed.
+- CAI integration is optional, and model outputs are not independently verified findings.
+- The local API is intended for a **single trusted user**, not exposed multi-user hosting.
+- The bundled catalog is a set of contracts and templates, not a promise that all 151 tools are runnable.
 
-The historical 0.4 baseline and the current 0.5 checks are documented in [the validation record](docs/VALIDATION.md). The 0.5 suite adds evidence parsing, migration, persistence, concurrency, review and comparison coverage.
+## 🗺️ Roadmap
 
-The adapter matrix uses executable fixtures across all 151 entries: 141 exercise execution contracts and ten assert their explicit restrictions. Those fixtures do not establish compatibility with every external tool version. CAI tests use local model fixtures; the three SDK tests skip when the optional SDK is absent. The URO test skips if that binary is unavailable beside the selected Python interpreter.
+- [ ] Validate more external tool versions and operating systems.
+- [ ] Expand constrained catalog adapters with explicit account/context contracts.
+- [ ] Improve evidence-age rules and controlled replay/recovery.
+- [ ] Strengthen identity testing coverage and review workflows.
+- [ ] Explore policy-controlled Burp/burpaderp and Strix integration.
+- [ ] Refine operator UX, model compatibility checks and agent observability.
 
-Chromium workbench and evidence-guided planning interaction regressions run in CI. Broader desktop/platform QA and real-binary version validation remain open. See [the validation record](docs/VALIDATION.md).
+## 🤝 Contributing
 
-### Team budgets and passive cache reliability
+Issues and pull requests are welcome, especially reproducible bugs, compatibility reports, evidence-handling improvements and scoped workflow templates. Please include the affected platform/tool versions and a minimal, non-sensitive reproduction. Do not submit real credentials or private target evidence.
 
-Multi-agent assessments now have a combined model-turn ceiling, including the
-optional lead synthesizer. Configure **Total team model turns** in Run setup or
-on a CAI team analyst node. Reports show each pass's reserved ceiling and explicit
-coverage gaps for skipped or incomplete analysts. See [defaults, API fields and
-allocation semantics](docs/TEAM-BUDGETS.md).
+## 📜 Attribution & license
 
-Passive response caching is isolated by the selected provider credentials.
-Changing an API key or a pagination limit triggers a fresh fetch. The in-memory
-LRU expires old entries and bounds retained queries; setting the TTL to zero
-disables cache reads and writes. Each enrichment still creates its own evidence
-artifacts and run provenance.
+Created by **[Victor Åhgren / MKlolbullen](https://github.com/MKlolbullen)**.
 
-### Checkpointed workflow recovery
+AI-tricky builds on the MIT-licensed [mini-tricky](https://github.com/MKlolbullen/mini-tricky) catalog. See [third-party notices](THIRD_PARTY_NOTICES.md) for attribution and separate upstream licensing. Application code is [MIT licensed](LICENSE).
 
-Recover selected branches from a stopped workflow through **Local workspace →
-Runs → Recover workflow branches**. Review which steps execute again and which
-upstream outputs are reused, then approve a new run bound to the original scope,
-budgets, input hashes and executable pins. Reused captures retain their original
-age and provenance. See [recovery contracts and limits](docs/WORKFLOW-RECOVERY.md).
+**Use only on systems you own or have explicit permission to assess.**
 
-### Actual model usage
+---
 
-The **Usage** tab and per-run panels show admitted model call attempts, responses
-and provider-reported tokens, with per-node and specialist-role attribution.
-Missing reports stay unknown, and old runs show usage unavailable. Planning and
-recovery have separate accounting. Records survive failures and runtime restarts,
-including isolated CAI workers. See [counter definitions and API](docs/MODEL-USAGE.md).
+<div align="center">
 
-## Configuration and compatibility
+**Less guessing. More evidence. Better security engineering.**
 
-| Variable | Purpose |
-| --- | --- |
-| `AI_TRICKY_DATA_DIR` | Override the local database, input and evidence directory |
-| `AI_TRICKY_PORT` | Loopback port for the server (default 8787); the bind stays 127.0.0.1 |
-| `CAI_PYTHON` | Python executable in the separate optional CAI environment; enables per-member isolated-interpreter workers |
-| `CAI_MODEL_BASE_URL` | Explicit local or permitted remote model endpoint |
-| `CAI_MODEL` | Model identifier at that endpoint |
-| `CAI_MODEL_API_KEY` | Optional server-side provider credential |
-| `CAI_ALLOW_REMOTE_MODEL=1` | Permit a remote HTTPS model endpoint |
-| `AI_TRICKY_ALLOW_PASSIVE=1` | Enable explicit passive-provider enrichment |
-| `AI_TRICKY_PASSIVE_MAX_PAGES` | Provider pagination ceiling: default 3, range 1–10 |
-| `AI_TRICKY_PASSIVE_CACHE_TTL` | In-memory cache lifetime in seconds: default 900, range 0–86400; zero disables caching |
-| `AI_TRICKY_PASSIVE_CACHE_ENTRIES` | In-memory LRU query capacity: default 128, range 1–1024 |
+[Repository](https://github.com/MKlolbullen/AI-tricky) · [Issues](https://github.com/MKlolbullen/AI-tricky/issues) · [Pull requests](https://github.com/MKlolbullen/AI-tricky/pulls)
 
-AI-tricky continues the Offsecs-u-AI prototype. Existing `OFFSECS_U_AI_*` and `RECONFORGE_*` environment names remain supported. Existing database selection and the `offsecs-u-ai.workflow/v1` interchange schema are retained; legacy `reconforge.prototype.workflow/v1` imports remain readable. These identifiers are compatibility details, not separate products.
-
-## Roadmap
-
-- Dedicated account, cluster, callback and notification contracts for restricted catalog entries.
-- Real-binary compatibility coverage across supported tool versions and platforms.
-- Additional controlled replay profiles and evidence-age policies for recovery.
-- Controlled multi-identity testing and reviewed reuse of unused model-turn allowances.
-- Burp/burpaderp and Strix integration through their own policy and evidence contracts.
-- Broader desktop/platform QA and refinement of the workflow studio.
-
-## Attribution and license
-
-Created by [Victor Åhgren / MKlolbullen](https://github.com/MKlolbullen), building on the architecture and catalog of [mini-tricky](https://github.com/MKlolbullen/mini-tricky).
-
-Application code is licensed under [MIT](LICENSE). The mini-tricky catalog is pinned to commit `96971000b0058423da52884d9028250ab76b0633`, with its MIT license retained. Other curated examples and descriptors are documented in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). This is not the complete hosted Trickest service or its proprietary wrappers.
-
-External binaries, model providers and SDKs retain their own licenses. The optional CAI 0.5.10 package has mixed MIT/proprietary terms and is not bundled. Use AI-tricky only for systems and data you are authorized to assess.
+</div>

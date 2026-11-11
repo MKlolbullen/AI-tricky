@@ -192,7 +192,7 @@ async def collect_assets(values, config, data, fetch, store, node_id):
 
 def recon_workflow(*, fuzz=False, scan=False, review=False):
     """Independent curated starter; leaves the pinned migration catalog intact."""
-    from .catalog import TOOLS
+    from .catalog import TOOLS, OUTPUT_INPUTS, MERGE_INPUTS
     from .workflows import REGISTRY, SCHEMA, validate_workflow
     nodes, edges = [], []
 
@@ -216,15 +216,15 @@ def recon_workflow(*, fuzz=False, scan=False, review=False):
     for nid, y in [('subfinder', 0), ('assetfinder', 200)]:
         node(nid, 'catalog_tool', 230, y, toolId=nid)
         edge('domains', nid, 'domain')
-    node('hosts', 'catalog_merge', 460, 100, inputs=['any'], outputs=['targets'], output='targets', title='Unique discovered hosts')
+    node('hosts', 'catalog_merge', 460, 100, inputs=list(MERGE_INPUTS['targets']), outputs=['targets'], output='targets', title='Unique discovered hosts')
     # Include an explicitly authorized apex even when --subs-only finds none.
     # A wildcard-only apex seed is filtered out before active probing.
-    edge('domains', 'hosts', 'domain', 'any')
-    edge('subfinder', 'hosts', 'targets', 'any'); edge('assetfinder', 'hosts', 'targets', 'any')
+    edge('domains', 'hosts', 'domain')
+    edge('subfinder', 'hosts', 'targets'); edge('assetfinder', 'hosts', 'targets')
     node('probe', 'catalog_tool', 690, 100, toolId='httprobe'); edge('hosts', 'probe', 'targets')
     node('crawl', 'catalog_tool', 920, 0, toolId='katana', params={'-jc': True}); edge('probe', 'crawl', 'url')
-    node('urls', 'catalog_merge', 1150, 100, inputs=['any'], outputs=['url'], output='url', title='Unique probe and crawl URLs')
-    edge('probe', 'urls', 'url', 'any'); edge('crawl', 'urls', 'url', 'any')
+    node('urls', 'catalog_merge', 1150, 100, inputs=list(MERGE_INPUTS['url']), outputs=['url'], output='url', title='Unique probe and crawl URLs')
+    edge('probe', 'urls', 'url'); edge('crawl', 'urls', 'url')
     node('sources', 'native_web_assets', 1610 if review else 1380, 100)
     node('summary', 'native_summary', 1840 if review else 1610, 100)
     edge('sources', 'summary', 'report')
@@ -240,17 +240,17 @@ def recon_workflow(*, fuzz=False, scan=False, review=False):
     if scan:
         node('scan', 'catalog_tool', 920, 560, toolId='nuclei', title='Nuclei — reviewed HTTP templates')
         edge('probe', 'scan', 'url')
-        node('scan-results', 'catalog_output', 1380, 560, inputs=['any'], outputs=['report'],
+        node('scan-results', 'catalog_output', 1380, 560, inputs=list(OUTPUT_INPUTS), outputs=['report'],
              output='report', title='Nuclei detections')
-        edge('scan', 'scan-results', 'findings', 'any')
+        edge('scan', 'scan-results', 'findings')
         edge('scan-results', 'summary', 'report')
     if fuzz:
-        node('fuzz-urls', 'catalog_merge', 920, 320, inputs=['any'], outputs=['targets'], output='targets', title='Probed URLs for directory fuzzing')
-        edge('probe', 'fuzz-urls', 'url', 'any')
+        node('fuzz-urls', 'catalog_merge', 920, 320, inputs=list(MERGE_INPUTS['targets']), outputs=['targets'], output='targets', title='Probed URLs for directory fuzzing')
+        edge('probe', 'fuzz-urls', 'url')
         node('fuzz', 'catalog_tool', 1150, 320, toolId='ffuf', title='Optional path fuzzing — bind a wordlist')
         edge('fuzz-urls', 'fuzz', 'targets')
-        node('fuzz-results', 'catalog_output', 1380, 320, inputs=['any'], outputs=['report'], output='report', title='Fuzzing observations')
-        edge('fuzz', 'fuzz-results', 'findings', 'any'); edge('fuzz-results', 'summary', 'report')
+        node('fuzz-results', 'catalog_output', 1380, 320, inputs=list(OUTPUT_INPUTS), outputs=['report'], output='report', title='Fuzzing observations')
+        edge('fuzz', 'fuzz-results', 'findings'); edge('fuzz-results', 'summary', 'report')
     graph = {'schema': SCHEMA, 'nodes': nodes, 'edges': edges, 'parallelism': 3}
     validate_workflow(graph, live=True)
     return graph

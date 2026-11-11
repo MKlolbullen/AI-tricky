@@ -11,7 +11,7 @@ test('all 151 migrated tool descriptors and 57 workflows have valid socket contr
 });
 test('multi-output connections bind the selected socket rather than the primary alias',()=>{
  const t=migrated.tools.find(t=>t.id==='httpx'),a=catalogNode('httpx',t),b=catalogSource('out','catalog_output');
- const workflow={schema:WORKFLOW_SCHEMA,nodes:[a,b],edges:[{id:'e1',source:a.id,target:b.id,sourceHandle:'out:url',targetHandle:'in:any'}]};
+ const workflow={schema:WORKFLOW_SCHEMA,nodes:[a,b],edges:[{id:'e1',source:a.id,target:b.id,sourceHandle:'out:url',targetHandle:'in:url'}]};
  validateWorkflow(workflow,catalogKinds,[]);
  workflow.edges[0].sourceHandle='out:invented';
  assert.throws(()=>validateWorkflow(workflow,catalogKinds,[]),/socket/);

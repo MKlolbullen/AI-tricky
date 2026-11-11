@@ -2,11 +2,15 @@
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import yaml
 
 ROOT=Path(__file__).resolve().parent.parent
+sys.path.insert(0,str(ROOT))
+# Single source of truth for the terminal-sink accepted-type sets.
+from backend.catalog import OUTPUT_INPUTS, MERGE_INPUTS
 SOURCE=ROOT/'third-party/mini-tricky'
 BLOCKED={
  'interlace':'Requires an arbitrary command string. Use typed graph fan-out instead.',
@@ -34,14 +38,27 @@ def convert_graph(raw,tools):
    spec=tools[n['tool_id']];data={'kind':'catalog_tool','toolId':spec['id'],'inputs':spec['inputs'],'outputs':spec['outputs'],'output':spec['outputs'][0] if spec['outputs'] else 'report','params':params}
   elif kind=='variable':
    typ=n.get('variable_type','targets');data={'kind':'catalog_source','sourceType':typ,'inputs':[],'outputs':[typ],'output':typ,'value':n.get('value') or ''}
-  elif kind=='output':data={'kind':'catalog_output','inputs':['any'],'outputs':['report'],'output':'report'}
+  elif kind=='output':data={'kind':'catalog_output','inputs':list(OUTPUT_INPUTS),'outputs':['report'],'output':'report'}
   elif kind=='merge':
-   typ=params.get('output_type','targets');data={'kind':'catalog_merge','inputs':['any'],'outputs':[typ],'output':typ}
+   typ=params.get('output_type','targets')
+   if typ not in MERGE_INPUTS:raise ValueError(f'Unsupported merge output type: {typ}')
+   data={'kind':'catalog_merge','inputs':list(MERGE_INPUTS[typ]),'outputs':[typ],'output':typ}
   elif kind=='payload':data={'kind':'catalog_payload','inputs':[],'outputs':['wordlist'],'output':'wordlist','params':params}
   else:raise ValueError(f'Unsupported source node kind: {kind}')
   data.update(title=n['label'],description='mini-tricky catalog',timeout=120,retries=0,status='pending',result='Not run')
   nodes.append({'id':n['id'],'type':'tool','position':n.get('position') or {'x':len(nodes)*230,'y':130},'data':data})
- edges=[{'id':e.get('id') or f'edge-{i}','source':e['source'],'target':e['target'],'sourceHandle':e.get('source_handle'),'targetHandle':e.get('target_handle'),'label':(e.get('source_handle') or 'out:any').removeprefix('out:'),'type':'smoothstep'} for i,e in enumerate(raw['edges'])]
+ by_id={n['id']:n for n in nodes}
+ edges=[]
+ for i,e in enumerate(raw['edges']):
+  src_type=(e.get('source_handle') or ('out:'+by_id[e['source']]['data']['output'])).removeprefix('out:')
+  # Sink nodes now declare real accepted types instead of a blanket 'any', so a
+  # pinned 'in:any' edge into a sink is normalised to the concrete source type
+  # (the pinned templates.yaml is hash-checked and must not be edited).
+  tgt_kind=by_id[e['target']]['data']['kind']
+  raw_tgt=e.get('target_handle')
+  tgt_type=src_type if tgt_kind in ('catalog_output','catalog_merge') and (raw_tgt in (None,'in:any')) else (raw_tgt or 'in:'+src_type).removeprefix('in:')
+  edges.append({'id':e.get('id') or f'edge-{i}','source':e['source'],'target':e['target'],
+                'sourceHandle':'out:'+src_type,'targetHandle':'in:'+tgt_type,'label':src_type,'type':'smoothstep'})
  return {'schema':'offsecs-u-ai.workflow/v1','nodes':nodes,'edges':edges,'parallelism':4}
 
 

@@ -18,6 +18,13 @@ TOOLS = {tool['id']: tool for tool in TOOL_ENTRIES}
 if len(TOOLS) != len(TOOL_ENTRIES):
     raise RuntimeError('Catalog tool IDs must be unique.')
 CATALOG_KINDS={'catalog_tool','catalog_source','catalog_merge','catalog_output','catalog_payload'}
+# Real accepted input types for the terminal sink nodes, replacing the former
+# blanket 'any'. A collector archives every emittable data stream; a merge may
+# only combine streams compatible with the data type it asserts on its output.
+# Order is part of the socket contract (contract() compares by value) and the
+# frontend catalogContract mirrors these arrays exactly — keep them in sync.
+OUTPUT_INPUTS=['domain','targets','url','findings','file','folder','sbom','query','wordlist']
+MERGE_INPUTS={'targets':['domain','targets','url'],'url':['targets','url']}
 SOURCE_TYPES={'domain','targets','url','file','folder','wordlist','query','sbom'}
 # Imported flags retain their metadata, but cannot override filesystem, code,
 # callbacks, transport policy or credential boundaries in this adapter.
@@ -77,9 +84,9 @@ def contract(data):
         inputs,outputs=[],[typ]
     elif kind=='catalog_merge':
         output=data.get('output')
-        if output not in ('targets','url'):raise ScopeError('Merge output must be targets or url.')
-        inputs,outputs=['any'],[output]
-    elif kind=='catalog_output':inputs,outputs=['any'],['report']
+        if output not in MERGE_INPUTS:raise ScopeError('Merge output must be targets or url.')
+        inputs,outputs=list(MERGE_INPUTS[output]),[output]
+    elif kind=='catalog_output':inputs,outputs=list(OUTPUT_INPUTS),['report']
     elif kind=='catalog_payload':
         params=data.get('params',{})
         if not isinstance(params,dict) or set(params)-{'payload_types','encodings'}:raise ScopeError('Invalid payload source parameters.')
@@ -107,17 +114,30 @@ def convert_mini(value):
             data={'kind':'catalog_tool','toolId':t['id'],'inputs':t['inputs'],'outputs':t['outputs'],'output':t['outputs'][0],'params':params}
         elif kind=='variable':
             typ=n.get('variable_type','targets');data={'kind':'catalog_source','sourceType':typ,'inputs':[],'outputs':[typ],'output':typ,'value':n.get('value') or ''}
-        elif kind=='output':data={'kind':'catalog_output','inputs':['any'],'outputs':['report'],'output':'report'}
+        elif kind=='output':data={'kind':'catalog_output','inputs':list(OUTPUT_INPUTS),'outputs':['report'],'output':'report'}
         elif kind=='merge':
-            typ=params.get('output_type','targets');data={'kind':'catalog_merge','inputs':['any'],'outputs':[typ],'output':typ}
+            typ=params.get('output_type','targets')
+            if typ not in MERGE_INPUTS:raise ScopeError('Merge output must be targets or url.')
+            data={'kind':'catalog_merge','inputs':list(MERGE_INPUTS[typ]),'outputs':[typ],'output':typ}
         elif kind=='payload':data={'kind':'catalog_payload','inputs':[],'outputs':['wordlist'],'output':'wordlist','params':params}
         else:raise ScopeError('Scripts, conditions, loops and modules require dedicated migration contracts.')
         data.update(title=n.get('label') or n.get('tool_id') or kind,description='mini-tricky import',timeout=120,retries=0,status='pending',result='Not run')
         nodes.append({'id':n.get('id'),'type':'tool','position':n.get('position') or {'x':len(nodes)*230,'y':130},'data':data})
+    by_id={n['id']:n for n in nodes}
     edges=[]
     for i,e in enumerate(raw['edges']):
         if not isinstance(e,dict):raise ScopeError('Invalid mini-tricky edge.')
-        edges.append({'id':e.get('id') or f'edge-{i}','source':e.get('source'),'target':e.get('target'),'sourceHandle':e.get('source_handle'),'targetHandle':e.get('target_handle'),'type':'smoothstep','label':str(e.get('source_handle') or 'out:any').removeprefix('out:')})
+        src_node=by_id.get(e.get('source'))
+        src_type=(e.get('source_handle') or ('out:'+src_node['data']['output'] if src_node else 'out:any')).removeprefix('out:')
+        raw_tgt=e.get('target_handle')
+        tgt_node=by_id.get(e.get('target'))
+        # Sink nodes declare real accepted types instead of a blanket 'any', so a
+        # legacy 'in:any' edge into a sink is normalised to the concrete source type.
+        if tgt_node and tgt_node['data']['kind'] in ('catalog_output','catalog_merge') and raw_tgt in (None,'in:any'):
+            tgt_type=src_type
+        else:
+            tgt_type=(raw_tgt or 'in:'+src_type).removeprefix('in:')
+        edges.append({'id':e.get('id') or f'edge-{i}','source':e.get('source'),'target':e.get('target'),'sourceHandle':'out:'+src_type,'targetHandle':'in:'+tgt_type,'type':'smoothstep','label':src_type})
     return {'schema':'offsecs-u-ai.workflow/v1','nodes':nodes,'edges':edges,'parallelism':4}
 
 

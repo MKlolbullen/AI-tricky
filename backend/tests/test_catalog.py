@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import RunControl, create_app
-from backend.catalog import CATALOG, TOOLS, ROOT, contract, convert_mini, registered_path, scoped_lines
+from backend.catalog import CATALOG, OUTPUT_INPUTS, TOOLS, ROOT, contract, convert_mini, registered_path, scoped_lines
 from backend.catalog_execution import incoming_streams, preflight
 from backend.cli_runner import CLIError, build_command, digest, execute_cli, pin_binary, prepare_context
 from backend.scope import ScopeError
@@ -180,9 +180,10 @@ def test_real_graph_stream_routing_and_cli_accounting(tmp_path,fixture_binary,mo
     # Use only the canonical subfinder -> HTTPX -> Nuclei branch to avoid requiring unrelated binaries.
     source=next(n for n in graph['nodes'] if n['data']['kind']=='catalog_source')
     tool_nodes=[next(n for n in graph['nodes'] if n['data'].get('toolId')==tid) for tid in ('subfinder','httpx','nuclei')]
-    sink={'id':'collector','type':'tool','position':{'x':1000,'y':0},'data':{'kind':'catalog_output','title':'Collect','inputs':['any'],'outputs':['report'],'output':'report','timeout':120,'retries':0}}
+    sink={'id':'collector','type':'tool','position':{'x':1000,'y':0},'data':{'kind':'catalog_output','title':'Collect','inputs':list(OUTPUT_INPUTS),'outputs':['report'],'output':'report','timeout':120,'retries':0}}
     nodes=[source,*tool_nodes,sink];types=['domain','targets','url','findings']
-    edges=[{'id':f'e{i}','source':nodes[i]['id'],'target':nodes[i+1]['id'],'sourceHandle':'out:'+typ,'targetHandle':'in:'+('any' if i==3 else typ)} for i,typ in enumerate(types)]
+    # The collector now declares real accepted types; the findings edge binds the concrete in:findings socket, not a blanket in:any.
+    edges=[{'id':f'e{i}','source':nodes[i]['id'],'target':nodes[i+1]['id'],'sourceHandle':'out:'+typ,'targetHandle':'in:'+typ} for i,typ in enumerate(types)]
     g={'schema':'offsecs-u-ai.workflow/v1','nodes':nodes,'edges':edges}
     from backend.tests.test_local import wait_done
     with TestClient(create_app(tmp_path/'state')) as c:

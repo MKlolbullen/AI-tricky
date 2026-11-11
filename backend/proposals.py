@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from .catalog import TOOLS, scoped_lines, tool_readiness
+from .catalog import TOOLS, OUTPUT_INPUTS, scoped_lines, tool_readiness
 from .catalog_execution import preflight
 from .evidence import EvidenceIndex
 from .observations import PARSER_VERSION, digest, encoded
@@ -91,7 +91,6 @@ def action_graph(action, proposal_id=None):
                      'data': {'kind': 'native_summary', 'title': summary['name'], 'inputs': summary['inputs'],
                               'output': summary['output'], 'timeout': 120, 'retries': 0}}
         outputs = [spec['output']]
-        sink_type = spec['output']
     else:
         spec = TOOLS[adapter]
         tool = {'id': 'followup-test', 'type': 'tool', 'position': {'x': 250, 'y': 130},
@@ -99,9 +98,9 @@ def action_graph(action, proposal_id=None):
                          'inputs': spec['inputs'], 'outputs': spec['outputs'], 'output': spec['outputs'][0],
                          'params': action['params'], 'timeout': min(spec.get('timeout_seconds', 300), 3600), 'retries': 0}}
         collector = {'id': 'followup-output', 'type': 'tool', 'position': {'x': 500, 'y': 130},
-                     'data': {'kind': 'catalog_output', 'title': 'Follow-up evidence', 'inputs': ['any'],
+                     'data': {'kind': 'catalog_output', 'title': 'Follow-up evidence', 'inputs': list(OUTPUT_INPUTS),
                               'outputs': ['report'], 'output': 'report', 'timeout': 120, 'retries': 0}}
-        outputs, sink_type = spec['outputs'], 'any'
+        outputs = spec['outputs']
     nodes = [source, tool, collector]
     if proposal_id:
         for node in nodes:
@@ -109,7 +108,7 @@ def action_graph(action, proposal_id=None):
     edges = [{'id': 'followup-in', 'source': source['id'], 'target': tool['id'],
               'sourceHandle': 'out:' + typ, 'targetHandle': 'in:' + typ}]
     edges += [{'id': f'followup-out-{i}', 'source': tool['id'], 'target': collector['id'],
-               'sourceHandle': 'out:' + output, 'targetHandle': 'in:' + sink_type} for i, output in enumerate(outputs)]
+               'sourceHandle': 'out:' + output, 'targetHandle': 'in:' + output} for i, output in enumerate(outputs)]
     graph = {'schema': SCHEMA, 'nodes': nodes, 'edges': edges, 'parallelism': 1}
     validate_workflow(graph, live=True)
     return graph

@@ -162,3 +162,21 @@ from the pinned mini-tricky migration. Use reviewed local tool contracts and
 registered support inputs. mksub and mkpath generate bounded offline candidates
 whose downstream active consumers recheck scope. The public recon example
 maps to the local web recon and Nuclei starter. See docs/TRICKEST-OPEN-SOURCE.md.
+
+## Typed sink sockets — 2026-11-11
+
+Terminal catalog sink nodes declare real accepted input types instead of a
+blanket `any`. `catalog_output` (artifact collector) accepts the full emittable
+data vocabulary (`domain, targets, url, findings, file, folder, sbom, query,
+wordlist`); `catalog_merge` accepts only types compatible with the data type it
+asserts on its output (`targets` ← domain/targets/url; `url` ← targets/url), so
+a merge can no longer mislabel an incompatible stream. The sets live once in
+`backend/catalog.OUTPUT_INPUTS`/`MERGE_INPUTS` and are mirrored verbatim (order
+included — the contract check is order-sensitive) in `src/catalog-contracts.mjs`.
+`validate_workflow` was unchanged: it already type-checks concrete multi-type
+input sockets, and the `any` sentinel is retained only for native-registry
+nodes. The pinned `templates.yaml` is hash-checked, so `migrate-catalog.py`
+(and the runtime `convert_mini` importer) normalise legacy `in:any` sink edges
+to the concrete source type at generation/import time rather than editing the
+pinned source. Sinks now render one input handle per accepted type on the
+canvas.

@@ -5,7 +5,7 @@ test('the Trickest catalog loads a local workflow and adds a typed tool', async 
   const installed = await request.post('/api/support-data/install/bundled', {data: {}});
   expect(installed.ok()).toBe(true);
   await page.goto('/');
-  const open = page.getByRole('button', {name: 'Templates', exact: true});
+  const open = page.getByRole('button', {name: /^Templates · \d+$/});
   const library = page.getByRole('dialog', {name: 'Template library'});
   await open.click();
   await library.getByLabel('Catalog source').selectOption('trickest-oss');

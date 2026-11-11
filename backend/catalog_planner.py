@@ -41,4 +41,4 @@ def plan_catalog(goal,source_type='domain',target_type='findings',max_risk='medi
     graph={'schema':'offsecs-u-ai.workflow/v1','nodes':nodes,'edges':edges,'parallelism':4}
     from .workflows import validate_workflow
     validate_workflow(graph,live=True)
-    return {'graph':graph,'goal':goal,'planner':'catalog-capabilities','model_called':False,'adapters':[TOOLS[s['tool_id']]['name'] for s in steps],'explanation':'Deterministic typed capability plan from the migrated catalog. Preflight still checks binaries, input bindings, credentials and execution settings.','steps':steps}
+    return {'graph':graph,'goal':goal,'planner':'catalog-capabilities','model_called':False,'adapters':[TOOLS[s['tool_id']]['name'] for s in steps],'explanation':'Deterministic typed capability plan from the local catalog. Preflight checks binaries, input bindings, credentials and execution settings.','steps':steps}

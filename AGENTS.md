@@ -154,3 +154,11 @@ Use direct verified HTTPS or direct loopback HTTP. Keep bearer values in memory,
 redact the request journal, and retain response metadata and run-local HMAC
 fingerprints. Keep findings subject to operator review and preserve legacy
 anonymous profile hashes. See docs/CONTROLLED-VERIFICATION.md.
+
+## Trickest open-source pack — 2026-11-11
+
+Keep public Trickest tool pins and workflow adaptations in a separate source
+from the pinned mini-tricky migration. Use reviewed local tool contracts and
+registered support inputs. mksub and mkpath generate bounded offline candidates
+whose downstream active consumers recheck scope. The public recon example
+maps to the local web recon and Nuclei starter. See docs/TRICKEST-OPEN-SOURCE.md.

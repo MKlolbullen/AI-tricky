@@ -1,0 +1,3 @@
+# Tool ID, Go package, Go module version (tab-separated)
+mksub	github.com/trickest/mksub	v1.1.1
+mkpath	github.com/trickest/mkpath	v1.1.0

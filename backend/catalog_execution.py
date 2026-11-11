@@ -9,7 +9,8 @@ from urllib.parse import quote
 from .catalog import CATALOG, CATALOG_KINDS, ROOT, TOOLS, registered_path, scoped_lines
 from .cli_runner import execute_cli, pin_binary
 from .scope import ScopeError, parse_target
-from .recon_tools import PROFILES as RECON_TOOL_PROFILES, tool_check
+from .recon_tools import TOOL_GROUPS, tool_check
+from .trickest_pack import GENERATORS, validate_wordlist
 from .http_routing import cli_routing, CLI_PROXY_FLAGS, DIRECT_NETWORK_TOOLS
 
 
@@ -98,8 +99,14 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
                 if key not in config.get('cli_credential_keys',[]) or key not in credentials:reason.append(f'Configure and select the provider credential variable {key}.')
             if not config.get('allow_cli'):reason.append('Enable catalog CLI execution for this run.')
             for typ,identifier in data.get('inputRefs',{}).items():
-                try:registered_path(store,identifier,'folder' if typ in ('folder','templates') else 'file');snapshots[identifier]=store.input(identifier)
+                try:
+                    path = registered_path(store, identifier, 'folder' if typ in ('folder', 'templates') else 'file')
+                    if typ == 'wordlist' and tool['id'] in GENERATORS:
+                        validate_wordlist(tool['id'], path)
+                    snapshots[identifier] = store.input(identifier)
                 except ScopeError as exc:reason.append(str(exc))
+                except OSError:
+                    reason.append('A registered input could not be read.')
             incoming={(e.get('targetHandle') or 'in:'+next(x for x in graph['nodes'] if x['id']==e['source'])['data']['output']).removeprefix('in:') for e in graph['edges'] if e['target']==n['id']}
             placeholders={m for token in tool['command'] for m in re.findall(r'\{([^}]+)\}',token)}
             for field,typ in [('wordlist_file','wordlist'),('paths_file','paths_file'),('folder','folder'),('sbom_file','sbom')]:
@@ -110,7 +117,7 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
             if 'exploit_type' in placeholders and not data.get('params',{}).get('exploit_type'):reason.append('Choose a named exploit_type context.')
             if check_binaries and tool['adapter']['mode']!='blocked':
                 tool_id = tool['id']
-                if tool_id in RECON_TOOL_PROFILES and tool_id not in tool_checks:
+                if tool_id in TOOL_GROUPS and tool_id not in tool_checks:
                     tool_checks[tool_id] = tool_check(tool_id)
                 check = tool_checks.get(tool_id)
                 if check and check['status'] == 'wrong_binary':

@@ -85,6 +85,9 @@ jobs:
       - run: |
           PATH="$RUNNER_TEMP/web-recon/bin:$PATH" python scripts/check-recon-tools.py
           AI_TRICKY_RECON_BIN="$RUNNER_TEMP/web-recon/bin" python -m pytest backend/tests/test_web_recon_real.py -q
+      - run: |
+          scripts/install-tools.sh --trickest-oss --yes --skip-toolchains --prefix="$RUNNER_TEMP/trickest-oss"
+          AI_TRICKY_TRICKEST_BIN="$RUNNER_TEMP/trickest-oss/bin" python -m pytest backend/tests/test_trickest_pack.py -q
 
   optional-cai:
     if: github.event_name == 'workflow_dispatch' && inputs.cai_sdk
@@ -116,7 +119,14 @@ jobs:
           cache: npm
       - run: python -m pip install -r requirements.txt
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - name: Prepare browser
+        run: |
+          if command -v google-chrome >/dev/null; then
+            google-chrome --version
+            echo "AI_TRICKY_TEST_BROWSER_CHANNEL=chrome" >> "$GITHUB_ENV"
+          else
+            npx playwright install --with-deps chromium
+          fi
       - run: npm run build
       - run: npm run test:browser
 

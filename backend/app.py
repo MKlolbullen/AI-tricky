@@ -25,7 +25,7 @@ from .agent_settings import AgentPresets, PresetInput, PresetRevision, SettingsC
 from .model_catalog import model_catalog
 from .workflows import REGISTRY, validate_workflow, execute_workflow
 from .intelligence import analysis_goal, plan_workflow
-from .catalog import CATALOG as MINI_CATALOG, CATALOG_KINDS, TOOLS, convert_mini, tool_readiness, blocked_flag
+from .catalog import CATALOG as MINI_CATALOG, CATALOG_KINDS, TOOLS, TRICKEST_CATALOG, convert_mini, tool_readiness, blocked_flag
 from .catalog_execution import preflight as catalog_preflight
 from .cli_runner import pause_processes, snapshot_folder
 from .support_data import SupportData
@@ -374,7 +374,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                 'capabilities': ['scoped_http_get', 'scoped_tcp_connect', 'domain_ip_cidr_inventory', 'cai_model', 'sqlite_history', 'native_dag', 'saved_workflows', 'workflow_recovery', 'model_usage'],
                 'workflow_adapters': REGISTRY,
                 'workflow_execution': 'Native DAG, CAI evidence review and 151 migrated catalog contracts; CLI execution requires explicit run enablement and preflight',
-                'catalog_tools':len(TOOLS),'catalog_workflows':len(MINI_CATALOG['workflows']),
+                'catalog_tools':len(TOOLS),'catalog_workflows':len(MINI_CATALOG['workflows']) + len(TRICKEST_CATALOG['workflows']),
                 'cli_credential_variables':[{'name':key,'configured':bool(vault.effective(key))} for key in sorted({key for t in TOOLS.values() for key in t.get('secrets',[])}) if key not in MODEL_VARS],
                 'model_providers':model_provider_status(),
                 'model_catalog':model_catalog(),
@@ -441,9 +441,18 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         graph = recon_workflow(fuzz=fuzz, scan=scan, review=review)
         return support_data.bind(graph, bundled_only=True)['graph'] if scan else graph
 
+    @app.get('/api/workflow-starters/trickest/{identifier}')
+    def trickest_starter(identifier: str):
+        from .trickest_pack import workflow
+        try:
+            graph = workflow(identifier)
+        except KeyError:
+            raise HTTPException(404, 'Trickest workflow template not found.') from None
+        return support_data.bind(graph, bundled_only=True)['graph']
+
     @app.get('/api/catalog')
     async def catalog():
-        return {**MINI_CATALOG,'readiness':[tool_readiness(t) for t in TOOLS.values()]}
+        return {**MINI_CATALOG, 'trickest': TRICKEST_CATALOG, 'readiness': [tool_readiness(t) for t in TOOLS.values()]}
 
     @app.post('/api/catalog/plan')
     async def catalog_plan(body: CatalogPlanInput):

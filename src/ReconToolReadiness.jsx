@@ -10,8 +10,8 @@ const labels = {
 
 export default function ReconToolReadiness({checks}) {
   if (!checks?.length) return null;
-  return <section aria-label="Web recon tool checks">
-    <h4>Web recon tools</h4>
+  return <section aria-label="Pinned tool checks">
+    <h4>Pinned tools</h4>
     <ul>
       {checks.map(tool => <li key={tool.tool_id}>
         <strong>{tool.tool_id} · {labels[tool.status]}</strong>

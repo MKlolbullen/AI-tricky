@@ -18,6 +18,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from .catalog import TOOLS, registered_path, scoped_lines
 from .scope import ScopeError, authorize, parse_target
+from .trickest_pack import GENERATORS, candidate_output, prepare_generator
 
 MAX_STREAM=2_000_000
 MAX_INPUT=10_000_000
@@ -176,6 +177,8 @@ def prepare_context(streams,data,work,store,config,tool,run_id=None):
     # Upstream URL lists can feed tools whose original placeholder is named targets.
     context.update({k:v for k,v in data.get('params',{}).items() if k in ('pattern','exploit_type')})
     if tool['id']=='gf':context.setdefault('pattern','xss')
+    if tool['id'] in GENERATORS:
+        target_values = prepare_generator(tool['id'], context, target_values, config)
     return context,target_values,streams
 
 
@@ -417,5 +420,7 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store):
             text=record['stdout']
             if tool['output_mode']=='file' and not generated:raise CLIError('Tool completed without its declared file output.')
             result=output_streams(tool,text,generated)
+            if tool['id'] in GENERATORS:
+                result = candidate_output(tool['id'], result, targets[0], config)
             for typ,values in result.items():total_streams[typ].extend(values)
     return [{'catalog_streams':{k:list(dict.fromkeys(v)) for k,v in total_streams.items()},'tool_id':tool['id'],'invocation_artifact_ids':invocation_artifacts,'evidence_status':'OBSERVATION'}]

@@ -10,6 +10,7 @@
 #
 # Usage:
 #   scripts/install-tools.sh --web-recon     # pinned starter binaries
+#   scripts/install-tools.sh --trickest-oss  # pinned mksub and mkpath
 #   scripts/install-tools.sh                 # install everything it can
 #   scripts/install-tools.sh --list          # print the tool/method table, exit
 #   scripts/install-tools.sh --tools=recon   # only a category (see --list)
@@ -36,7 +37,7 @@ ROOT="$(cd -- "$HERE/.." >/dev/null 2>&1 && pwd)"
 
 # ---- options -----------------------------------------------------------------
 PREFIX="${AI_TRICKY_PREFIX:-}"
-WEB_RECON=0
+INSTALL_PROFILE=""
 ONLY_TOOLS=""
 ONLY_METHODS=""
 SKIP_TOOLS=""
@@ -48,7 +49,7 @@ GO_VERSION="1.26.4"
 for arg in "$@"; do
   case "$arg" in
     --list)            LIST_ONLY=1 ;;
-    --web-recon)       WEB_RECON=1 ;;
+    --web-recon|--trickest-oss) INSTALL_PROFILE="${arg#--}" ;;
     --yes|-y)          ASSUME_YES=1 ;;
     --skip-toolchains) SKIP_TOOLCHAINS=1 ;;
     --tools=*)         ONLY_TOOLS="${arg#*=}" ;;
@@ -61,15 +62,15 @@ for arg in "$@"; do
 done
 
 if [[ -z "$PREFIX" ]]; then
-  if [[ "$WEB_RECON" == 1 ]]; then
-    PREFIX="$HOME/.local/share/ai-tricky/web-recon"
+  if [[ -n "$INSTALL_PROFILE" ]]; then
+    PREFIX="$HOME/.local/share/ai-tricky/$INSTALL_PROFILE"
   else
     PREFIX="$HOME/.local"
   fi
 fi
 BIN="$PREFIX/bin"
 OPT="$PREFIX/opt/ai-tricky-tools"
-LOCK="$ROOT/toolchains/web-recon.tsv"
+LOCK="$ROOT/toolchains/${INSTALL_PROFILE:-web-recon}.tsv"
 
 # ---- output ------------------------------------------------------------------
 if [[ -t 1 ]]; then
@@ -168,7 +169,7 @@ print(next(f["sha256"] for release in json.load(sys.stdin) for f in release["fil
     rm -rf "$stage"
     have_go || { fail "Go install failed"; return 1; }
   fi
-  if [[ "$WEB_RECON" == 1 ]]; then
+  if [[ -n "$INSTALL_PROFILE" ]]; then
     export GOBIN="$BIN"
   else
     export GOBIN="${GOBIN:-$HOME/go/bin}"
@@ -431,8 +432,8 @@ locked_go_spec() {
   awk -F '\t' -v tool="$1" '$1 == tool { print $2 "@" $3; exit }' "$LOCK"
 }
 
-if [[ "$WEB_RECON" == 1 ]]; then
-  MANIFEST="$(awk -F '\t' '!/^#/ && NF == 3 { print $1 "|web-recon|go|" $2 "@" $3 }' "$LOCK")"
+if [[ -n "$INSTALL_PROFILE" ]]; then
+  MANIFEST="$(awk -F '\t' -v profile="$INSTALL_PROFILE" '!/^#/ && NF == 3 { print $1 "|" profile "|go|" $2 "@" $3 }' "$LOCK")"
 fi
 
 # ---- listing -----------------------------------------------------------------
@@ -491,12 +492,12 @@ install_locked_go() {
   if ! have_go || ! have python3; then
     R_FAIL+=("$name"); fail "$name (requires the Go compiler and Python 3)"; return 1
   fi
-  if [[ -x "$BIN/$name" ]] && python3 "$HERE/check-recon-tools.py" --tool "$name" --binary "$BIN/$name" >/dev/null; then
+  if [[ -x "$BIN/$name" ]] && python3 "$HERE/check-recon-tools.py" --profile "$INSTALL_PROFILE" --tool "$name" --binary "$BIN/$name" >/dev/null; then
     R_SKIP+=("$name"); skip "$name (pinned version already installed)"; return 0
   fi
   stage="$(mktemp -d "$BIN/.build.XXXXXXXX")" || { R_FAIL+=("$name"); return 1; }
   install_logged "$name" env GOBIN="$stage" GOFLAGS=-mod=mod go install "$spec" &&
-    python3 "$HERE/check-recon-tools.py" --tool "$name" --binary "$stage/$name" >> "$LOG_DIR/$name.log" 2>&1 &&
+    python3 "$HERE/check-recon-tools.py" --profile "$INSTALL_PROFILE" --tool "$name" --binary "$stage/$name" >> "$LOG_DIR/$name.log" 2>&1 &&
     mv -f "$stage/$name" "$BIN/$name" || status=$?
   rm -rf "$stage"
   if [[ "$status" == 0 ]]; then
@@ -509,7 +510,7 @@ install_locked_go() {
 
 install_one() { # install_one name method source
   local name="$1" method="$2" source="$3"
-  if [[ "$WEB_RECON" == 1 ]]; then
+  if [[ -n "$INSTALL_PROFILE" ]]; then
     install_locked_go "$name" "$source"
     return $?
   fi
@@ -592,7 +593,7 @@ Installing data does not bind it to a workflow or start an assessment.
 EOF
 
 # The pinned profile requires every selected binary to install successfully.
-if [[ "$WEB_RECON" == 1 && ${#R_FAIL[@]} -gt 0 ]]; then exit 1; fi
+if [[ -n "$INSTALL_PROFILE" && ${#R_FAIL[@]} -gt 0 ]]; then exit 1; fi
 # Preserve the generic installer's partial-success behavior.
 if [[ ${#R_OK[@]} -eq 0 && ${#R_SKIP[@]} -eq 0 && ${#R_FAIL[@]} -gt 0 ]]; then exit 1; fi
 exit 0

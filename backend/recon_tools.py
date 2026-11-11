@@ -1,18 +1,26 @@
-"""Inspect the starter's Go build metadata without running a discovered executable."""
+"""Inspect pinned tools' Go build metadata without running their executables."""
 
 import mmap
 import os
 from pathlib import Path
 import shutil
 
-LOCK = Path(__file__).resolve().parents[1] / 'toolchains' / 'web-recon.tsv'
-PROFILES = {
-    tool: (package, version)
-    for tool, package, version in (
-        line.split('\t') for line in LOCK.read_text().splitlines()
-        if line and not line.startswith('#')
-    )
-}
+LOCK_DIR = Path(__file__).resolve().parents[1] / 'toolchains'
+
+
+def read_profiles(group):
+    return {
+        tool: (package, version)
+        for tool, package, version in (
+            line.split('\t') for line in (LOCK_DIR / f'{group}.tsv').read_text().splitlines()
+            if line and not line.startswith('#')
+        )
+    }
+
+
+PROFILES_BY_GROUP = {group: read_profiles(group) for group in ('web-recon', 'trickest-oss')}
+PROFILES = PROFILES_BY_GROUP['web-recon']
+TOOL_GROUPS = {tool: group for group, profiles in PROFILES_BY_GROUP.items() for tool in profiles}
 
 # Go's debug/buildinfo format uses a 32-byte header followed by two
 # length-prefixed strings for builds using the inline format (Go 1.18+).
@@ -54,10 +62,11 @@ def build_metadata(path):
 
 
 def tool_check(tool, path=None):
-    package, tested_version = PROFILES[tool]
+    group = TOOL_GROUPS[tool]
+    package, tested_version = PROFILES_BY_GROUP[group][tool]
     found = path or shutil.which(tool)
     path = str(Path(found).resolve()) if found else None
-    command = f'./scripts/install-tools.sh --web-recon --tools={tool}'
+    command = f'./scripts/install-tools.sh --{group} --tools={tool}'
     result = {'tool_id': tool, 'path': path, 'tested_version': tested_version,
               'installed_version': None, 'status': 'missing', 'remediation': command}
     if not path or not Path(path).is_file() or not os.access(path, os.X_OK):

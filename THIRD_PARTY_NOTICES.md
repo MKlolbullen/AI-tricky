@@ -8,7 +8,13 @@ The adaptation omits remote repository synchronization, SSH key inputs, Trickest
 
 ## Remaining catalog
 
-All other tool descriptors and workflow graphs are independently authored. https://trickest.com/library provides public discovery references; no complete commercial catalog, proprietary wrapper code or original catalog descriptions are bundled. Upstream tool repository links are references only. Binaries are not included or automatically installed. Check each upstream project's license before installing or distributing it. Readiness labels refer to this project's adapters, not upstream quality.
+The Trickest open-source pack runs upstream `mksub` v1.1.1 and `mkpath` v1.1.0
+through independently authored local adapters. Both upstream projects publish
+the MIT License, Copyright (c) 2022 Trickest. Their versions and revision links
+are recorded in `toolchains/trickest-oss.tsv` and `src/trickest-catalog.json`.
+The local recon workflow uses the public recon example cited above.
+
+All other tool descriptors and workflow graphs are independently authored. https://trickest.com/library provides public discovery references; no complete commercial catalog, proprietary wrapper code or original catalog descriptions are bundled. Upstream repository links document provenance. Binaries are installed by explicit operator commands. Readiness labels refer to this project's adapters.
 
 Trickest and ProjectDiscovery are referenced for interoperability and inspiration; this project is independent and is not affiliated with them.
 

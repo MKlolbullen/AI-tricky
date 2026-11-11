@@ -55,7 +55,7 @@ def streams_for(tool,store,tmp_path):
 
 
 def test_complete_source_counts_and_all_graphs_are_typed():
-    assert len(TOOLS)==151
+    assert len(CATALOG['tools'])==151
     assert len(CATALOG['workflows'])==57
     assert len({w['id'] for w in CATALOG['workflows']})==57
     for w in CATALOG['workflows']:validate_workflow(w,live=True)

@@ -1,0 +1,172 @@
+{
+  "tools": [
+    {
+      "id": "mksub",
+      "name": "mksub · Subdomain combinations",
+      "category": "Candidate generation",
+      "description": "Generate candidate subdomains from an entered domain and a small registered wordlist.",
+      "inputs": [
+        "domain",
+        "wordlist"
+      ],
+      "outputs": [
+        "targets"
+      ],
+      "targets": [
+        "domain",
+        "wordlist"
+      ],
+      "args": [],
+      "risk": "passive",
+      "secrets": [],
+      "command": [
+        "mksub",
+        "-d",
+        "{domain}",
+        "-w",
+        "{wordlist_file}",
+        "-l",
+        "2",
+        "-t",
+        "4"
+      ],
+      "output_mode": "lines",
+      "timeout_seconds": 30,
+      "adapter": {
+        "mode": "cli",
+        "reason": null,
+        "stdin": false,
+        "traffic": "offline",
+        "file_outputs": []
+      },
+      "capabilities": [
+        {
+          "input": "domain",
+          "output": "targets"
+        }
+      ],
+      "sourceCatalog": "trickest-oss",
+      "license": "MIT",
+      "version": "v1.1.1",
+      "revision": "c344238667a0fac7a76c9fbb654f50f74681a199",
+      "provenance": "Trickest open-source binary · local AI-tricky adapter",
+      "repository": "https://github.com/trickest/mksub/tree/c344238667a0fac7a76c9fbb654f50f74681a199"
+    },
+    {
+      "id": "mkpath",
+      "name": "mkpath · URL path combinations",
+      "category": "Candidate generation",
+      "description": "Generate candidate URLs below an explicit base URL from a small registered wordlist.",
+      "inputs": [
+        "url",
+        "wordlist"
+      ],
+      "outputs": [
+        "url"
+      ],
+      "targets": [
+        "url",
+        "wordlist"
+      ],
+      "args": [],
+      "risk": "passive",
+      "secrets": [],
+      "command": [
+        "mkpath",
+        "-d",
+        "{targets}",
+        "-w",
+        "{wordlist_file}",
+        "-l",
+        "2",
+        "-t",
+        "4"
+      ],
+      "output_mode": "lines",
+      "timeout_seconds": 30,
+      "adapter": {
+        "mode": "cli",
+        "reason": null,
+        "stdin": false,
+        "traffic": "offline",
+        "file_outputs": []
+      },
+      "capabilities": [
+        {
+          "input": "url",
+          "output": "url"
+        }
+      ],
+      "sourceCatalog": "trickest-oss",
+      "license": "MIT",
+      "version": "v1.1.0",
+      "revision": "df878ebf4eb06bd816ec8343ed9329d4a3a284b0",
+      "provenance": "Trickest open-source binary · local AI-tricky adapter",
+      "repository": "https://github.com/trickest/mkpath/tree/df878ebf4eb06bd816ec8343ed9329d4a3a284b0"
+    }
+  ],
+  "workflows": [
+    {
+      "id": "trickest-subdomain-candidates",
+      "name": "Trickest · Subdomain candidates",
+      "category": "Candidate generation",
+      "description": "Use mksub to generate a bounded list of subdomain candidates for review.",
+      "targets": [
+        "domain",
+        "wordlist"
+      ],
+      "repository": "https://github.com/trickest/mksub/tree/v1.1.1",
+      "revision": "v1.1.1",
+      "sourceCatalog": "trickest-oss",
+      "license": "MIT",
+      "steps": [
+        "Entered domain or wildcard seed",
+        "mksub",
+        "Candidate report"
+      ],
+      "provenance": "Local adaptation of a public Trickest project"
+    },
+    {
+      "id": "trickest-path-candidates",
+      "name": "Trickest · URL path candidates",
+      "category": "Candidate generation",
+      "description": "Use mkpath to generate bounded path combinations beneath an entered HTTP(S) URL.",
+      "targets": [
+        "url",
+        "wordlist"
+      ],
+      "repository": "https://github.com/trickest/mkpath/tree/v1.1.0",
+      "revision": "v1.1.0",
+      "sourceCatalog": "trickest-oss",
+      "license": "MIT",
+      "steps": [
+        "Entered URL",
+        "mkpath",
+        "Candidate report"
+      ],
+      "provenance": "Local adaptation of a public Trickest project"
+    },
+    {
+      "id": "trickest-local-recon",
+      "name": "Trickest · Recon and vulnerability scanner",
+      "category": "Web reconnaissance",
+      "description": "Adapt the public recon example to run local discovery, HTTP probing, crawling, source capture and Nuclei.",
+      "targets": [
+        "domain",
+        "url"
+      ],
+      "repository": "https://github.com/trickest/recon-and-vulnerability-scanner-template/tree/45b274fedd3d1297157775740da8f4ba44e72233",
+      "revision": "45b274fedd3d1297157775740da8f4ba44e72233",
+      "sourceCatalog": "trickest-oss",
+      "license": "MIT",
+      "steps": [
+        "subfinder + assetfinder",
+        "httprobe",
+        "Katana",
+        "Web source evidence",
+        "Nuclei"
+      ],
+      "provenance": "Local adaptation of a public Trickest project"
+    }
+  ]
+}

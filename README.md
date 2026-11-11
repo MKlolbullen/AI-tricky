@@ -40,6 +40,7 @@ Design a typed workflow. Execute bounded checks. Preserve the request/response t
 | 🧩 **Visual workflow studio** | Build typed, directed acyclic graphs with named sockets, registered inputs, preflight checks and per-node artifacts. |
 | 🛰️ **Recon & discovery** | Work with domains, IPs, CIDRs and URLs; use native DNS/TCP/HTTP checks and installed CLI adapters. |
 | 🌐 **Web reconnaissance** | Explicit wildcard scope, subdomain discovery, probing, crawling and bounded JS/TS/chunk/source-map collection. |
+| 🧰 **Trickest open-source pack** | Run pinned mksub and mkpath adapters, or load the local recon and Nuclei workflow. [Setup](docs/TRICKEST-OPEN-SOURCE.md) |
 | 🤖 **Specialist agent teams** | Evidence handoffs across recon, analysis, vulnerability review and PoC *planning*, with per-role model routing. |
 | 🎛️ **Saved agent presets** | Persist team settings, model choices, worker/turn limits and defaults in local SQLite. |
 | 🔌 **Provider choice** | Configure local model endpoints or supported remote providers, including OpenAI, Anthropic, Gemini, xAI and Venice. |
@@ -108,6 +109,7 @@ For CLI dependencies:
 ```bash
 scripts/install-tools.sh --list
 scripts/install-tools.sh --web-recon   # pinned recon starter and Nuclei
+scripts/install-tools.sh --trickest-oss # pinned mksub and mkpath
 scripts/install-tools.sh --tools=recon,dns
 scripts/install-tools.sh --tools=httpx,ffuf
 ```

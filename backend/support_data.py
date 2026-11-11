@@ -21,8 +21,8 @@ MANIFEST = ROOT / 'support-data/manifest.json'
 MAX_ARCHIVE = 50_000_000
 MAX_EXPANDED = 100_000_000
 MAX_FILES = 30000
-PATH_TOOLS = {'ffuf','gobuster','dirsearch','feroxbuster','wfuzz','dirb'}
-DNS_WORD_TOOLS = {'shuffledns','puredns'}
+PATH_TOOLS = {'ffuf','gobuster','dirsearch','feroxbuster','wfuzz','dirb','mkpath'}
+DNS_WORD_TOOLS = {'shuffledns','puredns','mksub'}
 
 
 def requirements(tool):

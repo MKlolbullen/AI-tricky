@@ -1,10 +1,12 @@
 import migrated from './mini-tricky-catalog.json' with {type:'json'};
-export {migrated};
+import trickest from './trickest-catalog.json' with {type:'json'};
+export {migrated, trickest};
+export const isExecutableTemplate = entry => ['mini-tricky', 'trickest-oss'].includes(entry.sourceCatalog);
 export const catalogKinds=['catalog_tool','catalog_source','catalog_merge','catalog_output','catalog_payload'];
-export const catalogTools=new Map(migrated.tools.map(t=>[t.id,t]));
+export const catalogTools=new Map([...migrated.tools, ...trickest.tools].map(t=>[t.id,t]));
 export const isCatalog=data=>catalogKinds.includes(data?.kind);
 export function catalogContract(data){
- if(data.kind==='catalog_tool'){const t=catalogTools.get(data.toolId);if(!t)throw Error('Unknown migrated tool');return {inputs:t.inputs,outputs:t.outputs}}
+ if(data.kind==='catalog_tool'){const t=catalogTools.get(data.toolId);if(!t)throw Error('Unknown catalog tool');return {inputs:t.inputs,outputs:t.outputs}}
  if(data.kind==='catalog_source'){if(!['domain','targets','url','folder','file','wordlist','query','sbom'].includes(data.sourceType))throw Error('Unknown source type');return {inputs:[],outputs:[data.sourceType]}}
  if(data.kind==='catalog_merge')return {inputs:['any'],outputs:[data.output]};
  if(data.kind==='catalog_output')return {inputs:['any'],outputs:['report']};

@@ -12,7 +12,11 @@ from .scope import ScopeError, authorize, network_hosts, parse_target
 
 ROOT=Path(__file__).resolve().parent.parent
 CATALOG=json.loads((ROOT/'src/mini-tricky-catalog.json').read_text())
-TOOLS={t['id']:t for t in CATALOG['tools']}
+TRICKEST_CATALOG = json.loads((ROOT / 'src/trickest-catalog.json').read_text())
+TOOL_ENTRIES = CATALOG['tools'] + TRICKEST_CATALOG['tools']
+TOOLS = {tool['id']: tool for tool in TOOL_ENTRIES}
+if len(TOOLS) != len(TOOL_ENTRIES):
+    raise RuntimeError('Catalog tool IDs must be unique.')
 CATALOG_KINDS={'catalog_tool','catalog_source','catalog_merge','catalog_output','catalog_payload'}
 SOURCE_TYPES={'domain','targets','url','file','folder','wordlist','query','sbom'}
 # Imported flags retain their metadata, but cannot override filesystem, code,

@@ -2,15 +2,29 @@ import React, {useEffect, useState} from 'react';
 import {api, downloadJSON} from './api.mjs';
 
 function VerificationCard({report, onCapture}) {
+  const access = report.profile_id === 'object_access';
+  const roles = access ? ['owner', 'control', 'other'] : ['baseline', 'variant'];
+  const labels = {owner: 'Owner object', control: 'Second identity control', other: 'Second identity on owner object'};
   return <article className="verification-card" aria-label="Paired verification result">
     <div className="section-intro"><h4>{report.title}</h4><span className="tag">{report.outcome.replaceAll('_', ' ').toUpperCase()}</span></div>
     <p>{report.summary}</p><small>Run {report.run_id.slice(0, 8)} · {report.run_status} · Profile version {report.profile_version}</small>
     <p className="proposal-boundary">This result concerns the selected check. Finding severity, confidence and review status remain separate.</p>
     {report.evidence_current === false && <p className="local-error" role="status">Captured evidence no longer matches the saved comparison. Recorded outcome: {report.recorded_outcome}.</p>}
-    <table aria-label="Baseline and variant evidence"><thead><tr><th>Role</th><th>HTTP</th><th>Bytes / connected IP</th><th>Capture</th></tr></thead><tbody>{['baseline', 'variant'].map(role => {
-      const capture = report.captures.find(c => c.request.role === role);
-      return <tr key={role}><td>{role}</td><td>{capture?.status || 'Not captured'}{capture?.truncated ? ' · truncated' : ''}</td><td>{capture?.body_bytes ?? '—'} · {capture?.connected_ip || '—'}</td><td>{capture?.artifact_id ? <button className="secondary" onClick={() => onCapture(capture.artifact_id)}>Inspect {role}</button> : 'Unavailable'}</td></tr>;
-    })}</tbody></table>
+    <table aria-label={access ? 'Object access evidence' : 'Baseline and variant evidence'}>
+      <thead><tr><th>Role</th><th>HTTP</th>{access && <th>Resource ID matched</th>}
+        <th>Bytes / connected IP</th><th>Capture</th></tr></thead>
+      <tbody>{roles.map(role => {
+        const capture = report.captures.find(c => c.request.role === role);
+        const label = report.identities?.find(identity => identity.id === capture?.request.identity_id)?.label;
+        return <tr key={role}>
+          <td>{labels[role] || role}{label && <small> · {label}</small>}</td>
+          <td>{capture?.status || 'Not captured'}{capture?.truncated ? ' · truncated' : ''}</td>
+          {access && <td>{capture?.artifact_id ? (capture.resource_marker_matched ? 'Yes' : 'No') : '—'}</td>}
+          <td>{capture?.body_bytes ?? '—'} · {capture?.connected_ip || '—'}</td>
+          <td>{capture?.artifact_id ? <button className="secondary" onClick={() => onCapture(capture.artifact_id)}>Inspect {role}</button> : 'Unavailable'}</td>
+        </tr>;
+      })}</tbody>
+    </table>
     {!!report.differences.length && <details open><summary>Captured differences ({report.differences.length})</summary><table><thead><tr><th>Field</th><th>Baseline</th><th>Variant</th></tr></thead><tbody>{report.differences.map(d => <tr key={d.field}><td>{d.field}</td><td><code>{d.baseline ?? 'Absent'}</code></td><td><code>{d.variant ?? 'Absent'}</code></td></tr>)}</tbody></table></details>}
     <details><summary>Request bindings, response headers and fingerprints</summary><pre>{JSON.stringify({facts: report.facts, captures: report.captures, approval: report.approval, profile_hash: report.contract_hash}, null, 2)}</pre></details>
     <details><summary>Coverage and interpretation</summary><ul>{report.coverage_limits.map((reason, i) => <li key={i}>{reason}</li>)}</ul></details>

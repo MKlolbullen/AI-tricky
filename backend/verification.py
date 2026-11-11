@@ -1,7 +1,8 @@
-"""Versioned, server-owned two-GET verification profiles and offline comparisons."""
+"""Versioned, server-owned GET verification profiles and offline comparisons."""
 import re
 
 from .observations import digest
+from .access_verification import PROFILE_ID
 
 SCHEMA = 'ai-tricky.verification/v1'
 VERSION = '1'
@@ -11,16 +12,23 @@ PROFILES = {
                    'expected_signal': 'Two complete successful responses have matching status, selected headers and captured body hashes.'},
     'cors_origin': {'title': 'CORS response policy',
                     'expected_signal': 'The variant response permits the fixed test origin or anonymous wildcard access.'},
+    PROFILE_ID: {'title': 'Authenticated object access',
+                 'expected_signal': 'After both identity controls succeed, the second identity receives the matching owner object response.'},
 }
 COMPARE_HEADERS = ('content-type', 'server', 'content-security-policy', 'strict-transport-security',
                    'x-content-type-options', 'access-control-allow-origin', 'access-control-allow-credentials', 'vary')
 
 
 def profiles():
-    return [{'id': key, 'version': VERSION, **value, 'native_operations': 2} for key, value in PROFILES.items()]
+    return [{'id': key, 'version': VERSION, **value, 'native_operations': operation_count(key)}
+            for key, value in PROFILES.items()]
 
 
-def contract(profile_id, url, node_id='followup-test', finding_id=None):
+def operation_count(profile_id):
+    return 3 if profile_id == PROFILE_ID else 2
+
+
+def contract(profile_id, url, node_id='followup-test', finding_id=None, *, access=None):
     if profile_id not in PROFILES:
         raise ValueError('Unsupported verification profile.')
     result = {'schema': SCHEMA, 'profile_id': profile_id, 'version': VERSION, **PROFILES[profile_id],
@@ -29,12 +37,30 @@ def contract(profile_id, url, node_id='followup-test', finding_id=None):
               'requests': [{'role': 'baseline', 'method': 'GET', 'url': url, 'headers': {}},
                            {'role': 'variant', 'method': 'GET', 'url': url,
                             'headers': {'Origin': TEST_ORIGIN} if profile_id == 'cors_origin' else {}}]}
+    if profile_id == PROFILE_ID:
+        if access is None:
+            raise ValueError('Select two test identities and their resource controls.')
+        options = access['options']
+        result.update(access=access, credentials='session_bearer', native_operations=3, requests=[
+            {'role': role, 'method': 'GET', 'url': target, 'headers': {}, 'identity_id': options[identity]}
+            for role, target, identity in (
+                ('owner', url, 'owner_identity_id'),
+                ('control', options['control_url'], 'other_identity_id'),
+                ('other', url, 'other_identity_id'),
+            )
+        ])
+    elif access is not None:
+        raise ValueError('Test identities require the authenticated object access profile.')
     return {**result, 'contract_hash': digest(result)}
 
 
 def check_contract(binding):
-    if not isinstance(binding, dict) or binding != contract(binding['profile_id'], binding['requests'][0]['url'],
-                                                           binding['node_id'], binding.get('finding_id')):
+    try:
+        expected = contract(binding['profile_id'], binding['requests'][0]['url'], binding['node_id'],
+                            binding.get('finding_id'), access=binding.get('access'))
+    except (TypeError, KeyError, IndexError, ValueError):
+        expected = None
+    if expected is None or binding != expected:
         raise ValueError('Verification profile contract changed. Prepare a new execution review.')
 
 
@@ -43,7 +69,7 @@ def request_spec(config, node_id, step, url):
     if not config.get('proposal_execution') or not binding:
         raise ValueError('Controlled verification requires a recorded proposal approval.')
     check_contract(binding)
-    if type(step) is not int or step not in (0, 1) or node_id != binding['node_id']:
+    if type(step) is not int or not 0 <= step < len(binding['requests']) or node_id != binding['node_id']:
         raise ValueError('Request is outside the approved verification profile.')
     request = binding['requests'][step]
     if request['url'] != url:
@@ -61,13 +87,74 @@ def capture_summary(store, response, request, run_id=None, node_id=None):
                 node_id is not None and metadata['node_id'] != node_id or
                 data.get('verification_request') != request or data.get('url') != request['url']):
             error = 'Capture provenance does not match the approved request.'
-    return {'request': request, 'artifact_id': aid, 'status': data.get('status'),
+    capture = {'request': request, 'artifact_id': aid, 'status': data.get('status'),
             'headers': {key: data.get('headers', {}).get(key) for key in COMPARE_HEADERS if key in data.get('headers', {})},
             'body_sha256': data.get('body_sha256'), 'body_bytes': data.get('body_bytes'),
             'truncated': data.get('truncated', False), 'connected_ip': data.get('connected_ip'),
             'ambiguous_headers': data.get('ambiguous_headers', []),
             'truncated_headers': data.get('truncated_headers', []), 'error': error,
             'capture_hash': digest(data) if aid else None}
+    if 'identity_id' in request:
+        capture.update(body_fingerprint=data.get('body_fingerprint'),
+                       resource_marker_matched=data.get('resource_marker_matched', False),
+                       exchange_id=data.get('http_exchange_id'))
+    return capture
+
+
+def usable_access_capture(capture):
+    fingerprint = capture.get('body_fingerprint')
+    return (capture.get('artifact_id') and not capture.get('error') and not capture.get('truncated')
+            and capture.get('connected_ip') and isinstance(fingerprint, str)
+            and re.fullmatch(r'[a-f0-9]{64}', fingerprint))
+
+
+def successful_control(capture):
+    return bool(usable_access_capture(capture) and capture['status'] == 200
+                and capture['resource_marker_matched'])
+
+
+def evaluate_access(binding, captures, result, interruption):
+    result['identities'] = binding['access']['identities']
+    result['coverage_limits'] = [
+        'This check covers the approved GETs and the operator-specified resource ownership.',
+        'Authenticated capture retains status, marker matches and run-local fingerprints.',
+        'Finding status requires operator review.',
+    ]
+    result['summary'] = 'The approved object access check was inconclusive.'
+    result['facts'] = {
+        'owner_control_succeeded': len(captures) > 0 and successful_control(captures[0]),
+        'other_control_succeeded': len(captures) > 1 and successful_control(captures[1]),
+    }
+    if interruption:
+        result['coverage_limits'].append('Execution stopped: ' + interruption + '.')
+        return result
+    if not all(result['facts'].values()):
+        result['coverage_limits'].append('Both identities must return their expected objects before comparison.')
+        return result
+    if [c['request'] for c in captures] != binding['requests'] or not all(map(usable_access_capture, captures)):
+        result['coverage_limits'].append('Three complete captures bound to the approved requests are required.')
+        return result
+    owner, control, other = captures
+    if len({owner['connected_ip'], control['connected_ip'], other['connected_ip']}) != 1:
+        result['coverage_limits'].append('The three responses must have the same connected peer.')
+        return result
+    same_body = owner['body_fingerprint'] == other['body_fingerprint']
+    result['facts'].update(other_status=other['status'], owner_body_matched=same_body,
+                           other_marker_matched=other['resource_marker_matched'])
+    if not same_body:
+        result['differences'].append({'field': 'body_fingerprint', 'baseline': owner['body_fingerprint'],
+                                      'variant': other['body_fingerprint']})
+    if other['status'] != owner['status']:
+        result['differences'].append({'field': 'status', 'baseline': owner['status'], 'variant': other['status']})
+    if other['status'] == 200 and other['resource_marker_matched'] and same_body:
+        result.update(outcome='signal_observed',
+                      summary='The second identity received the same owner object response. Review the access policy.')
+    elif other['status'] in (403, 404) and not other['resource_marker_matched'] and not same_body:
+        result.update(outcome='signal_not_observed',
+                      summary='The second identity received a denial or not-found response for the owner object.')
+    else:
+        result['coverage_limits'].append('The other response needs manual interpretation.')
+    return result
 
 
 def evaluate(binding, captures, *, interruption=None):
@@ -79,6 +166,8 @@ def evaluate(binding, captures, *, interruption=None):
                   'This is a profile-specific observation, not a verified vulnerability or a finding review decision.',
                   'Only two unauthenticated GETs to the bound URL are covered; redirects are not followed.',
                   'No cookies, authorization credentials, browser execution or preflight requests are included.']}
+    if binding['profile_id'] == PROFILE_ID:
+        return evaluate_access(binding, captures, result, interruption)
     reasons = []
     if interruption:
         reasons.append('Execution stopped: ' + interruption + '.')
@@ -141,6 +230,11 @@ async def execute_pair(rid, node_id, config, urls, fetch, store):
             captures.append(capture_summary(store, response, request, rid, node_id))
             if response.get('error'):
                 break
+            if binding['profile_id'] == PROFILE_ID and step < 2:
+                if not successful_control(captures[-1]):
+                    break
+                if step == 1 and captures[0]['connected_ip'] != captures[1]['connected_ip']:
+                    break
     except BaseException as exc:
         interruption = type(exc).__name__
         raise

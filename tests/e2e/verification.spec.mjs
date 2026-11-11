@@ -18,7 +18,7 @@ async function planAndReview(page, workspace, profile) {
   const plan = await (await planned).json();
   await workspace.getByRole('button', {name: 'Review execution', exact: true}).click();
   await workspace.getByRole('combobox', {name: 'HTTP check profile'}).selectOption(profile);
-  await expect(workspace.getByRole('spinbutton', {name: 'Native operation limit'})).toHaveValue('2');
+  await expect(workspace.getByRole('spinbutton', {name: 'Native operation limit'})).toHaveValue(profile === 'object_access' ? '3' : '2');
   return plan;
 }
 
@@ -84,4 +84,42 @@ test('paired verification profile restores its exact requests and requires fresh
   await expect(workspace.getByRole('spinbutton', {name: 'Native operation limit'})).toHaveValue('2');
   await expect(workspace.getByRole('button', {name: 'Approve & start once', exact: true})).toBeDisabled();
   expect(await (await page.request.get('/api/_qa/target-calls')).json()).toEqual([]);
+});
+
+test('operator registers two identities and reviews the authenticated object access captures', async ({page}) => {
+  const workspace = await openPlanner(page);
+  const plan = await planAndReview(page, workspace, 'object_access');
+  const settings = workspace.getByRole('region', {name: 'Object access settings'});
+  await settings.getByText('Manage test identities', {exact: true}).click();
+  for (const [label, token] of [['Owner fixture', 'qa-owner-token'], ['Other fixture', 'qa-other-token']]) {
+    await settings.getByLabel('Identity label').fill(label);
+    await settings.getByLabel('Bearer token').fill(token);
+    await settings.getByRole('button', {name: 'Register test identity'}).click();
+    await expect(settings.getByLabel('Bearer token')).toHaveValue('');
+  }
+  await settings.getByLabel('Resource owner identity').selectOption({label: 'Owner fixture'});
+  await settings.getByLabel('Second test identity').selectOption({label: 'Other fixture'});
+  const origin = new URL(plan.proposals[0].action.target).origin;
+  await settings.getByLabel("Second identity's control URL").fill(origin + '/control');
+  await settings.getByLabel('Expected owner object ID').fill('owner');
+  await settings.getByLabel('Expected control object ID').fill('control');
+  const review = await prepare(page, workspace);
+  const bindings = workspace.getByRole('table', {name: 'Approved object access requests'});
+  await expect(bindings).toContainText('Owner fixture');
+  await expect(bindings).toContainText(origin + '/control');
+  expect(JSON.stringify(review)).not.toContain('qa-owner-token');
+  expect(await (await page.request.get('/api/_qa/target-calls')).json()).toEqual([]);
+  await workspace.getByRole('checkbox', {name: 'I approve this exact scope, workflow and limits.'}).check();
+  await workspace.getByRole('button', {name: 'Approve & start once', exact: true}).click();
+  const controlled = workspace.getByRole('region', {name: 'Controlled verification'});
+  await expect(controlled).toContainText('SIGNAL OBSERVED');
+  const captures = controlled.getByRole('table', {name: 'Object access evidence'});
+  await expect(captures.getByRole('row')).toHaveCount(4);
+  await expect(captures).toContainText('Second identity control');
+  const calls = await (await page.request.get('/api/_qa/target-calls')).json();
+  expect(calls.map(call => call.path)).toEqual(['/approved', '/control', '/approved']);
+  expect(calls.every(call => call.authorization && !call.cookie)).toBe(true);
+  for (const identity of review.snapshot.config.verification.access.identities) {
+    await page.request.post('/api/verification/identities/' + identity.id + '/remove', {data: {}});
+  }
 });

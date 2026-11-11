@@ -16,6 +16,7 @@ from .scope import ScopeError, network_hosts, parse_target
 from .store import now
 from .workflows import validate_workflow
 from . import verification
+from .access_verification import ObjectAccessInput, PROFILE_ID, TestIdentities
 from .http_routing import HTTPRouting, routing_binding
 
 SCHEMA = 'ai-tricky.proposal-execution/v1'
@@ -30,7 +31,8 @@ class ExecutionOptions(BaseModel):
     max_hosts: int = Field(default=64, ge=1, le=256)
     max_seconds: int = Field(default=120, ge=1, le=3600)
     input_refs: dict[str, Annotated[str, StringConstraints(pattern=r'^[A-Za-z0-9_-]{1,64}$')]] = Field(default_factory=dict, max_length=1)
-    verification_profile: Literal['repeat_get', 'cors_origin'] | None = None
+    verification_profile: Literal['repeat_get', 'cors_origin', 'object_access'] | None = None
+    object_access: ObjectAccessInput | None = None
     finding_id: str | None = Field(default=None, min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
     http_routing: HTTPRouting = Field(default_factory=HTTPRouting)
 
@@ -51,8 +53,9 @@ class ExecutionError(ValueError):
 
 
 class ProposalExecutions:
-    def __init__(self, store, planner):
+    def __init__(self, store, planner, identities=None):
         self.store, self.planner = store, planner
+        self.identities = identities if identities is not None else TestIdentities()
         self.session = str(uuid.uuid4())
         with store.connect() as c:
             c.executescript('''
@@ -137,15 +140,29 @@ class ProposalExecutions:
         if refs:
             next(n for n in graph['nodes'] if n['id'] == 'followup-test')['data']['inputRefs'] = refs
         validate_workflow(graph, live=True)
-        config = {k: v for k, v in options.items() if k not in ('input_refs', 'verification_profile', 'finding_id')}
+        config = {k: v for k, v in options.items()
+                  if k not in ('input_refs', 'verification_profile', 'finding_id', 'object_access')}
         profile_id, finding_id = options.get('verification_profile'), options.get('finding_id')
+        access_options = options.get('object_access')
+        if access_options and profile_id != PROFILE_ID:
+            raise ExecutionError('Test identities require the authenticated object access profile.', 422)
         if profile_id:
             if action['adapter_id'] != 'native_http':
                 raise ExecutionError('Controlled verification is available only for a bound native HTTP proposal.', 422)
-            if config['max_requests'] < 2:
-                raise ExecutionError('This verification profile requires a budget of at least two native operations.', 422)
+            required = verification.operation_count(profile_id)
+            if config['max_requests'] < required:
+                raise ExecutionError(f'This verification profile requires a budget of at least {required} native operations.', 422)
             self._check_finding(plan_id, proposal_id, finding_id)
-            config['verification'] = verification.contract(profile_id, action['target'], finding_id=finding_id)
+            access = None
+            if profile_id == PROFILE_ID:
+                if not access_options:
+                    raise ExecutionError('Select both test identities and the control object.', 422)
+                if config['http_routing']['mode'] != 'direct':
+                    raise ExecutionError('Authenticated object verification requires direct HTTP routing.', 422)
+                access = self.identities.prepare(access_options, action['target'],
+                                                 [parse_target(t) for t in plan['scope']])
+            config['verification'] = verification.contract(profile_id, action['target'],
+                                                           finding_id=finding_id, access=access)
         elif finding_id:
             raise ExecutionError('Select a controlled verification profile to link a finding.', 422)
         if not action['cost']['cli_invocations'] and config['allow_cli']:
@@ -197,6 +214,8 @@ class ProposalExecutions:
             except ValueError as exc:
                 raise ExecutionError(str(exc)) from None
             self._check_finding(record['plan_id'], record['proposal_id'], config['verification'].get('finding_id'))
+            if access := config['verification'].get('access'):
+                self.identities.snapshot(access)
         if self._scope_ids(plan['scope']) != config['target_ids'] or plan['scope'] != config['targets']:
             raise ExecutionError('The entered scope changed. Prepare a new review.')
         bindings = self._bindings(config)

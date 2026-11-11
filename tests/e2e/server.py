@@ -121,6 +121,14 @@ if __name__ == '__main__':
         def do_GET(self):
             self.calls.append({'path': self.path, 'origin': self.headers.get('Origin'),
                                'cookie': bool(self.headers.get('Cookie')), 'authorization': bool(self.headers.get('Authorization'))})
+            token = self.headers.get('Authorization')
+            if self.path in ('/approved', '/control') and token in ('Bearer qa-owner-token', 'Bearer qa-other-token'):
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Set-Cookie', 'fixture=' + token)
+                self.end_headers()
+                self.wfile.write(json.dumps({'id': 'owner' if self.path == '/approved' else 'control'}).encode())
+                return
             self.send_response(200); self.send_header('Content-Type', 'text/plain')
             if self.headers.get('Origin'):
                 self.send_header('Access-Control-Allow-Origin', self.headers['Origin'])

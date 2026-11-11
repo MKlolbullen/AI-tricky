@@ -4,6 +4,7 @@ import ipaddress
 import json
 import os
 import hashlib
+import secrets
 import uuid
 import threading
 import http.client
@@ -44,6 +45,7 @@ from .passive_sources import ADAPTERS as PASSIVE_ADAPTERS
 from .passive_ingest import PassiveIngestor, default_passive_http, passive_enabled
 from . import team as team_leader
 from . import verification
+from .access_verification import AuthenticatedRequest, IdentityInput, TestIdentities
 
 
 class TargetInput(BaseModel):
@@ -178,6 +180,8 @@ class RunControl:
         self.team_routes = {}
         self.team_task_level = 'standard'
         self.http_routing = None
+        self.verification_identities = {}
+        self.verification_fingerprint_key = None
         self.task = None
 
 
@@ -239,7 +243,8 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                 for role,route in config.get('team_routes',{}).items()}
         return {'default':inherited,'routes':routes} if routes else inherited
     proposal_planner = ProposalPlanner(store, evidence)
-    proposal_executions = ProposalExecutions(store, proposal_planner)
+    test_identities = TestIdentities()
+    proposal_executions = ProposalExecutions(store, proposal_planner, test_identities)
     controls = {}
     def recovery_model_config(config=None):
         if assessor is not None and not (config or {}).get('team_routes'):
@@ -636,6 +641,22 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     def verification_profiles():
         return verification.profiles()
 
+    @app.get('/api/verification/identities')
+    def verification_identities():
+        return test_identities.list()
+
+    @app.post('/api/verification/identities', status_code=201)
+    def add_verification_identity(body: IdentityInput):
+        return test_identities.add(body)
+
+    @app.post('/api/verification/identities/{identifier}/remove')
+    def remove_verification_identity(identifier: str):
+        try:
+            test_identities.remove(identifier)
+        except KeyError:
+            raise HTTPException(404, 'Test identity not found.') from None
+        return {'removed': True}
+
     @app.get('/api/agent/proposals/{plan_id}/{proposal_id}/verification-findings')
     def verification_findings(plan_id: str, proposal_id: str):
         return proposal_executions.eligible_findings(plan_id, proposal_id)
@@ -846,8 +867,17 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
 
         async def fetch(url, *, node_id=None, verification_step=None):
             request = None
+            authentication = None
             if verification_step is not None:
                 request = verification.request_spec(config, node_id, verification_step, url)
+                if 'identity_id' in request:
+                    options = config['verification']['access']['options']
+                    identity = ctl.verification_identities.get(request['identity_id'])
+                    if identity is None or ctl.verification_fingerprint_key is None:
+                        return {'error': 'The approved test identity is unavailable.'}
+                    expected = options['control_object'] if request['role'] == 'control' else options['owner_object']
+                    authentication = AuthenticatedRequest(identity, options['json_pointer'], expected,
+                                                          ctl.verification_fingerprint_key)
             while True:
                 await ctl.gate.wait()
                 async with ctl.lock:
@@ -870,7 +900,10 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                                                     **({'verification_role': request['role']} if request else {})})
                     break
             routing=config.get('http_routing',{'mode':'direct'})
-            exchange_id=http_journal.begin(rid,node_id,number,url,routing,request_message(url))
+            admitted_request = request_message(url)
+            if authentication is not None:
+                admitted_request['representation'] = 'authenticated_metadata_only'
+            exchange_id=http_journal.begin(rid,node_id,number,url,routing,admitted_request)
             capture_started=threading.Event()
             capture_cancelled=threading.Event()
             capture_lock=threading.Lock()
@@ -882,6 +915,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                     response=fetch_scoped(url,target_scope,
                         allowed=lambda:not ctl.cancelled and ctl.gate.is_set() and (node_id is None or node_id in ctl.active_nodes),
                         routing=ctl.http_routing,on_request=lambda message:http_journal.prepared(exchange_id,message),
+                        **({'authentication': authentication} if authentication is not None else {}),
                         **({'controlled_headers':request['headers']} if request else {}))
                     if request:response['verification_request']=request
                     response['http_exchange_id']=exchange_id
@@ -1054,6 +1088,9 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             store.status(rid, 'failed', {'error': message[:500], 'request_count': ctl.requests,'cli_invocation_count':ctl.cli_invocations,
                                        'model_usage': usage.summary(run_id=rid)})
             store.event(rid, 'run.failed', {'error': message[:500]})
+        finally:
+            ctl.verification_identities.clear()
+            ctl.verification_fingerprint_key = None
 
     def gather_team_evidence(targets, limit=200):
         """Existing in-scope observations for adaptive team role selection. Read
@@ -1154,6 +1191,13 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         except (ValueError,ScopeError):
             store.status(run['id'],'failed',{'error':'HTTP routing or CA trust changed before dispatch.'})
             return
+        if access := (run['config'].get('verification') or {}).get('access'):
+            try:
+                ctl.verification_identities = test_identities.snapshot(access)
+            except ScopeError as exc:
+                store.status(run['id'], 'failed', {'error': str(exc)})
+                return
+            ctl.verification_fingerprint_key = secrets.token_bytes(32)
         ctl.model = model.get('default') if model and 'routes' in model else model
         ctl.team_routes = model.get('routes',{}) if model else {}
         ctl.team_task_level = run['config'].get('team_task_level','standard')

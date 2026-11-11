@@ -143,3 +143,14 @@ Show resolved paths and detected versions in preflight and keep bounded private
 install diagnostics. The optional Nuclei branch binds registered bundled HTTP
 templates and records candidate findings. Optional specialist review receives
 saved HTTP observations and proposes validation without target tools.
+
+## Authenticated object verification — 2026-11-11
+
+Bind two immutable session-only bearer identities to the exact resource origin.
+Use the existing single-use proposal approval and three server-owned GETs:
+owner object, second identity control object, then cross-account comparison.
+Require both controls and a connected peer match before the cross-account test.
+Use direct verified HTTPS or direct loopback HTTP. Keep bearer values in memory,
+redact the request journal, and retain response metadata and run-local HMAC
+fingerprints. Keep findings subject to operator review and preserve legacy
+anonymous profile hashes. See docs/CONTROLLED-VERIFICATION.md.

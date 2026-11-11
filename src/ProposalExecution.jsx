@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {api, downloadJSON} from './api.mjs';
 const HTTPRoutingSettings=React.lazy(()=>import('./HTTPRoutingSettings'));
+const ObjectAccessOptions = React.lazy(() => import('./ObjectAccessOptions'));
 
 export default function ProposalExecution({plan, proposal, onRun}) {
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -26,13 +27,22 @@ export default function ProposalExecution({plan, proposal, onRun}) {
     setOptions({allow_cli: config.allow_cli, max_requests: config.max_requests,
       max_cli_invocations: config.max_cli_invocations, max_hosts: config.max_hosts, max_seconds: config.max_seconds,
       http_routing:config.http_routing||{mode:'direct',proxy_url:'http://127.0.0.1:8080',ca_input_id:null}, input_refs: config.workflow.nodes.find(n => n.id === 'followup-test')?.data.inputRefs || {},
-      verification_profile: config.verification?.profile_id || null, finding_id: config.verification?.finding_id || null});
+      verification_profile: config.verification?.profile_id || null, finding_id: config.verification?.finding_id || null,
+      object_access: config.verification?.access?.options || null});
   }, [review?.id]);
   useEffect(() => {
     if (review?.status !== 'pending') return;
     const timer = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [review?.id, review?.status]);
+  const binding = review?.snapshot.config.verification;
+  const selectedProfile = profiles.find(profile => profile.id === options.verification_profile);
+  const selectProfile = id => {
+    const profile = profiles.find(entry => entry.id === id);
+    setOptions(previous => ({...previous, verification_profile: id || null, finding_id: null,
+      max_requests: Math.max(profile?.native_operations || 1, previous.max_requests),
+      object_access: id === 'object_access' ? {json_pointer: '/id'} : null}));
+  };
   const pending = review?.status === 'pending', expired = pending && clock >= Date.parse(review.expires);
   const update = (key, value) => setOptions(previous => ({...previous, [key]: value}));
   const prepare = async event => {
@@ -70,9 +80,16 @@ export default function ProposalExecution({plan, proposal, onRun}) {
       <p>Prepare a saved snapshot, inspect its exact scope and limits, then approve it once. Reviews expire after 15 minutes and a runtime restart requires a new review.</p>
       <form onSubmit={prepare}>
         <fieldset disabled={busy || pending || !plan.current} className="execution-options"><legend>Execution settings</legend><React.Suspense fallback={null}><HTTPRoutingSettings value={options.http_routing} onChange={v=>update('http_routing',v)}/></React.Suspense>
-          {proposal.action.adapter_id === 'native_http' && <label className="field-label">HTTP check profile<select value={options.verification_profile || ''} onChange={e => setOptions(previous => ({...previous, verification_profile: e.target.value || null, finding_id: null, max_requests: e.target.value ? Math.max(2, previous.max_requests) : previous.max_requests}))}>
-            <option value="">Single capture</option>{profiles.map(p => <option key={p.id} value={p.id}>{p.title} · 2 GETs</option>)}</select></label>}
-          <label className="field-label">Native operation limit<input type="number" min={options.verification_profile ? 2 : 1} max={2048} value={options.max_requests} onChange={e => update('max_requests', Number(e.target.value))}/></label>
+          {proposal.action.adapter_id === 'native_http' && <label className="field-label">HTTP check profile<select
+            value={options.verification_profile || ''} onChange={e => selectProfile(e.target.value)}>
+            <option value="">Single capture</option>{profiles.map(p => <option key={p.id} value={p.id}>{p.title} · {p.native_operations} GETs</option>)}
+          </select></label>}
+          {options.verification_profile === 'object_access' && <React.Suspense fallback={<p>Loading test identities…</p>}>
+            <ObjectAccessOptions target={proposal.action.target} value={options.object_access || {json_pointer: '/id'}}
+              onChange={value => update('object_access', value)}/>
+          </React.Suspense>}
+          <label className="field-label">Native operation limit<input type="number" min={selectedProfile?.native_operations || 1}
+            max={2048} value={options.max_requests} onChange={e => update('max_requests', Number(e.target.value))}/></label>
           {options.verification_profile && <label className="field-label">Link supported finding<select value={options.finding_id || ''} onChange={e => update('finding_id', e.target.value || null)}><option value="">No finding link</option>{findings.map(f => <option key={f.id} value={f.id}>{f.title} · {f.status}</option>)}</select><small>Only findings supported by this proposal's cited observations are offered. Review status remains an operator decision.</small></label>}
           {cli && <><label className="field-label">CLI launch limit<input type="number" min={1} max={256} value={options.max_cli_invocations} onChange={e => update('max_cli_invocations', Number(e.target.value))}/></label>
             <label className="http-toggle"><input type="checkbox" checked={options.allow_cli} onChange={e => update('allow_cli', e.target.checked)}/><span>Enable this catalog CLI adapter</span></label></>}
@@ -91,7 +108,23 @@ export default function ProposalExecution({plan, proposal, onRun}) {
         <h4>{review.snapshot.action.adapter_id} → {review.snapshot.action.target}</h4>
         <strong>Snapshot scope</strong><div className="scope-chips">{review.snapshot.config.targets.map(t => <code key={t}>{t}</code>)}</div>
         <p>{review.snapshot.config.max_requests} native operation(s) maximum · {review.snapshot.config.allow_cli ? review.snapshot.config.max_cli_invocations : 0} CLI launch(es) maximum · {review.snapshot.config.max_hosts} host(s) maximum · {review.snapshot.config.max_seconds}s deadline</p>
-        {review.snapshot.config.verification && <div className="verification-pair"><strong>{review.snapshot.config.verification.title} · two sequential GETs</strong><p>{review.snapshot.config.verification.expected_signal}</p><table aria-label="Approved request pair"><thead><tr><th>Role</th><th>Method / URL</th><th>Additional headers</th></tr></thead><tbody>{review.snapshot.config.verification.requests.map(r => <tr key={r.role}><td>{r.role}</td><td><code>{r.method} {r.url}</code></td><td><code>{Object.keys(r.headers).length ? JSON.stringify(r.headers) : 'None'}</code></td></tr>)}</tbody></table><small>Credentials omitted · Redirects not followed · Results do not change finding review status.</small></div>}
+        {binding && <div className="verification-pair">
+          <strong>{binding.title} · {binding.access ? 'up to 3 sequential GETs' : 'two sequential GETs'}</strong>
+          <p>{binding.expected_signal}</p>
+          <table aria-label={binding.access ? 'Approved object access requests' : 'Approved request pair'}>
+            <thead><tr><th>Role</th><th>Method / URL</th><th>{binding.access ? 'Identity' : 'Additional headers'}</th></tr></thead>
+            <tbody>{binding.requests.map(request => <tr key={request.role}><td>{request.role}</td>
+              <td><code>{request.method} {request.url}</code></td>
+              <td>{binding.access ? binding.access.identities.find(identity => identity.id === request.identity_id)?.label
+                : <code>{Object.keys(request.headers).length ? JSON.stringify(request.headers) : 'None'}</code>}</td>
+            </tr>)}</tbody>
+          </table>
+          {binding.access ? <small>Expected IDs at <code>{binding.access.options.json_pointer}</code>{' '}
+            are <code>{binding.access.options.owner_object}</code> for the owner object and <code>{binding.access.options.control_object}</code> for the control.
+            The comparison starts only after both controls succeed. Saved responses contain metadata and fingerprints.</small>
+            : <small>Credentials omitted · Redirects not followed · Results do not change finding review status.</small>}
+          {binding.access && <p>Confirm the owner object belongs to the first account and the second account should be denied.</p>}
+        </div>}
         {cli && <p>CLI-internal network requests are uncounted. Input scope checks do not constrain traffic inside the external binary.</p>}
         <small>Review {review.id.slice(0, 8)} · Expires {new Date(review.expires).toLocaleString()}</small>
         <code className="execution-hash">{review.snapshot_hash}</code>

@@ -155,7 +155,8 @@ class HTTPJournal:
                 '_ai_tricky':{'exchange_id':row['id'],'run_id':row['run_id'],'node_id':row['node_id'],'state':row['state'],
                     'route':row['route'],'error':row['error'],'cancel_requested':bool(row['cancel_requested']),
                     'body_truncated':response.get('body_truncated',False),'headers_truncated':response.get('headers_truncated',False),
-                    'timing_precision':'total_elapsed_only','source':row['source']}})
+                    'timing_precision':'total_elapsed_only','source':row['source'],
+                    'capture_mode':request.get('representation')}})
             if request.get('body_bytes'):
                 raw=base64.b64decode(request['body_base64'])
                 try:post={'text':raw.decode('utf-8')}

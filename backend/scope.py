@@ -190,7 +190,8 @@ class PinnedHTTPS(http.client.HTTPSConnection):
             raise
 
 
-def fetch_scoped(url: str, targets: list[Target], max_bytes: int = 131072, allowed=None, *, controlled_headers=None, routing=None, on_request=None) -> dict:
+def fetch_scoped(url: str, targets: list[Target], max_bytes: int = 131072, allowed=None, *,
+                 controlled_headers=None, routing=None, on_request=None, authentication=None) -> dict:
     from .verification import TEST_ORIGIN, COMPARE_HEADERS
     import hashlib
     from .http_journal import message, request_message
@@ -205,6 +206,8 @@ def fetch_scoped(url: str, targets: list[Target], max_bytes: int = 131072, allow
     p = urlsplit(url)
     path = urlunsplit(('','',p.path or '/',p.query,''))
     proxy=bool(routing and routing.config['mode']=='proxy')
+    if authentication is not None:
+        authentication.authorize_peer(target, address, proxy)
     conn = (ProxyTargetConnection(target,address,routing) if proxy else
             PinnedHTTPS(target.host,target.port,address,routing.context if routing else None) if target.scheme=='https' else
             http.client.HTTPConnection(address,target.port,timeout=10))
@@ -213,7 +216,13 @@ def fetch_scoped(url: str, targets: list[Target], max_bytes: int = 131072, allow
         host += f':{target.port}'
     headers_out={'Host':host,'User-Agent':'AI-tricky/0.8.0','Accept-Encoding':'identity', **(controlled_headers or {})}
     wire_target=proxy_request_target(target,address) if proxy and target.scheme=='http' else path
-    request=request_message(url,headers_out,request_target=wire_target)
+    recorded_headers = headers_out
+    if authentication is not None:
+        recorded_headers = {**headers_out, 'Authorization': 'Bearer [redacted]'}
+        headers_out['Authorization'] = 'Bearer ' + authentication.identity.token
+    request=request_message(url,recorded_headers,request_target=wire_target)
+    if authentication is not None:
+        request['representation'] = 'authenticated_metadata_only'
     route={'mode':'proxy' if proxy else 'direct','proxy_url':routing.config['proxy_url'] if proxy else None,
            'resolved_target_ip':address,'origin_peer_observed':not proxy,
            'tls_verified':target.scheme=='https','ca_sha256':routing.ca_sha256 if routing else None}
@@ -224,6 +233,22 @@ def fetch_scoped(url: str, targets: list[Target], max_bytes: int = 131072, allow
         response = conn.getresponse()
         body = response.read(max_bytes+1)
         all_headers=response.getheaders()
+        if authentication is not None:
+            import hmac
+            truncated = len(body) > max_bytes
+            body = body[:max_bytes]
+            marker = authentication.matches(all_headers, body, truncated)
+            fingerprint = hmac.digest(authentication.fingerprint_key, body, 'sha256').hex()
+            version = {10: 'HTTP/1.0', 11: 'HTTP/1.1'}.get(response.version, 'HTTP/1.1')
+            saved_response = message(f'{version} {response.status}', [], status=response.status,
+                                     http_version=version)
+            saved_response.update(representation='authenticated_metadata_only', body_bytes=len(body),
+                                  body_truncated=truncated, body_fingerprint=fingerprint,
+                                  resource_marker_matched=marker)
+            return {'url': url, 'status': response.status, 'headers': {}, 'body': '',
+                    'body_bytes': len(body), 'body_fingerprint': fingerprint,
+                    'resource_marker_matched': marker, 'truncated': truncated, 'connected_ip': address,
+                    'http_exchange': {'request': request, 'response': saved_response, 'route': route}}
         selected = [(k.lower(), v.strip(' \t')) for k,v in all_headers if k.lower() in (*COMPARE_HEADERS, 'location')]
         headers = {k:v[:2000] for k,v in selected}
         version={10:'HTTP/1.0',11:'HTTP/1.1'}.get(response.version,'HTTP/1.1')

@@ -1,0 +1,6 @@
+# Tool ID, Go package, Go module version (tab-separated)
+subfinder	github.com/projectdiscovery/subfinder/v2/cmd/subfinder	v2.17.0
+assetfinder	github.com/tomnomnom/assetfinder	v0.1.1
+httprobe	github.com/tomnomnom/httprobe	v0.1.3-0.20220609162043-7e8abdb4096a
+katana	github.com/projectdiscovery/katana/cmd/katana	v1.8.0
+nuclei	github.com/projectdiscovery/nuclei/v3/cmd/nuclei	v3.11.1

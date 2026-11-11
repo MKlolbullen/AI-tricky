@@ -26,6 +26,54 @@ Loading does not run tools. Enable network/CLI execution, inspect budgets and pr
 
 **Load web recon with path fuzzing** adds a separate `ffuf` branch after probing. Bind a registered wordlist in its inspector or connect a registered wordlist source. Preflight blocks missing wordlists. Concrete URLs without a `FUZZ` marker get `/FUZZ` appended under the authorized path; custom path/query markers remain explicit. Fuzz results are captured observations; they do not automatically verify findings.
 
+**Load web recon with Nuclei** scans the probed URLs with a registered template folder.
+Use **Inputs → Templates, resolvers and wordlists → Install bundled support files**
+before loading this variant to bind the bundled HTTP starter templates automatically.
+For an already loaded canvas, use the support data binding action or select the
+registered folder in the node. Scanner matches appear as candidates in Findings
+and link to their CLI artifacts. The source collector journals native HTTP
+exchanges separately from scanner traffic.
+
+**Add specialist evidence review** adds an HTTP evidence node and a CAI team node
+with the specialist profile. The collector reuses the upstream HTTP captures.
+The team can produce evidence-linked validation plans from those captures.
+Use **Agent desk → Evidence follow-ups** to select recorded scanner observations
+for a separate proposal. CAI and provider configuration are required only for
+model review.
+
+## Pinned tool installation
+
+With the application and its Python environment installed, run:
+
+```bash
+./scripts/install-tools.sh --web-recon --yes
+export PATH="$HOME/.local/share/ai-tricky/web-recon/bin:$PATH"
+.venv/bin/python scripts/check-recon-tools.py
+```
+
+Start AI-tricky with that PATH. The same versions in
+[`toolchains/web-recon.tsv`](../toolchains/web-recon.tsv) drive installation,
+readiness and CI. The profile covers subfinder, assetfinder, httprobe, Katana and
+Nuclei. Go 1.26.4 is the tested compiler. If Go is missing, the installer can
+fetch the compiler and check its archive against the checksum published by Go.
+Use `--prefix` for a different install location or `--tools=nuclei` to retry one
+tool. The profile returns a failure code if a selected tool fails.
+
+The installer prints its diagnostic directory on failure. It retains the last
+64 KiB of each package command's output in private local logs. Review log content
+before sharing it. Preflight shows resolved paths, detected Go module versions
+and the pinned install command. A different Go package in place of a selected
+tool blocks preflight. Other versions and builds without readable metadata are
+shown with their own status. The version check reads metadata without executing
+the discovered binary. Run execution continues to bind executable hashes.
+
+The dedicated Linux CI job installs the pins into a fresh prefix and checks
+their flags. It uses recorded discovery results and runs real httprobe, Katana
+and Nuclei against a loopback fixture. It checks source manifests, HTTP evidence,
+candidate findings and specialist validation plans using an injected test
+assessor. Live passive provider availability and a clean Kali VM remain separate
+validation steps.
+
 ## Captures and limits
 
 The collector follows HTML script/link/page references, static quoted source/chunk references and `sourceMappingURL` directives. It recognizes JS/MJS/CJS/JSX, TS/TSX, `.chunk`, `.webchunk`, `.map`, CSS, JSON, manifests, GraphQL, text, XML and YAML. It does not guess paths or execute JavaScript. It honors HTML base URLs and independently checks every resolved URL against scope.

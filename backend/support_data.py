@@ -251,11 +251,12 @@ class SupportData:
             os.rename(stage,destination)
         for row in rows:self._register(row['id'],row['name'],row['kind'],self.root/row['path'],row['roles'])
 
-    def bind(self, graph):
+    def bind(self, graph, *, bundled_only=False):
         from .workflows import validate_workflow
         validate_workflow(graph,live=True)
         result=copy.deepcopy(graph);available={};changes=[];missing=[]
-        for entry in self.manifest['bundled']+self.manifest['remote']:
+        entries = self.manifest['bundled'] + ([] if bundled_only else self.manifest['remote'])
+        for entry in entries:
             for row in self._checked_inputs(entry,validate=True):
                 for role in row['roles']:available[role]=row['input_id']
         for node in result['nodes']:

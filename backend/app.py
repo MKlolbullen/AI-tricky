@@ -431,9 +431,10 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         return {'deleted': True}
 
     @app.get('/api/workflow-starters/web-recon')
-    async def web_recon_starter(fuzz: bool = False):
+    async def web_recon_starter(fuzz: bool = False, scan: bool = False, review: bool = False):
         from .web_recon import recon_workflow
-        return recon_workflow(fuzz=fuzz)
+        graph = recon_workflow(fuzz=fuzz, scan=scan, review=review)
+        return support_data.bind(graph, bundled_only=True)['graph'] if scan else graph
 
     @app.get('/api/catalog')
     async def catalog():

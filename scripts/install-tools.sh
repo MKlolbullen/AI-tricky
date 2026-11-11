@@ -9,6 +9,7 @@
 # npm, system packages, Git builds and GitHub release binaries).
 #
 # Usage:
+#   scripts/install-tools.sh --web-recon     # pinned starter binaries
 #   scripts/install-tools.sh                 # install everything it can
 #   scripts/install-tools.sh --list          # print the tool/method table, exit
 #   scripts/install-tools.sh --tools=recon   # only a category (see --list)
@@ -34,18 +35,20 @@ HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ROOT="$(cd -- "$HERE/.." >/dev/null 2>&1 && pwd)"
 
 # ---- options -----------------------------------------------------------------
-PREFIX="${AI_TRICKY_PREFIX:-$HOME/.local}"
+PREFIX="${AI_TRICKY_PREFIX:-}"
+WEB_RECON=0
 ONLY_TOOLS=""
 ONLY_METHODS=""
 SKIP_TOOLS=""
 SKIP_TOOLCHAINS=0
 ASSUME_YES=0
 LIST_ONLY=0
-GO_VERSION="1.23.4"
+GO_VERSION="1.26.4"
 
 for arg in "$@"; do
   case "$arg" in
     --list)            LIST_ONLY=1 ;;
+    --web-recon)       WEB_RECON=1 ;;
     --yes|-y)          ASSUME_YES=1 ;;
     --skip-toolchains) SKIP_TOOLCHAINS=1 ;;
     --tools=*)         ONLY_TOOLS="${arg#*=}" ;;
@@ -57,9 +60,16 @@ for arg in "$@"; do
   esac
 done
 
+if [[ -z "$PREFIX" ]]; then
+  if [[ "$WEB_RECON" == 1 ]]; then
+    PREFIX="$HOME/.local/share/ai-tricky/web-recon"
+  else
+    PREFIX="$HOME/.local"
+  fi
+fi
 BIN="$PREFIX/bin"
 OPT="$PREFIX/opt/ai-tricky-tools"
-mkdir -p "$BIN" "$OPT"
+LOCK="$ROOT/toolchains/web-recon.tsv"
 
 # ---- output ------------------------------------------------------------------
 if [[ -t 1 ]]; then
@@ -127,18 +137,43 @@ ensure_base() {
   fi
 }
 
+have_go() {
+  [[ "$(go version 2>/dev/null)" == "go version go"* ]]
+}
+
 ensure_go() {
-  if have go; then ok "go $(go version | awk '{print $3}' | sed 's/go//')"; else
+  if ! have_go && [[ -x "$OPT/go/bin/go" ]]; then
+    export PATH="$OPT/go/bin:$PATH"
+  fi
+  if have_go; then ok "$(go version)"; else
     [[ "$SKIP_TOOLCHAINS" == 1 ]] && { warn "go not found (--skip-toolchains)"; return 1; }
     say "Installing Go $GO_VERSION to $OPT/go"
-    local tgz="go${GO_VERSION}.${OS}-${GOARCH}.tar.gz"
-    if curl -fsSL "https://go.dev/dl/${tgz}" -o "$OPT/$tgz"; then
-      rm -rf "$OPT/go"; tar -C "$OPT" -xzf "$OPT/$tgz" && rm -f "$OPT/$tgz"
-      export PATH="$OPT/go/bin:$PATH"
+    local tgz="go${GO_VERSION}.${OS}-${GOARCH}.tar.gz" expected actual stage
+    have python3 || { fail "Python 3 is required to verify the Go archive"; return 1; }
+    expected="$(curl -fsSL 'https://go.dev/dl/?mode=json&include=all' | python3 -c '
+import json, sys
+print(next(f["sha256"] for release in json.load(sys.stdin) for f in release["files"] if f["filename"] == sys.argv[1]))
+' "$tgz")" || return 1
+    stage="$(mktemp -d "$OPT/go-install.XXXXXXXX")" || return 1
+    if curl -fsSL "https://go.dev/dl/$tgz" -o "$stage/$tgz"; then
+      actual="$(python3 -c 'import hashlib, sys; print(hashlib.file_digest(open(sys.argv[1], "rb"), "sha256").hexdigest())' "$stage/$tgz")"
+      if [[ "$actual" == "$expected" ]] && tar -C "$stage" -xzf "$stage/$tgz" && [[ -x "$stage/go/bin/go" ]]; then
+        rm -rf "$OPT/go"
+        mv "$stage/go" "$OPT/go"
+        export PATH="$OPT/go/bin:$PATH"
+      else
+        fail "Go archive checksum or extraction failed"
+      fi
     fi
-    have go || { fail "Go install failed"; return 1; }
+    rm -rf "$stage"
+    have_go || { fail "Go install failed"; return 1; }
   fi
-  export GOBIN="${GOBIN:-$HOME/go/bin}"; mkdir -p "$GOBIN"; export PATH="$GOBIN:$PATH"
+  if [[ "$WEB_RECON" == 1 ]]; then
+    export GOBIN="$BIN"
+  else
+    export GOBIN="${GOBIN:-$HOME/go/bin}"
+  fi
+  mkdir -p "$GOBIN"; export PATH="$GOBIN:$PATH"
   export GOFLAGS="${GOFLAGS:-}"
   return 0
 }
@@ -392,6 +427,14 @@ zap-baseline.py|framework|manual|install OWASP ZAP (www.zaproxy.org); script shi
 MF
 )
 
+locked_go_spec() {
+  awk -F '\t' -v tool="$1" '$1 == tool { print $2 "@" $3; exit }' "$LOCK"
+}
+
+if [[ "$WEB_RECON" == 1 ]]; then
+  MANIFEST="$(awk -F '\t' '!/^#/ && NF == 3 { print $1 "|web-recon|go|" $2 "@" $3 }' "$LOCK")"
+fi
+
 # ---- listing -----------------------------------------------------------------
 if [[ "$LIST_ONLY" == 1 ]]; then
   printf '%-22s %-12s %-8s %s\n' "TOOL" "CATEGORY" "METHOD" "SOURCE"
@@ -404,15 +447,20 @@ if [[ "$LIST_ONLY" == 1 ]]; then
 fi
 
 # ---- plan: which toolchains are needed --------------------------------------
-NEED_GO=0 NEED_RUST=0 NEED_PIPX=0
+NEED_GO=0 NEED_RUST=0 NEED_PIPX=0 SELECTED=0
 while IFS='|' read -r name cat method source; do
   [[ -z "$name" || "$name" == \#* ]] && continue
   if [[ -n "$ONLY_TOOLS" ]] && ! in_csv "$name" "$ONLY_TOOLS" && ! in_csv "$cat" "$ONLY_TOOLS"; then continue; fi
   if [[ -n "$ONLY_METHODS" ]] && ! in_csv "$method" "$ONLY_METHODS"; then continue; fi
   if [[ -n "$SKIP_TOOLS" ]] && in_csv "$name" "$SKIP_TOOLS"; then continue; fi
+  SELECTED=$((SELECTED + 1))
   case "$method" in go) NEED_GO=1 ;; cargo) NEED_RUST=1 ;; pipx) NEED_PIPX=1 ;; esac
 done <<< "$MANIFEST"
 
+if [[ "$SELECTED" == 0 ]]; then
+  echo "No install recipes match the selection." >&2
+  exit 2
+fi
 say "AI-tricky catalog tool installer"
 echo "  prefix:    $PREFIX  (binaries/launchers in $BIN)"
 echo "  platform:  $OS/$GOARCH   package manager: ${PKG:-none}"
@@ -423,6 +471,8 @@ echo
 
 if ! confirm "Install tools now?"; then echo "Aborted."; exit 0; fi
 
+mkdir -p "$BIN" "$OPT/logs" || exit 1
+LOG_DIR="$(mktemp -d "$OPT/logs/install.XXXXXXXX")" || exit 1
 say "Preparing toolchains"
 ensure_base
 [[ "$NEED_GO"   == 1 ]] && { ensure_go   || warn "Go tools will be skipped"; }
@@ -431,35 +481,67 @@ ensure_base
 echo
 
 # ---- install loop ------------------------------------------------------------
+install_logged() {
+  local name="$1"; shift
+  (umask 077; "$@" 2>&1 | tail -c 65536 > "$LOG_DIR/$name.log")
+}
+
+install_locked_go() {
+  local name="$1" spec="$2" stage status=0
+  if ! have_go || ! have python3; then
+    R_FAIL+=("$name"); fail "$name (requires the Go compiler and Python 3)"; return 1
+  fi
+  if [[ -x "$BIN/$name" ]] && python3 "$HERE/check-recon-tools.py" --tool "$name" --binary "$BIN/$name" >/dev/null; then
+    R_SKIP+=("$name"); skip "$name (pinned version already installed)"; return 0
+  fi
+  stage="$(mktemp -d "$BIN/.build.XXXXXXXX")" || { R_FAIL+=("$name"); return 1; }
+  install_logged "$name" env GOBIN="$stage" GOFLAGS=-mod=mod go install "$spec" &&
+    python3 "$HERE/check-recon-tools.py" --tool "$name" --binary "$stage/$name" >> "$LOG_DIR/$name.log" 2>&1 &&
+    mv -f "$stage/$name" "$BIN/$name" || status=$?
+  rm -rf "$stage"
+  if [[ "$status" == 0 ]]; then
+    R_OK+=("$name"); ok "$name ($spec)"
+  else
+    R_FAIL+=("$name"); fail "$name (see $LOG_DIR/$name.log)"
+  fi
+  return "$status"
+}
+
 install_one() { # install_one name method source
   local name="$1" method="$2" source="$3"
-  # Already available? (match the catalog's own `which <binary>` check.)
+  if [[ "$WEB_RECON" == 1 ]]; then
+    install_locked_go "$name" "$source"
+    return $?
+  fi
+  # Preserve existing executables on the generic install path.
   if [[ "$method" != manual ]] && have "$name"; then R_SKIP+=("$name"); skip "$name (already on PATH)"; return 0; fi
 
   case "$method" in
     go)
-      have go || { R_FAIL+=("$name"); fail "$name (go unavailable)"; return 1; }
-      if GOFLAGS=-mod=mod go install "${source}@latest" >/dev/null 2>&1; then R_OK+=("$name"); ok "$name (go)"; else R_FAIL+=("$name"); fail "$name (go install failed)"; fi ;;
+      have_go || { R_FAIL+=("$name"); fail "$name (Go compiler unavailable)"; return 1; }
+      local spec
+      spec="$(locked_go_spec "$name")"
+      if install_logged "$name" env GOFLAGS=-mod=mod go install "${spec:-${source}@latest}"; then R_OK+=("$name"); ok "$name (go)"; else R_FAIL+=("$name"); fail "$name (go install failed)"; fi ;;
     cargo)
       have cargo || { R_FAIL+=("$name"); fail "$name (cargo unavailable)"; return 1; }
-      if cargo install "$source" >/dev/null 2>&1; then R_OK+=("$name"); ok "$name (cargo)"; else R_FAIL+=("$name"); fail "$name (cargo install failed)"; fi ;;
+      if install_logged "$name" cargo install "$source"; then R_OK+=("$name"); ok "$name (cargo)"; else R_FAIL+=("$name"); fail "$name (cargo install failed)"; fi ;;
     pipx)
       have pipx || python3 -m pipx --version >/dev/null 2>&1 || { R_FAIL+=("$name"); fail "$name (pipx unavailable)"; return 1; }
-      if $(pipx_bin) install --force "$source" >/dev/null 2>&1; then R_OK+=("$name"); ok "$name (pipx)"; else R_FAIL+=("$name"); fail "$name (pipx install failed)"; fi ;;
+      if install_logged "$name" $(pipx_bin) install --force "$source"; then R_OK+=("$name"); ok "$name (pipx)"; else R_FAIL+=("$name"); fail "$name (pipx install failed)"; fi ;;
     gem)
       have gem || { R_FAIL+=("$name"); fail "$name (ruby/gem unavailable)"; return 1; }
-      if $SUDO gem install "$source" >/dev/null 2>&1 || gem install --user-install "$source" >/dev/null 2>&1; then R_OK+=("$name"); ok "$name (gem)"; else R_FAIL+=("$name"); fail "$name (gem install failed)"; fi ;;
+      if install_logged "$name" $SUDO gem install "$source" || install_logged "$name-user" gem install --user-install "$source"; then R_OK+=("$name"); ok "$name (gem)"; else R_FAIL+=("$name"); fail "$name (gem install failed)"; fi ;;
     npm)
       have npm || { R_FAIL+=("$name"); fail "$name (npm unavailable)"; return 1; }
-      if npm install -g "$source" >/dev/null 2>&1 || $SUDO npm install -g "$source" >/dev/null 2>&1; then R_OK+=("$name"); ok "$name (npm)"; else R_FAIL+=("$name"); fail "$name (npm install failed)"; fi ;;
+      if install_logged "$name" npm install -g "$source" || install_logged "$name-system" $SUDO npm install -g "$source"; then R_OK+=("$name"); ok "$name (npm)"; else R_FAIL+=("$name"); fail "$name (npm install failed)"; fi ;;
     apt)
-      if pkg_install "$source" >/dev/null 2>&1; then R_OK+=("$name"); ok "$name ($PKG)"; else R_FAIL+=("$name"); fail "$name (system package install failed)"; fi ;;
+      if install_logged "$name" pkg_install "$source"; then R_OK+=("$name"); ok "$name ($PKG)"; else R_FAIL+=("$name"); fail "$name (system package install failed)"; fi ;;
     gitpy)
       # shellcheck disable=SC2086
       set -- $source
-      if gitpy_install "$name" "$1" "$2" "${3:-$name}"; then R_OK+=("$name"); ok "$name (git+venv)"; else R_FAIL+=("$name"); fi ;;
+      if install_logged "$name" gitpy_install "$name" "$1" "$2" "${3:-$name}"; then R_OK+=("$name"); ok "$name (git+venv)"; else R_FAIL+=("$name"); fi ;;
     fn)
-      if "$source" >/dev/null 2>&1; then R_OK+=("$name"); ok "$name (binary)"; else R_FAIL+=("$name"); fail "$name (download/build failed)"; fi ;;
+      if install_logged "$name" "$source"; then R_OK+=("$name"); ok "$name (binary)"; else R_FAIL+=("$name"); fail "$name (download/build failed)"; fi ;;
     manual)
       R_MANUAL+=("$name :: $source"); warn "$name — manual: $source" ;;
     *) R_FAIL+=("$name"); fail "$name (unknown method '$method')" ;;
@@ -484,6 +566,7 @@ printf '  %sinstalled%s %d   %salready present%s %d   %sfailed%s %d   %smanual%s
 if [[ ${#R_FAIL[@]} -gt 0 ]]; then
   echo; echo "${R}Failed${N} (re-run with that tool, or install it by hand):"
   printf '  - %s\n' "${R_FAIL[@]}"
+  echo "  Local diagnostics: $LOG_DIR"
 fi
 if [[ ${#R_MANUAL[@]} -gt 0 ]]; then
   echo; echo "${Y}Manual${N} (not auto-installed):"
@@ -508,6 +591,8 @@ Or use Local workspace → Inputs → Templates, resolvers and wordlists.
 Installing data does not bind it to a workflow or start an assessment.
 EOF
 
-# Non-zero exit only if literally nothing succeeded and something was attempted.
+# The pinned profile requires every selected binary to install successfully.
+if [[ "$WEB_RECON" == 1 && ${#R_FAIL[@]} -gt 0 ]]; then exit 1; fi
+# Preserve the generic installer's partial-success behavior.
 if [[ ${#R_OK[@]} -eq 0 && ${#R_SKIP[@]} -eq 0 && ${#R_FAIL[@]} -gt 0 ]]; then exit 1; fi
 exit 0

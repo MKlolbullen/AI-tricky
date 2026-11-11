@@ -63,6 +63,7 @@ DATA=(
   "${ROOT}/src/templates.json${SEP}src"
   "${ROOT}/backend/gf-patterns.json${SEP}backend"
   "${ROOT}/support-data/manifest.json${SEP}support-data"
+  "${ROOT}/toolchains/web-recon.tsv${SEP}toolchains"
   "${ROOT}/support-data/bundled${SEP}support-data/bundled"
   "${ROOT}/third-party/mini-tricky/payloads${SEP}third-party/mini-tricky/payloads"
 )

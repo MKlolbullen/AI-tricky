@@ -183,6 +183,8 @@ def build_command(tool,data,context,binary):
     try:argv=[part.format_map(context) for part in tool['command']]
     except KeyError as exc:raise ScopeError(f'Missing typed input or named context: {exc.args[0]}.') from None
     argv[0]=binary['path']
+    if tool['id'] == 'subfinder':
+        argv.append('-duc')
     if tool['id'] in ('shuffledns','massdns'):
         if not context.get('resolvers_file'):raise ScopeError('Register a resolvers file for this DNS adapter.')
         argv=[context['resolvers_file'] if part in ('/usr/share/resolvers.txt','resolvers.txt') else part for part in argv]

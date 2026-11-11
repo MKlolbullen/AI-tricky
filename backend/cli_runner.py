@@ -178,7 +178,7 @@ def prepare_context(streams,data,work,store,config,tool,run_id=None):
     context.update({k:v for k,v in data.get('params',{}).items() if k in ('pattern','exploit_type')})
     if tool['id']=='gf':context.setdefault('pattern','xss')
     if tool['id'] in GENERATORS:
-        target_values = prepare_generator(tool['id'], context, target_values, config)
+        target_values = prepare_generator(tool['id'], context, target_values, config, work)
     return context,target_values,streams
 
 

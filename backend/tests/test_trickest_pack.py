@@ -11,7 +11,7 @@ from backend.recon_tools import PROFILES_BY_GROUP, tool_check
 from backend.store import Store
 from backend.tests.test_local import wait_done
 from backend.tests.test_workflows import launch
-from backend.trickest_pack import GENERATORS, candidate_output, validate_wordlist, workflow
+from backend.trickest_pack import GENERATORS, candidate_output, prepare_generator, validate_wordlist, workflow
 from backend.scope import ScopeError
 from backend.workflows import validate_workflow
 
@@ -66,6 +66,25 @@ def test_candidate_boundaries_are_checked_before_downstream_use():
         'https://example.test/app/login?x=1', 'https://example.test:8443/app/login',
     ]}, 'https://example.test/app', scope)
     assert paths == {'url': ['https://example.test/app/login']}
+
+
+def test_generator_writes_bounded_wordlist_into_the_run_workdir(tmp_path):
+    # The bounded wordlist is written into this run's work dir, never beside the
+    # registered input, so the inputs area is untouched and concurrent runs do
+    # not share the file. context['wordlist_file'] points at the work-dir copy.
+    work = tmp_path / 'work'
+    work.mkdir()
+    source = work / 'wordlist.input'  # the copy cli_runner places under work
+    source.write_text('api\ndev\napi\n')  # duplicate entry to exercise dedupe
+    context = {'wordlist_file': str(source)}
+    returned = prepare_generator('mksub', context, ['example.test'], {'targets': ['example.test']}, work)
+    bounded = work / 'bounded-trickest-wordlist.txt'
+    assert context['wordlist_file'] == str(bounded) and bounded.exists()
+    assert bounded.read_text() == 'api\ndev\n'  # bounded and de-duplicated
+    assert returned == ['example.test'] and context['domain'] == 'example.test'
+    # The input copy is left intact and nothing is written next to it.
+    assert source.read_text() == 'api\ndev\napi\n'
+    assert sorted(p.name for p in work.iterdir()) == ['bounded-trickest-wordlist.txt', 'wordlist.input']
 
 
 def test_preflight_requires_a_bound_wordlist(tmp_path):

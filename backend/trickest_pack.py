@@ -37,11 +37,14 @@ def validate_wordlist(tool, path):
     return words
 
 
-def prepare_generator(tool, context, values, config):
+def prepare_generator(tool, context, values, config, work):
     if len(values) != 1 or not context.get('wordlist_file'):
         raise ScopeError('Bind one seed and a wordlist for each Trickest generator invocation.')
     words = validate_wordlist(tool, context['wordlist_file'])
-    path = Path(context['wordlist_file']).with_name('bounded-trickest-wordlist.txt')
+    # Write the bounded wordlist into this run's work directory explicitly, never
+    # beside the (already copied) input, so the registered-inputs area is never
+    # written and concurrent runs cannot share or clobber the bounded file.
+    path = Path(work) / 'bounded-trickest-wordlist.txt'
     path.write_text('\n'.join(words) + '\n', encoding='ascii')
     context['wordlist_file'] = str(path)
     scopes = [parse_target(value) for value in config['targets']]
@@ -63,6 +66,11 @@ def prepare_generator(tool, context, values, config):
 
 
 def candidate_output(tool, streams, seed, config):
+    # Candidate generation only: for mksub these are subdomains of the entered
+    # seed, which may fall outside an exact-host scope entry (they are in scope
+    # only under a wildcard). They are never probed here — active tools
+    # re-authorise every value before any traffic. See the candidate-boundary
+    # test, which asserts exact-host scope rejects them and wildcard accepts them.
     output = 'targets' if tool == 'mksub' else 'url'
     candidates = []
     scopes = [parse_target(value) for value in config['targets']]

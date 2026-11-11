@@ -106,11 +106,16 @@ For CLI dependencies:
 
 ```bash
 scripts/install-tools.sh --list
+scripts/install-tools.sh --web-recon   # pinned recon starter and Nuclei
 scripts/install-tools.sh --tools=recon,dns
 scripts/install-tools.sh --tools=httpx,ffuf
 ```
 
 Review installation scripts before running them. Some binaries require manual installation; use **Run setup → Check workflow readiness** to see what's actually available.
+
+The pinned web recon profile installs in its own directory and saves per-tool
+install diagnostics. See [web recon setup](docs/WEB-RECON.md#pinned-tool-installation)
+for the PATH entry, version check and Nuclei template binding.
 
 ### Option C — standalone executable
 

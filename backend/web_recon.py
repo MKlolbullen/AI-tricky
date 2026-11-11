@@ -190,7 +190,7 @@ async def collect_assets(values, config, data, fetch, store, node_id):
              'evidence_status': 'OBSERVATION'}]
 
 
-def recon_workflow(*, fuzz=False):
+def recon_workflow(*, fuzz=False, scan=False, review=False):
     """Independent curated starter; leaves the pinned migration catalog intact."""
     from .catalog import TOOLS
     from .workflows import REGISTRY, SCHEMA, validate_workflow
@@ -225,8 +225,25 @@ def recon_workflow(*, fuzz=False):
     node('crawl', 'catalog_tool', 920, 0, toolId='katana', params={'-jc': True}); edge('probe', 'crawl', 'url')
     node('urls', 'catalog_merge', 1150, 100, inputs=['any'], outputs=['url'], output='url', title='Unique probe and crawl URLs')
     edge('probe', 'urls', 'url', 'any'); edge('crawl', 'urls', 'url', 'any')
-    node('sources', 'native_web_assets', 1380, 100); edge('urls', 'sources', 'url')
-    node('summary', 'native_summary', 1610, 100); edge('sources', 'summary', 'report')
+    node('sources', 'native_web_assets', 1610 if review else 1380, 100)
+    node('summary', 'native_summary', 1840 if review else 1610, 100)
+    edge('sources', 'summary', 'report')
+    if review:
+        node('capture', 'native_http', 1380, 100)
+        edge('urls', 'capture', 'url')
+        edge('capture', 'sources', 'observations')
+        node('review', 'native_team', 1610, -120, team_profile='specialist')
+        edge('capture', 'review', 'observations')
+        edge('review', 'summary', 'report')
+    else:
+        edge('urls', 'sources', 'url')
+    if scan:
+        node('scan', 'catalog_tool', 920, 560, toolId='nuclei', title='Nuclei — reviewed HTTP templates')
+        edge('probe', 'scan', 'url')
+        node('scan-results', 'catalog_output', 1380, 560, inputs=['any'], outputs=['report'],
+             output='report', title='Nuclei detections')
+        edge('scan', 'scan-results', 'findings', 'any')
+        edge('scan-results', 'summary', 'report')
     if fuzz:
         node('fuzz-urls', 'catalog_merge', 920, 320, inputs=['any'], outputs=['targets'], output='targets', title='Probed URLs for directory fuzzing')
         edge('probe', 'fuzz-urls', 'url', 'any')

@@ -9,6 +9,7 @@ from urllib.parse import quote
 from .catalog import CATALOG, CATALOG_KINDS, ROOT, TOOLS, registered_path, scoped_lines
 from .cli_runner import execute_cli, pin_binary
 from .scope import ScopeError, parse_target
+from .recon_tools import PROFILES as RECON_TOOL_PROFILES, tool_check
 from .http_routing import cli_routing, CLI_PROXY_FLAGS, DIRECT_NETWORK_TOOLS
 
 
@@ -59,7 +60,7 @@ def source_values(data,config):
 
 
 def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),node_ids=None):
-    issues=[];binaries={};snapshots={};coverage=[]
+    issues=[];binaries={};snapshots={};coverage=[];tool_checks={}
     for n in graph['nodes']:
         if node_ids is not None and n['id'] not in node_ids:continue
         data=n['data'];kind=data['kind'];reason=[]
@@ -108,10 +109,19 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
             if tool['id']=='puredns' and not data.get('inputRefs',{}).get('resolvers_trusted'):reason.append('Register and bind a trusted resolvers file for PureDNS.')
             if 'exploit_type' in placeholders and not data.get('params',{}).get('exploit_type'):reason.append('Choose a named exploit_type context.')
             if check_binaries and tool['adapter']['mode']!='blocked':
-                try:binaries[tool['id']]=pin_binary(tool)
-                except ScopeError as exc:reason.append(str(exc))
+                tool_id = tool['id']
+                if tool_id in RECON_TOOL_PROFILES and tool_id not in tool_checks:
+                    tool_checks[tool_id] = tool_check(tool_id)
+                check = tool_checks.get(tool_id)
+                if check and check['status'] == 'wrong_binary':
+                    reason.append(f'{tool_id} resolves to a different Go package. {check["remediation"]}')
+                elif tool_id not in binaries:
+                    try:
+                        binaries[tool_id] = pin_binary(tool)
+                    except (ScopeError, OSError) as exc:
+                        reason.append(str(exc))
         if reason:issues.append({'node_id':n['id'],'reasons':list(dict.fromkeys(reason))})
-    return {'capture_coverage':coverage,'ready':not issues,'issues':issues,'cli_binaries':binaries,'input_snapshots':snapshots,'catalog_tools':len({n['data']['toolId'] for n in graph['nodes'] if n['data']['kind']=='catalog_tool' and (node_ids is None or n['id'] in node_ids)}),'accounting':'Native operations count HTTP/TCP admissions. CLI operations count process launches; tool-internal network requests are not measured or limited by the native request cap.'}
+    return {'tool_checks': list(tool_checks.values()), 'capture_coverage':coverage,'ready':not issues,'issues':issues,'cli_binaries':binaries,'input_snapshots':snapshots,'catalog_tools':len({n['data']['toolId'] for n in graph['nodes'] if n['data']['kind']=='catalog_tool' and (node_ids is None or n['id'] in node_ids)}),'accounting':'Native operations count HTTP/TCP admissions. CLI operations count process launches; tool-internal network requests are not measured or limited by the native request cap.'}
 
 
 async def execute_catalog_node(rid,nid,data,streams,config,ctl,store):

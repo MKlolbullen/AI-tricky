@@ -133,3 +133,13 @@ Prioritize real tool command contracts over more unverified adapters. Reuse one 
 ## Saved agent preferences — 2026-11-10
 
 The user requested durable agent settings and provider model dropdowns. Use named revisioned SQLite presets with one explicit default restored on workspace open. Save role/profile/task routing, ceilings, workers, adaptive/synthesis and a shared planning model; preserve workflow node overrides. Keep targets, traffic/CLI permissions, credentials and approvals outside presets. Saving/loading never calls a provider or enables remote inference. Reviewed offline model menus are suggestions, not live account availability or SDK guarantees; keep custom exact IDs and reuse saved IDs per provider. Blank remote choices can be saved as drafts but must still fail execution preflight. See docs/AGENT-SETTINGS.md. This supersedes older instructions requiring all model IDs to be typed manually; existing provider and credential gates remain intact.
+
+## Verified web recon starter — 2026-11-11
+
+Use the pinned Go package versions in toolchains/web-recon.tsv for the starter
+installer and real-binary CI. Preserve the imported 151-tool/57-workflow catalog.
+Use recorded passive discoveries with a loopback fixture for active tool tests.
+Show resolved paths and detected versions in preflight and keep bounded private
+install diagnostics. The optional Nuclei branch binds registered bundled HTTP
+templates and records candidate findings. Optional specialist review receives
+saved HTTP observations and proposes validation without target tools.

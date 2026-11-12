@@ -301,22 +301,27 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store):
     streams=dict(streams)
     # Filter before scalar fan-out as well as immediately before dispatch: one
     # unapproved discovery must not prevent the remaining approved hosts running.
-    if tool['adapter']['traffic']!='offline':
-        key=next((k for k in ('targets','url','domain') if streams.get(k)),None)
-        if key:
-            allowed,rejected=scoped_lines(streams[key],key,config,discovery=tool['adapter']['traffic']=='passive')
-            if rejected:store.event(rid,'cli.inputs_filtered',{'node_id':nid,'tool_id':tool['id'],'rejected_count':len(rejected)})
-            if not allowed:raise ScopeError('No upstream targets are authorized for this CLI invocation.')
-            streams[key]=allowed
-    base=streams.get('targets') or streams.get('url') or streams.get('domain') or streams.get('file') or [None]
-    batches=[[v] for v in base] if scalar else [base]
+    if tool['adapter']['traffic'] != 'offline':
+        network_inputs = [typ for typ in ('targets', 'url', 'domain') if streams.get(typ)]
+        for typ in network_inputs:
+            allowed, rejected = scoped_lines(streams[typ], typ, config, discovery=tool['adapter']['traffic'] == 'passive')
+            if rejected:
+                store.event(rid, 'cli.inputs_filtered', {'node_id': nid, 'tool_id': tool['id'], 'rejected_count': len(rejected)})
+            streams[typ] = allowed
+        if network_inputs and not any(streams[typ] for typ in network_inputs):
+            raise ScopeError('No upstream targets are authorized for this CLI invocation.')
+    # These two sockets feed the same CLI target argument or list file.
+    if {'targets', 'url'}.issubset(tool['inputs']) and streams.get('targets') and streams.get('url'):
+        streams['targets'] = list(dict.fromkeys(streams['targets'] + streams.pop('url')))
+    batch_type = next((typ for typ in ('targets', 'url', 'domain', 'file') if streams.get(typ)), None)
+    base = streams[batch_type] if batch_type else [None]
+    batches = [[value] for value in base] if scalar else [base]
     if len(batches)>config['max_hosts']:raise ScopeError('Scalar CLI fan-out exceeds the run host cap.')
     for batch in batches:
         with tempfile.TemporaryDirectory(prefix='cli-',dir=store.root/'jobs') as directory:
             work=Path(directory).resolve();selected=dict(streams)
-            if scalar:
-                for typ in ('targets','url','domain','file'):
-                    if selected.get(typ):selected[typ]=batch
+            if scalar and batch_type:
+                selected[batch_type] = batch
             context,targets,prepared=prepare_context(selected,data,work,store,config,tool,run_id=rid)
             argv=build_command(tool,data,context,pin)
             from .http_routing import cli_routing, resolve_routing, CLI_PROXY_FLAGS

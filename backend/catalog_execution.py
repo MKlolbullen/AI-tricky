@@ -9,25 +9,26 @@ from urllib.parse import quote
 from .catalog import CATALOG, CATALOG_KINDS, ROOT, TOOLS, registered_path, scoped_lines
 from .cli_runner import execute_cli, pin_binary
 from .scope import ScopeError, parse_target
+from .workflow_sockets import catalog_socket_values, incoming_routes
 from .recon_tools import TOOL_GROUPS, tool_check
 from .trickest_pack import GENERATORS, validate_wordlist
 from .http_routing import cli_routing, CLI_PROXY_FLAGS, DIRECT_NETWORK_TOOLS
 
 
-def incoming_streams(graph,nid,outputs):
-    streams={}
-    for edge in graph['edges']:
-        if edge['target']!=nid:continue
-        source=next(n for n in graph['nodes'] if n['id']==edge['source'])
-        typ=(edge.get('sourceHandle') or 'out:'+source['data']['output']).removeprefix('out:')
-        target=(edge.get('targetHandle') or 'in:'+typ).removeprefix('in:')
-        for row in outputs.get(edge['source'],[]):
-            packet=row.get('catalog_streams')
-            values=packet.get(typ,[]) if packet is not None else [r['target'] for r in outputs[edge['source']] if 'target' in r] if typ=='targets' else []
-            key=typ if target=='any' else target
-            streams.setdefault(key,[]).extend(values)
-            if packet is None:break
-    return {k:list(dict.fromkeys(v)) for k,v in streams.items()}
+def incoming_streams(routes, outputs):
+    streams = {}
+    for parent, output, input_type in routes:
+        values = streams.setdefault(output if input_type == 'any' else input_type, [])
+        for row in outputs[parent]:
+            packet = row.get('catalog_streams')
+            if packet is not None:
+                values.extend(catalog_socket_values(row, output))
+            elif output == 'targets':
+                if 'target' in row:
+                    values.append(row['target'])
+            else:
+                values.append(json.dumps(row, sort_keys=True))
+    return {key: list(dict.fromkeys(values)) for key, values in streams.items()}
 
 
 def source_values(data,config):
@@ -62,6 +63,7 @@ def source_values(data,config):
 
 def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),node_ids=None):
     issues=[];binaries={};snapshots={};coverage=[];tool_checks={}
+    routes = incoming_routes(graph)
     for n in graph['nodes']:
         if node_ids is not None and n['id'] not in node_ids:continue
         data=n['data'];kind=data['kind'];reason=[]
@@ -79,7 +81,7 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
                     identifier=data.get('inputRefs',{}).get('graph')
                     if identifier:
                         registered_path(store,identifier,'file');snapshots[identifier]=store.input(identifier)
-                    elif not any(e['target']==n['id'] and (e.get('sourceHandle')=='out:file' or next(x for x in graph['nodes'] if x['id']==e['source'])['data']['output']=='file') for e in graph['edges']):
+                    elif not any(input_type == 'file' for _, _, input_type in routes[n['id']]):
                         raise ScopeError('Bind an identity graph export or connect a file-producing source/collector.')
             except ScopeError as exc:reason.append(str(exc))
         if kind=='catalog_source':
@@ -107,7 +109,7 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
                 except ScopeError as exc:reason.append(str(exc))
                 except OSError:
                     reason.append('A registered input could not be read.')
-            incoming={(e.get('targetHandle') or 'in:'+next(x for x in graph['nodes'] if x['id']==e['source'])['data']['output']).removeprefix('in:') for e in graph['edges'] if e['target']==n['id']}
+            incoming = {input_type for _, _, input_type in routes[n['id']]}
             placeholders={m for token in tool['command'] for m in re.findall(r'\{([^}]+)\}',token)}
             for field,typ in [('wordlist_file','wordlist'),('paths_file','paths_file'),('folder','folder'),('sbom_file','sbom')]:
                 if field in placeholders and typ not in incoming and typ not in data.get('inputRefs',{}):reason.append(f'Requires a connected or registered {typ} input.')

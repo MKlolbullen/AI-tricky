@@ -17,6 +17,9 @@ from backend.cli_runner import CLIError, build_command, digest, execute_cli, pin
 from backend.scope import ScopeError
 from backend.store import Store
 from backend.workflows import validate_workflow
+from backend.workflow_sockets import incoming_routes
+from backend.tests.test_local import target_server, wait_done
+from backend.tests.test_workflows import graph as native_graph, launch
 
 CONFIG={'targets':['example.test','https://example.test/'],'max_hosts':64,'allow_http':True,'allow_cli':True,'max_cli_invocations':64,'max_seconds':5,'cli_credential_keys':[]}
 
@@ -104,9 +107,59 @@ def test_every_tool_compiles_or_reports_its_explicit_context_restriction(tid,tmp
 
 
 def test_typed_multi_output_edges_use_requested_socket():
-    graph={'nodes':[{'id':'source','data':{'output':'targets'}},{'id':'sink','data':{'output':'report'}}],'edges':[{'source':'source','target':'sink','sourceHandle':'out:url','targetHandle':'in:url'}]}
-    values={'source':[{'catalog_streams':{'targets':['wrong.example'],'url':['https://example.test/']}}]}
-    assert incoming_streams(graph,'sink',values)=={'url':['https://example.test/']}
+    g = native_graph('native_http')
+    g['nodes'].insert(0, {'id': 'producer', 'data': data_for(TOOLS['httpx'])})
+    g['edges'] = [{'source': 'producer', 'target': 'n0', 'sourceHandle': 'out:url'}]
+    values = {'producer': [{'catalog_streams': {'targets': ['wrong.example'], 'url': ['https://example.test/']}}]}
+    assert incoming_streams(incoming_routes(g)['n0'], values) == {'url': ['https://example.test/']}
+
+
+def test_catalog_url_socket_routes_only_urls_to_native_http(tmp_path, target_server, monkeypatch):
+    base, handler = target_server
+    binary = tmp_path / 'httpx'
+    stdout = base + "/wired\nother.example.test"
+    binary.write_text(f'#!{sys.executable}\nprint({stdout!r})\n')
+    binary.chmod(0o755)
+    monkeypatch.setenv('PATH', str(tmp_path) + os.pathsep + os.environ.get('PATH', ''))
+    g = native_graph('native_scope', 'native_http', 'native_summary')
+    g['nodes'].insert(2, {'id': 'collector', 'type': 'tool', 'position': {'x': 690, 'y': 0},
+                         'data': {'kind': 'catalog_output', 'inputs': ['any'], 'outputs': ['report'], 'output': 'report'}})
+    g['nodes'].insert(1, {'id': 'probe', 'type': 'tool', 'position': {'x': 230, 'y': 0}, 'data': data_for(TOOLS['httpx'])})
+    g['edges'] = [
+        {'id': 'scope-probe', 'source': 'n0', 'target': 'probe'},
+        {'id': 'xy-edge__probeout:url-n1', 'source': 'probe', 'target': 'n1', 'sourceHandle': 'out:url'},
+        {'id': 'capture-report', 'source': 'n1', 'target': 'collector', 'targetHandle': 'in:any'},
+        {'id': 'report-summary', 'source': 'collector', 'target': 'n2'},
+    ]
+    with TestClient(create_app(tmp_path / 'state')) as client:
+        saved = client.post('/api/workflows', json={'name': 'Named legacy edge', 'graph': g})
+        assert saved.status_code == 200, saved.text
+        response = launch(client, base, g, allow_cli=True, max_requests=4)
+        assert response.status_code == 201, response.text
+        run_id = response.json()['id']
+        done = wait_done(client, run_id)
+        assert done['status'] == 'completed', done
+        assert handler.calls == ['/wired']
+        assert done['result']['request_count'] == 1 and done['result']['cli_invocation_count'] == 1
+        nodes = {node['node_id']: node for node in client.get(f'/api/runs/{run_id}/nodes').json()}
+        collection = client.get('/api/artifacts/' + nodes['collector']['result']['artifact_id']).json()[0]
+        [capture] = collection['catalog_streams']['observations']
+        assert json.loads(capture)['url'] == base + '/wired'
+        summary = client.get('/api/artifacts/' + nodes['n2']['result']['artifact_id']).json()[0]
+        assert summary['records'] == 1
+
+
+def test_cli_dispatch_uses_both_wired_network_inputs(tmp_path):
+    binary = tmp_path / 'httpx'
+    binary.write_text(f'#!{sys.executable}\nfrom pathlib import Path\nimport sys\nprint(Path(sys.argv[sys.argv.index("-l") + 1]).read_text(), end="")\n')
+    binary.chmod(0o755)
+    tool = TOOLS['httpx']
+    store = Store(tmp_path / 'state')
+    config = {**CONFIG, 'cli_binaries': {'httpx': {'path': str(binary), 'sha256': digest(binary)}}}
+    values = {'targets': ['https://example.test/from-targets', 'outside.test'],
+              'url': ['https://example.test/from-urls', 'https://example.test/from-targets']}
+    result = asyncio.run(execute_cli(store.new_run(config)['id'], 'probe', data_for(tool), values, config, RunControl(), store))
+    assert result[0]['catalog_streams']['url'] == ['https://example.test/from-targets', 'https://example.test/from-urls']
 
 
 def test_numeric_one_is_a_value_and_not_a_boolean_flag(fixture_binary):

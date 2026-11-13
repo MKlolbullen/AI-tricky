@@ -23,3 +23,12 @@ Trickest and ProjectDiscovery are referenced for interoperability and inspiratio
 The 151 tool specifications, 57 workflow templates, capability metadata and six small payload wordlists in `third-party/mini-tricky/` are adapted from [MKlolbullen/mini-tricky](https://github.com/MKlolbullen/mini-tricky), commit `96971000b0058423da52884d9028250ab76b0633`, under the MIT License. Copyright (c) 2026 MKlolbullen. The complete license is included in `third-party/mini-tricky/LICENSE`; provenance is recorded in `SOURCE.json`. The generated catalog is `src/mini-tricky-catalog.json`.
 
 This license attribution concerns the catalog and examples. External security binaries retain their own licenses and are not bundled. The bundled GF URL-parameter patterns are independently authored local heuristics, not proof of vulnerabilities.
+
+## API Surface parsers
+
+API Surface uses MIT-licensed Python bindings and grammars for static parsing.
+The versions are pinned in `requirements.txt` and their package license files
+are included with bundled builds.
+[Tree-sitter Python bindings](https://github.com/tree-sitter/py-tree-sitter) ·
+[JavaScript grammar](https://github.com/tree-sitter/tree-sitter-javascript) ·
+[TypeScript grammar](https://github.com/tree-sitter/tree-sitter-typescript)

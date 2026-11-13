@@ -80,6 +80,7 @@ say "Building the binary"
   "${ADD_DATA[@]}" \
   --collect-submodules backend \
   --collect-submodules uvicorn \
+  --copy-metadata tree-sitter --copy-metadata tree-sitter-javascript --copy-metadata tree-sitter-typescript \
   scripts/binary_entry.py
 
 if [[ -x dist-bin/ai-tricky ]]; then

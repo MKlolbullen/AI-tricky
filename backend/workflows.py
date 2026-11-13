@@ -136,7 +136,7 @@ def web_url(host, port):
     return f"{'https' if port in (443, 8443) else 'http'}://{host}:{port}/"
 
 
-async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset_graph=None):
+async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset_graph=None, http_journal=None):
     graph = config['workflow']
     order, incoming = validate_workflow(graph, live=True)
     routes = incoming_routes(graph)
@@ -209,6 +209,10 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
         if kind == 'native_web_assets':
             from .web_recon import collect_assets
             return await collect_assets(values, config, by_id[nid]['data'], fetch, store, nid)
+        if kind == 'native_api_surface':
+            from .api_surface import analyze_surface
+            exchanges = http_journal.endpoint_exchanges if http_journal else lambda _run, _limit: ([], False)
+            return [await asyncio.to_thread(analyze_surface, store, rid, values, config['targets'], exchanges)]
         if kind == 'native_cai':
             # Evidence-only analysis: the existing configured CAI provider gets no live tools.
             result = await analyze(values, node_id=nid)

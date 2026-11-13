@@ -162,3 +162,14 @@ from the pinned mini-tricky migration. Use reviewed local tool contracts and
 registered support inputs. mksub and mkpath generate bounded offline candidates
 whose downstream active consumers recheck scope. The public recon example
 maps to the local web recon and Nuclei starter. See docs/TRICKEST-OPEN-SOURCE.md.
+
+## API Surface and catalog argument inspector
+
+The user selected API Surface, then the local Burp bridge, enforced CLI scope,
+multi-identity access matrix, and delta-first recon in that order. Implement
+one increment at a time. API Surface parses recorded JavaScript/TypeScript and
+embedded source maps without executing code, sends no target requests, retains
+source provenance, and distinguishes inference from matched native/imported
+HTTP exchanges. Keep argument editing in the selected tool's right inspector
+with visible flags, typed controls, defaults, and separate registered input
+bindings. Preserve server validation and adapter-owned flags.

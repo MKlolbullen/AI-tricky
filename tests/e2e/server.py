@@ -20,6 +20,16 @@ from backend.model_usage import ModelUsage, TOKEN_FIELDS
 
 def seed(store, fixture_url):
     target = store.add_target(fixture_url + '/')
+    surface_run = store.new_run({'engine': 'workflow', 'targets': [fixture_url + '/'], 'workflow': {'nodes': [
+        {'id': 'qa-web-source', 'data': {'kind': 'native_web_assets'}},
+    ]}})['id']
+    bundle = fixture_url + '/app.js'
+    capture = store.artifact(surface_run, 'http-1.json', {'url': bundle, 'body': "fetch('/api/users?sort=asc');"}, node_id='qa-web-source')
+    source_output = store.artifact(surface_run, 'node-qa-web-source.json', [{'manifest': [
+        {'url': bundle, 'kind': 'js', 'status': 200, 'artifact_id': capture},
+    ]}], node_id='qa-web-source')
+    store.node_status(surface_run, 'qa-web-source', 'completed', {'artifact_id': source_output, 'records': 1})
+    store.status(surface_run, 'completed', {'report': 'Saved API Surface fixture.'})
     # Interrupted workflow fixture: only the selected recovery dispatch will
     # contact the loopback HTTP server. Seeding/previewing has no target access.
     from backend.workflows import REGISTRY

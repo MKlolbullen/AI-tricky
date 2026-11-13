@@ -190,7 +190,7 @@ async def collect_assets(values, config, data, fetch, store, node_id):
              'evidence_status': 'OBSERVATION'}]
 
 
-def recon_workflow(*, fuzz=False, scan=False, review=False):
+def recon_workflow(*, fuzz=False, scan=False, review=False, surface=False):
     """Independent curated starter; leaves the pinned migration catalog intact."""
     from .catalog import TOOLS
     from .workflows import REGISTRY, SCHEMA, validate_workflow
@@ -228,6 +228,9 @@ def recon_workflow(*, fuzz=False, scan=False, review=False):
     node('sources', 'native_web_assets', 1610 if review else 1380, 100)
     node('summary', 'native_summary', 1840 if review else 1610, 100)
     edge('sources', 'summary', 'report')
+    if surface:
+        node('api-surface', 'native_api_surface', 1840 if review else 1610, 310)
+        edge('sources', 'api-surface', 'report')
     if review:
         node('capture', 'native_http', 1380, 100)
         edge('urls', 'capture', 'url')

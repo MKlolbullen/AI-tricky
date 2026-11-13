@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import sys
 import threading
 import time
 from types import SimpleNamespace
@@ -16,8 +17,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend import cli_scope
-from backend.app import create_app
+from backend.app import RunControl, create_app
+from backend.cli_runner import digest, execute_cli
+from backend.proposals import ProposalPlanner
 from backend.scope import ScopeError
+from backend.store import Store
+from backend.tests.test_evidence import capture, run as source_run
+from backend.tests.test_proposal_execution import prepare
+from backend.tests.test_proposals import report
 
 BIN_DIR = os.environ.get('AI_TRICKY_SCOPE_BIN')
 
@@ -62,11 +69,13 @@ def test_relay_only_dispatches_bound_get_routes(gateway):
         assert await request(b'GET http://127.0.0.1:28080/allowed HTTP/1.1\r\nAuthorization: secret') == (
             200, [['Content-Type', 'text/plain']], b'fixture',
         )
+        assert (await request(b'GET /allowed HTTP/1.1'))[0] == 403
 
     asyncio.run(run())
     assert calls == [('https://example.test/app/allowed', 'fuzz')]
-    assert relay.denied == 6
-    assert relay.store.event.call_count == 6
+    assert relay.requests == 1
+    assert relay.denied == 7
+    assert relay.store.event.call_count == 7
     assert json.loads(relay.remap_stdout('{"url":"http://127.0.0.1:28080/allowed"}')) == {
         'url': 'https://example.test/app/allowed', 'http_exchange_id': 'exchange',
     }
@@ -108,6 +117,98 @@ def test_preflight_rejects_unsupported_modes_and_bindings(tmp_path):
         check = client.post('/api/runs/preflight', json=options).json()
         assert not check['ready']
         assert 'supports only ffuf' in str(check['issues'])
+
+
+def fixture_executable(path, marker):
+    path.write_text(f'#!{sys.executable}\nfrom pathlib import Path\nPath({str(marker)!r}).write_text("launched")\n')
+    path.chmod(0o755)
+    return path
+
+
+@pytest.mark.skipif(sys.platform != 'linux', reason='Enforced CLI scope is Linux-only')
+def test_helper_change_while_launch_waits_blocks_admission(tmp_path, monkeypatch):
+    store = Store(tmp_path / 'state')
+    launched = tmp_path / 'launched'
+    ffuf, bwrap, relay = (fixture_executable(tmp_path / name, launched) for name in ('ffuf', 'bwrap', 'relay'))
+    words = tmp_path / 'paths.txt'
+    words.write_text('ok\n')
+    entry = store.add_input('paths', 'file', words.resolve(), digest(words))
+    config = {'targets': ['https://example.test/app'], 'max_hosts': 1, 'allow_cli': True,
+              'max_cli_invocations': 1, 'max_seconds': 5, 'cli_scope': 'enforced',
+              'http_routing': {'mode': 'direct'},
+              'cli_binaries': {'ffuf': {'path': str(ffuf), 'sha256': digest(ffuf)}},
+              'cli_sandbox': {'bwrap': cli_scope.executable_pin(str(bwrap)),
+                              'relay': cli_scope.executable_pin(str(relay))}}
+    data = {'toolId': 'ffuf', 'inputRefs': {'wordlist': entry['id']}, 'params': {}, 'require_cli_scope': True}
+    rid = store.new_run(config)['id']
+    ctl = RunControl()
+    ctl.gate.clear()
+    checks = []
+    verify = cli_scope.verify_pins
+
+    def recorded(pins):
+        checks.append(pins)
+        verify(pins)
+
+    monkeypatch.setattr(cli_scope, 'verify_pins', recorded)
+
+    async def fetch(url, *, node_id):
+        raise AssertionError('No target request is expected.')
+
+    async def exercise():
+        task = asyncio.create_task(execute_cli(rid, 'fuzz', data, {'targets': ['https://example.test/app']},
+                                               config, ctl, store, fetch=fetch))
+        for _ in range(100):
+            if checks:
+                break
+            await asyncio.sleep(.01)
+        await asyncio.sleep(.05)
+        assert len(checks) == 1 and not task.done()
+        relay.write_text(relay.read_text() + '# replaced while the launch was paused\n')
+        ctl.gate.set()
+        with pytest.raises(ScopeError, match='helpers changed'):
+            await task
+
+    asyncio.run(exercise())
+    assert len(checks) == 2
+    assert ctl.cli_invocations == 0 and not launched.exists()
+    assert not any(event['kind'] == 'cli.admitted' for event in store.events(rid))
+
+
+def enforced_plan(app, client, scope, url, adapter):
+    client.post('/api/targets', json={'value': scope}).raise_for_status()
+    store = app.state.store
+    rid = source_run(store, targets=[scope], max_hosts=8, cli_scope='enforced')
+    capture(store, rid, url=url)
+    planner = ProposalPlanner(store)
+    oid = planner.evidence.observations(run_id=rid)['items'][0]['id']
+    context = planner.context(rid, [oid], 'Collect follow-up evidence', 'medium')
+    return planner.save('Collect follow-up evidence', context, json.dumps(report(context, adapter)))
+
+
+def test_proposal_reviews_keep_enforced_source_scope(tmp_path, monkeypatch):
+    executable = tmp_path / 'nuclei'
+    executable.write_text(f'#!{sys.executable}\nprint("fixture output")\n')
+    executable.chmod(0o700)
+    monkeypatch.setenv('PATH', str(tmp_path) + os.pathsep + os.environ.get('PATH', ''))
+    folder = tmp_path / 'templates'
+    folder.mkdir()
+    (folder / 'reviewed.yaml').write_text('id: fixture-review\n')
+    app = create_app(tmp_path / 'data')
+    with TestClient(app) as client:
+        templates = client.post('/api/inputs', json={'name': 'Reviewed fixtures', 'path': str(folder)}).json()['id']
+        plan = enforced_plan(app, client, '127.0.0.1', 'http://127.0.0.1:8000/api', 'nuclei')
+        proposal = plan['proposals'][0]
+        assert any('supports only ffuf' in reason for reason in proposal['requirements'])
+        response = prepare(client, plan, proposal, allow_cli=True, input_refs={'templates': templates})
+        assert response.status_code == 422 and 'supports only ffuf' in response.text
+        assert prepare(client, plan, proposal, allow_cli=True, input_refs={'templates': templates},
+                       cli_scope='standard').status_code == 422
+        native = enforced_plan(app, client, 'https://example.com/api', 'https://example.com/api', 'native_http')
+        response = prepare(client, native, native['proposals'][0])
+        assert response.status_code == 201, response.text
+        assert response.json()['snapshot']['config']['cli_scope'] == 'enforced'
+        assert len(client.get('/api/runs').json()) == 2
 
 
 @pytest.mark.skipif(not BIN_DIR, reason='Requires pinned Linux isolation binaries')

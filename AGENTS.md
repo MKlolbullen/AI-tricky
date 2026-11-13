@@ -192,3 +192,6 @@ filesystem mounts. The only relay dispatches exact wordlist-derived GETs
 through the existing scoped HTTP transport, shared budget and journal. Keep
 this mode fail closed across preflight, launches and workflow recovery.
 Use loopback fixtures to verify direct network denial and real ffuf capture.
+Recheck helper hashes at admission after pauses, dispatch each bound path at
+most once per invocation, and bind the source run's enforcement mode into
+proposal reviews. Never downgrade an enforced source run to standard mode.

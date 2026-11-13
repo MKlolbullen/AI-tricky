@@ -102,6 +102,17 @@ class ProposalExecutions:
             raise ExecutionError('Every recorded scope entry must still be an entered target. Restore the scope before preparing a new review.')
         return [known[t] for t in scope]
 
+    def _source_cli_scope(self, plan):
+        # Use the plan context bound by context_hash, never a client option.
+        with self.store.connect() as c:
+            row = c.execute('SELECT context FROM agent_plans WHERE id=?', (plan['id'],)).fetchone()
+        if row is None:
+            raise ExecutionError('Evidence-guided plan not found.', 404)
+        mode = json.loads(row['context']).get('run_config', {}).get('cli_scope', 'standard')
+        if mode not in ('standard', 'enforced'):
+            raise ExecutionError('The source run has an unsupported CLI scope mode.', 422)
+        return mode
+
     def _bindings(self, config):
         ready = preflight(config['workflow'], config, self.store)
         if not ready['ready']:
@@ -114,6 +125,7 @@ class ProposalExecutions:
                 path = registered_path(self.store, identifier, kind)
                 pins[identifier] = {'kind': kind, 'sha256': input_fingerprint(path, kind)}
         return {'cli_binaries': ready['cli_binaries'], 'input_snapshots': ready['input_snapshots'],
+                'cli_sandbox': ready['cli_sandbox'],
                 'proposal_input_pins': pins,'http_routing_binding':routing_binding(config.get('http_routing'),self.store)}
 
     def eligible_findings(self, plan_id, proposal_id):
@@ -169,7 +181,7 @@ class ProposalExecutions:
             raise ExecutionError('This native proposal does not require CLI permission.', 422)
         config.update(target_ids=self._scope_ids(plan['scope']), targets=plan['scope'], goal=plan['goal'],
                       engine='workflow', workflow=graph, parallelism=1, ports=[80, 443], allow_http=True,
-                      cli_credential_keys=[])
+                      cli_credential_keys=[], cli_scope=self._source_cli_scope(plan))
         scopes = [parse_target(t) for t in config['targets']]
         for target in scopes:
             if target.kind not in ('url', 'wildcard'):
@@ -219,7 +231,7 @@ class ProposalExecutions:
         if self._scope_ids(plan['scope']) != config['target_ids'] or plan['scope'] != config['targets']:
             raise ExecutionError('The entered scope changed. Prepare a new review.')
         bindings = self._bindings(config)
-        if any(bindings[key] != config[key] for key in bindings):
+        if any(bindings[key] != config.get(key) for key in bindings):
             raise ExecutionError('Executable or registered input contents changed. Prepare a new review.')
 
     def _check_pending(self, c, record):

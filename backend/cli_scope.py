@@ -61,8 +61,9 @@ def executable_pin(path):
 
 
 def sandbox_prefix(pins):
+    # --new-session blocks TIOCSTI input injection into a controlling terminal.
     return [pins['bwrap']['path'], '--unshare-user', '--unshare-net', '--unshare-pid', '--unshare-ipc',
-            '--unshare-uts', '--disable-userns', '--die-with-parent',
+            '--unshare-uts', '--disable-userns', '--die-with-parent', '--new-session',
             '--cap-drop', 'ALL', '--clearenv', '--setenv', 'HOME', '/tmp',
             '--setenv', 'XDG_CONFIG_HOME', '/tmp', '--setenv', 'LANG', 'C',
             '--dev', '/dev', '--tmpfs', '/tmp', '--chdir', '/tmp',
@@ -136,6 +137,7 @@ class ScopedGateway:
         self.tasks = set()
         self.denied = 0
         self.requests = 0
+        self.admitted = set()
         self.exchanges = {}
         self.exchange_ids = set()
 
@@ -193,6 +195,12 @@ class ScopedGateway:
             return 403, [], b''
         if self.ctl.cancelled:
             return 503, [], b''
+        # One destination request per bound route keeps traffic at most one
+        # GET per wordlist entry and each ffuf row tied to one exchange.
+        if path in self.admitted:
+            self.denied_request('Route was already requested in this invocation.')
+            return 403, [], b''
+        self.admitted.add(path)
         self.requests += 1
         result = await self.fetch(url, node_id=self.nid)
         if exchange_id := result.get('http_exchange_id'):

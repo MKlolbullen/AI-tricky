@@ -371,6 +371,9 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store,*,fetch=None):
                         if not ctl.gate.is_set():continue
                         if ctl.cli_invocations>=config['max_cli_invocations']:raise ScopeError('CLI invocation budget exhausted.')
                         if digest(pin['path'])!=pin['sha256']:raise ScopeError('Executable changed after preflight.')
+                        if gateway is not None:
+                            # Helpers may change while this launch waits on pause/lock.
+                            cli_scope.verify_pins(config.get('cli_sandbox'))
                         ctl.cli_invocations+=1;number=ctl.cli_invocations
                         store.event(rid,'cli.admitted',{'node_id':nid,'tool_id':tool['id'],'invocation_number':number,'traffic':tool['adapter']['traffic']})
                         break

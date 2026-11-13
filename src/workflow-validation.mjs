@@ -1,5 +1,6 @@
 import {isCatalog,catalogContract,catalogKinds} from './catalog-contracts.mjs';
 import nativeRegistry from './native-registry.json' with {type:'json'};
+import {resolveConnection} from './workflow-sockets.mjs';
 export const WORKFLOW_SCHEMA='offsecs-u-ai.workflow/v1';
 export function validateWorkflow(v,knownKinds,templates){
  if(![WORKFLOW_SCHEMA,'reconforge.prototype.workflow/v1'].includes(v?.schema)||!Array.isArray(v.nodes)||!Array.isArray(v.edges)||v.nodes.length>500||v.edges.length>2000)throw Error('Invalid workflow format or size');
@@ -13,13 +14,9 @@ export function validateWorkflow(v,knownKinds,templates){
   ids.add(n.id);
  }
  const graph=new Map(v.nodes.map(n=>[n.id,[]])),edgeIds=new Set();
+ const byId=new Map(v.nodes.map(n=>[n.id,n.data]));
  for(const e of v.edges){if(typeof e.id!=='string'||(e.label!==undefined&&typeof e.label!=='string'))throw Error('Invalid edge data');if(!ids.has(e.source)||!ids.has(e.target)||e.source===e.target||edgeIds.has(e.id))throw Error('Invalid edge');edgeIds.add(e.id);graph.get(e.source).push(e.target);
-  const a=v.nodes.find(n=>n.id===e.source),b=v.nodes.find(n=>n.id===e.target);
-  const sourceType=e.sourceHandle?.replace(/^out:/,'')||a.data.output,targetType=e.targetHandle?.replace(/^in:/,'')||sourceType;
-  if(isCatalog(a.data)&&!a.data.outputs.includes(sourceType))throw Error('Unknown source socket');
-  if(isCatalog(b.data)&&(!b.data.inputs.includes(targetType)&&!b.data.inputs.includes('any')||targetType!=='any'&&sourceType!==targetType))throw Error('Incompatible catalog socket types');
-  if(nativeRegistry[b.data.kind]&&!nativeRegistry[b.data.kind].inputs.includes(sourceType))throw Error('Incompatible native port types');
-  if(b.data.kind==='template'&&!b.data.inputs.includes(a.data.output))throw Error('Incompatible port types');
+  resolveConnection(e,byId.get(e.source),byId.get(e.target));
  }
  const visited=new Set(),active=new Set();function visit(id){if(active.has(id))throw Error('Workflow contains a cycle');if(visited.has(id))return;active.add(id);graph.get(id).forEach(visit);active.delete(id);visited.add(id)}
  ids.forEach(visit);return v;

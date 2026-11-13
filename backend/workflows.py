@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .scope import ScopeError, network_hosts, parse_target, parse_url
 from .catalog import CATALOG_KINDS, contract
+from .workflow_sockets import incoming_routes, resolve_sockets, routed_rows
 
 ROOT = Path(__file__).resolve().parent.parent
 REGISTRY = json.loads((ROOT / 'src/native-registry.json').read_text())
@@ -99,23 +100,18 @@ def validate_workflow(graph, *, live=False):
         by_id[n['id']], incoming[n['id']] = n, []
     edge_ids, pairs = set(), set()
     for e in edges:
-        if not isinstance(e, dict) or not isinstance(e.get('id'), str) or not ID.fullmatch(e['id']) or e['id'] in edge_ids:
+        if not isinstance(e, dict) or not isinstance(e.get('id'), str) or e['id'] in edge_ids:
             raise ScopeError('Invalid or duplicate workflow edge.')
         if any(e.get(k) is not None and not isinstance(e[k],str) for k in ('sourceHandle','targetHandle')):
             raise ScopeError('Invalid typed socket handle.')
         source, target = e.get('source'), e.get('target')
         if not isinstance(source, str) or not isinstance(target, str) or source not in by_id or target not in by_id or source == target or (source, target, e.get('sourceHandle'), e.get('targetHandle')) in pairs:
             raise ScopeError('Dangling, duplicate or self-referencing edge.')
-        source_type = e.get('sourceHandle')
-        target_type = e.get('targetHandle')
-        if source_type is not None and (not isinstance(source_type,str) or not source_type.startswith('out:')):
-            raise ScopeError('Invalid source socket.')
-        if target_type is not None and (not isinstance(target_type,str) or not target_type.startswith('in:')):
-            raise ScopeError('Invalid target socket.')
-        source_type = source_type[4:] if source_type else specs[source][1][0]
-        target_type = target_type[3:] if target_type else source_type
-        if source_type not in specs[source][1] or (target_type not in specs[target][0] and 'any' not in specs[target][0]) or (target_type!='any' and source_type!=target_type):
-            raise ScopeError('Incompatible workflow port types.')
+        resolve_sockets(e, specs[source][1], specs[target][0])
+        # Accept exact IDs from historical React Flow exports as well as normal IDs.
+        old_id = f"xy-edge__{source}{e.get('sourceHandle') or ''}-{target}{e.get('targetHandle') or ''}"
+        if not ID.fullmatch(e['id']) and e['id'] != old_id:
+            raise ScopeError('Invalid workflow edge ID.')
         incoming[target].append(source)
         edge_ids.add(e['id'])
         pairs.add((source,target,e.get('sourceHandle'),e.get('targetHandle')))
@@ -143,6 +139,7 @@ def web_url(host, port):
 async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset_graph=None):
     graph = config['workflow']
     order, incoming = validate_workflow(graph, live=True)
+    routes = incoming_routes(graph)
     by_id = {n['id']: n for n in graph['nodes']}
     outputs, states = {}, {nid: 'queued' for nid in order}
     slots = asyncio.Semaphore(config['parallelism'])
@@ -156,7 +153,7 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
         kind = by_id[nid]['data']['kind']
         if kind in CATALOG_KINDS:
             from .catalog_execution import incoming_streams, execute_catalog_node
-            streams=incoming_streams(graph,nid,outputs)
+            streams=incoming_streams(routes[nid], outputs)
             return await execute_catalog_node(rid,nid,by_id[nid]['data'],streams,config,ctl,store)
         if kind == 'native_scope':
             return [{'target': t, 'kind': parse_target(t).kind} for t in config['targets']]
@@ -189,17 +186,7 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
         if kind == 'native_http':
             urls = []
             rows = []
-            expanded=[]
             for entry in values:
-                if 'catalog_streams' in entry:
-                    for typ in ('url','targets'):
-                        for value in entry['catalog_streams'].get(typ,[]):
-                            try:
-                                target=parse_url(value) if '://' in value else parse_target(value)
-                                expanded.append({'target':target.url,'kind':target.kind})
-                            except ScopeError:pass
-                else:expanded.append(entry)
-            for entry in expanded:
                 if 'target' in entry and 'kind' in entry:
                     target = parse_url(entry['target']) if '://' in entry['target'] else parse_target(entry['target'])
                     if target.kind == 'url':
@@ -309,8 +296,8 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
             try:
                 values = []
                 seen = set()
-                for parent in incoming[nid]:
-                    for row in outputs[parent]:
+                if by_id[nid]['data']['kind'] not in CATALOG_KINDS:
+                    for row in routed_rows(routes[nid], outputs):
                         key = json.dumps(row, sort_keys=True)
                         if key not in seen:
                             values.append(row)

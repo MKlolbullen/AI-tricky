@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {migrated,catalogKinds,catalogNode,catalogSource} from '../src/catalog-contracts.mjs';
 import {validateWorkflow,WORKFLOW_SCHEMA} from '../src/workflow-validation.mjs';
+import {nativeNode} from '../src/native-workflow.mjs';
+import {namedEdges} from '../src/workflow-sockets.mjs';
 
 test('all 151 migrated tool descriptors and 57 workflows have valid socket contracts',()=>{
  assert.equal(migrated.tools.length,151);assert.equal(migrated.workflows.length,57);
@@ -22,4 +24,21 @@ test('modified migrated tool input/output contracts are rejected',()=>{
 });
 test('payload and merge sources keep canonical output types',()=>{
  for(const kind of ['catalog_source','catalog_payload','catalog_merge','catalog_output'])validateWorkflow({schema:WORKFLOW_SCHEMA,nodes:[catalogSource('node',kind)],edges:[]},catalogKinds,[]);
+});
+
+test('mixed graphs resolve old edges to named native and any sockets',()=>{
+ const probe=catalogNode('probe',migrated.tools.find(t=>t.id==='httpx'));
+ const capture=nativeNode('capture','native_http');
+ const collector=catalogSource('collector','catalog_output');
+ const nodes=[probe,capture,collector];
+ const edges=[
+  {id:'xy-edge__probeout:url-capture',source:'probe',sourceHandle:'out:url',target:'capture'},
+  {id:'edge-1',source:'capture',target:'collector',targetHandle:'in:observations'},
+ ];
+ validateWorkflow({schema:WORKFLOW_SCHEMA,nodes,edges},['native_http'],[]);
+ assert.deepEqual(namedEdges(nodes,edges).map(e=>[e.id,e.sourceHandle,e.targetHandle]),[
+  ['edge-2','out:url','in:url'],['edge-1','out:observations','in:any'],
+ ]);
+ edges[0].targetHandle='in:services';
+ assert.throws(()=>validateWorkflow({schema:WORKFLOW_SCHEMA,nodes,edges},['native_http'],[]),/port types/);
 });

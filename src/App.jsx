@@ -1,5 +1,5 @@
 import React, {useState, useCallback, useRef, useEffect} from 'react';
-import {ReactFlow, ReactFlowProvider, Background, Handle, Position, addEdge, useNodesState, useEdgesState, useReactFlow, useViewport, MarkerType} from '@xyflow/react';
+import {ReactFlow, ReactFlowProvider, Background, Handle, Position, addEdge, useNodesState, useEdgesState, useReactFlow, useViewport, useUpdateNodeInternals, MarkerType} from '@xyflow/react';
 import {Graph, Target, Globe, File, Link, Lightning, Robot, Laptop, Sparkle, MagnifyingGlass, Plus, Minus, ArrowsOut, TreeStructure, Play, Pause, Stop, CheckCircle, Circle, Info, X, CaretDown, CaretRight, CaretLeft, GearSix, List, Clock, Copy, DownloadSimple, UploadSimple, Trash, ArrowSquareOut, FileText, ShieldCheck, Warning, Funnel, DotsThreeVertical} from '@phosphor-icons/react';
 import '@xyflow/react/dist/style.css';
 import './styles.css';
@@ -14,15 +14,30 @@ import CatalogInspector from './CatalogInspector';
 import {catalogKinds,catalogNode,catalogSource,isCatalog,isExecutableTemplate,migrated,trickest} from './catalog-contracts.mjs';
 import {api} from './api.mjs';
 import {validateWorkflow,WORKFLOW_SCHEMA} from './workflow-validation.mjs';
+import {namedEdges, nodeSockets, resolveConnection} from './workflow-sockets.mjs';
 const icons={...Object.fromEntries(catalogKinds.map(k=>[k,Graph])),...Object.fromEntries(Object.keys(registry).map(k=>[k,(k==='native_cai'||k==='native_team')?Robot:Graph])),template:Graph,domain:Target,file:File,subfinder:Target,assetfinder:Link,dnsx:Globe,httpx:Lightning,merge:Graph,agent:Robot,burp:Lightning};
 const catalog=[{group:'Catalog sources & logic',items:[['catalog_source','Typed source'],['catalog_merge','Typed merge'],['catalog_output','Artifact collector'],['catalog_payload','Payload set']]},{group:'Native execution',items:Object.entries(registry).map(([id,s])=>[id,s.name])},{group:'Inputs',items:[['domain','Domain'],['file','File']]},{group:'Tools',items:[['subfinder','subfinder'],['assetfinder','assetfinder'],['dnsx','dnsx'],['httpx','httpx'],['merge','Merge & dedupe']]},{group:'Agents',items:[['agent','Local agent'],['agent','Strix'],['agent','CAI']]},{group:'Burp',items:[['burp','Review request']]}];
 const specs={...Object.fromEntries(Object.entries(registry).map(([id,s])=>[id,[s.name,s.description,s.output,'Ready for local execution']])),domain:['Domain Input','example.com','domain','12 domains'],file:['File Input','Drop a domain list','domain_list','No file'],subfinder:['subfinder','Enumerate subdomains','domain_list','12 domains'],assetfinder:['assetfinder','Find related assets','domain_list','8 domains'],dnsx:['dnsx','Resolve domain names','domain_list','17 resolved'],httpx:['httpx','Probe HTTP(S) services','url_list','31 URLs'],merge:['Merge & dedupe','Unique domains','domain_list','17 unique'],agent:['Agent analysis','AI-powered finding analysis','findings','3 findings'],burp:['Burp review','Validate findings','evidence','Awaiting review']};
 function makeNode(id,kind,x,y,label){if(catalogKinds.includes(kind))return catalogSource(id,kind,{x,y});if(registry[kind])return nativeNode(id,kind,{x,y});const s=specs[kind];return {id,type:'tool',position:{x,y},data:{kind,title:label||s[0],description:s[1],output:s[2],result:s[3],status:kind==='burp'?'waiting':'done',backend:label==='Strix'?'Strix':(label==='CAI'||(kind==='agent'&&!label))?'CAI':'Local agent',domain:'example.com',timeout:120,retries:1}};}
 const initialNodes=[makeNode('01','domain',0,125),makeNode('02','subfinder',205,0),makeNode('03','assetfinder',205,250),makeNode('04','merge',420,125),makeNode('05','httpx',420,375),makeNode('06','agent',635,125),makeNode('07','burp',635,375)];
-const initialEdges=[['01','02','domain'],['01','03','domain'],['02','04','domain_list'],['03','04','domain_list'],['04','05','domain_list'],['05','06','url_list'],['06','07','findings']].map(([source,target,label])=>({id:`${source}-${target}`,source,target,label,type:'smoothstep',markerEnd:{type:MarkerType.ArrowClosed},style:{stroke:'#03cbe0',strokeWidth:2},labelStyle:{fill:'#a4c2e6',fontSize:10},labelBgStyle:{fill:'#14233c',stroke:'#294361'},labelBgPadding:[5,3],labelBgBorderRadius:3}));
+const initialEdges=namedEdges(initialNodes,[['01','02','domain'],['01','03','domain'],['02','04','domain_list'],['03','04','domain_list'],['04','05','domain_list'],['05','06','url_list'],['06','07','findings']].map(([source,target,label])=>({id:`${source}-${target}`,source,target,label,type:'smoothstep',markerEnd:{type:MarkerType.ArrowClosed},style:{stroke:'#03cbe0',strokeWidth:2},labelStyle:{fill:'#a4c2e6',fontSize:10},labelBgStyle:{fill:'#14233c',stroke:'#294361'},labelBgPadding:[5,3],labelBgBorderRadius:3})));
 const findings=[['Possible access-control gap','/api/users/{id}','Access control (IDOR)','Medium'],['Verbose API error','/api/transfer','Information disclosure','Medium'],['Missing security header','/','HTTP hygiene','Low']];
 const files=[['httpx.jsonl','31 URL records','jsonl'],['domains.txt','17 unique domains','txt'],['agent_analysis.json','3 candidate findings','json'],['request_diff.txt','1 proposed replay','txt']];
-function ToolNode({id,data,selected}){const Icon=icons[data.kind]||File;return <div className={`tool-node ${selected?'selected':''} ${data.kind==='agent'?'agent':''} ${data.kind==='burp'?'burp':''}`}>{isCatalog(data)?data.inputs.map((type,i)=><Handle key={type} id={`in:${type}`} type="target" position={Position.Left} title={`Input: ${type}`} style={{top:`${25+i*50/Math.max(1,data.inputs.length-1)}%`}}/>):<Handle type="target" position={data.kind==='httpx'||data.kind==='burp'?Position.Top:Position.Left} isConnectable={!['domain','file','native_scope'].includes(data.kind)} style={{opacity:['domain','file','native_scope'].includes(data.kind)?0:1}}/>}<div className="node-top"><Icon size={29}/><span>{id}</span>{data.status==='done'?<CheckCircle weight="fill" size={18}/>:data.status==='running'?<Circle className="pulsing" weight="fill" size={17}/>:<Circle size={17}/>}</div><strong>{data.title}</strong><p>{data.description}</p><footer className={data.status==='waiting'?'amber':''}>{data.status==='waiting'?<><Clock size={13}/>Awaiting review</>:['failed','skipped','cancelled','interrupted','planned','reused'].includes(data.status)?data.status:data.status==='pending'?(registry[data.kind]?'Ready':data.kind==='template'?'Preview only':'Queued'):data.status==='running'?(data.live?'Running…':'Simulating…'):<><span>{data.result}</span><span>{data.live?'local':'fixture'}</span></>}</footer>{isCatalog(data)?data.outputs.map((type,i)=><Handle key={type} id={`out:${type}`} type="source" position={Position.Right} title={`Output: ${type}`} style={{top:`${25+i*50/Math.max(1,data.outputs.length-1)}%`}}/>):<Handle type="source" position={data.kind==='agent'||data.kind==='merge'?Position.Bottom:Position.Right}/>}</div>}
+function ToolNode({id,data,selected}){
+ const Icon=icons[data.kind]||File;
+ const {inputs,outputs}=nodeSockets(data);
+ const updateInternals=useUpdateNodeInternals();
+ const socketKey=JSON.stringify([inputs,outputs]);
+ useEffect(()=>{updateInternals(id)},[id,socketKey,updateInternals]);
+ const inputsAtTop=['httpx','burp'].includes(data.kind);
+ const outputsAtBottom=['agent','merge'].includes(data.kind);
+ const offset=(index,count)=>count>1?{top:`${25+index*50/(count-1)}%`}:undefined;
+ return <div className={`tool-node ${selected?'selected':''} ${data.kind==='agent'?'agent':''} ${data.kind==='burp'?'burp':''}`}>
+  {inputs.map((type,i)=><Handle key={type} id={`in:${type}`} type="target" position={inputsAtTop?Position.Top:Position.Left} title={`Input: ${type}`} style={offset(i,inputs.length)}/>)}
+  <div className="node-top"><Icon size={29}/><span>{id}</span>{data.status==='done'?<CheckCircle weight="fill" size={18}/>:data.status==='running'?<Circle className="pulsing" weight="fill" size={17}/>:<Circle size={17}/>}</div><strong>{data.title}</strong><p>{data.description}</p><footer className={data.status==='waiting'?'amber':''}>{data.status==='waiting'?<><Clock size={13}/>Awaiting review</>:['failed','skipped','cancelled','interrupted','planned','reused'].includes(data.status)?data.status:data.status==='pending'?(registry[data.kind]?'Ready':data.kind==='template'?'Preview only':'Queued'):data.status==='running'?(data.live?'Running…':'Simulating…'):<><span>{data.result}</span><span>{data.live?'local':'fixture'}</span></>}</footer>
+  {outputs.map((type,i)=><Handle key={type} id={`out:${type}`} type="source" position={outputsAtBottom?Position.Bottom:Position.Right} title={`Output: ${type}`} style={offset(i,outputs.length)}/>)}
+ </div>;
+}
 const nodeTypes={tool:ToolNode};
 function AppContent(){
  const [liveId,setLiveId]=useState(null);
@@ -36,19 +51,51 @@ function AppContent(){
  useEffect(()=>{const close=e=>{if(e.key==='Escape'){setModal(null);setTemplatesOpen(false);}if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();setLibrary(true);setTimeout(()=>document.querySelector('.search input')?.focus(),0)}};document.addEventListener('keydown',close);return()=>document.removeEventListener('keydown',close)},[]);
  const liveView=mode==='Runs'&&liveId&&live?.run?.config.workflow;
  const displayNodes=liveView?live.run.config.workflow.nodes.map(n=>{const status=live.nodes.find(x=>x.node_id===n.id);return {...n,data:{...n.data,live:true,status:status?.status==='completed'?'done':status?.status||'pending',result:status?.result?`${status.result.records??0} records · ${status.result.errors||0} errors`:'Waiting'}}}):nodes;
- const displayEdges=liveView?live.run.config.workflow.edges:edges;
+ const displayEdges=liveView?namedEdges(displayNodes,live.run.config.workflow.edges):edges;
  const node=displayNodes.find(n=>n.id===selected),f=findings[finding],domain=nodes.find(n=>n.data.kind==='domain')?.data.domain||'example.com';
  const notify=t=>{setToast(t);window.setTimeout(()=>setToast(''),3500)};
- const updateNode=(values)=>setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{...n.data,...values}}:n));
+ const updateNode=values=>{
+  const before=nodes.find(n=>n.id===selected);
+  if(!before)return;
+  const after={...before,data:{...before.data,...values}};
+  const previousSockets=nodeSockets(before.data),nextSockets=nodeSockets(after.data);
+  const handles=new Set([...nextSockets.inputs.map(type=>`in:${type}`),...nextSockets.outputs.map(type=>`out:${type}`)]);
+  if(JSON.stringify(previousSockets)!==JSON.stringify(nextSockets)){
+   const matches=edge=>(edge.source!==selected||handles.has(edge.sourceHandle))&&(edge.target!==selected||handles.has(edge.targetHandle));
+   setEdges(current=>current.filter(matches));
+   if(edges.some(edge=>!matches(edge)))notify('Removed connections to sockets that changed.');
+  }
+  setNodes(ns=>ns.map(n=>n.id===selected?{...n,data:{...n.data,...values}}:n));
+ };
  const addNode=(kind,label,pos)=>{setMode('Design');const id=String(idRef.current++).padStart(2,'0');setNodes(ns=>[...ns,makeNode(id,kind,pos?.x??140+ns.length*15,pos?.y??170+ns.length*12,label)]);setSelected(id);setInspectorTab('Configure');setInspector(true);notify(`${label||specs[kind][0]} added — connect its input and output`)};
- const isValidConnection=useCallback(c=>{if(c.source===c.target)return false;const a=nodes.find(n=>n.id===c.source),b=nodes.find(n=>n.id===c.target);if(!a||!b||['domain','file','native_scope'].includes(b.data.kind))return false;const expected=registry[b.data.kind]?.inputs||(b.data.kind==='template'?b.data.inputs:({subfinder:['domain'],assetfinder:['domain'],dnsx:['domain_list'],merge:['domain_list'],httpx:['domain_list'],agent:['url_list'],burp:['findings']}[b.data.kind]||[]));const sourceType=c.sourceHandle?.replace(/^out:/,'')||a.data.output,targetType=c.targetHandle?.replace(/^in:/,'')||sourceType;if(!(isCatalog(b.data)?b.data.inputs:expected).some(t=>t==='any'||t===targetType)||targetType!=='any'&&sourceType!==targetType)return false;const reaches=(id,seen=new Set())=>{if(id===c.source)return true;if(seen.has(id))return false;seen.add(id);return edges.filter(e=>e.source===id).some(e=>reaches(e.target,seen))};return !reaches(c.target)},[nodes,edges]);
- const connect=useCallback(c=>setEdges(es=>addEdge({...c,type:'smoothstep',label:c.sourceHandle?.replace(/^out:/,'')||nodes.find(n=>n.id===c.source)?.data.output,markerEnd:{type:MarkerType.ArrowClosed}},es)),[nodes]);
+ const isValidConnection=useCallback(c=>{
+  if(c.source===c.target)return false;
+  const source=nodes.find(n=>n.id===c.source),target=nodes.find(n=>n.id===c.target);
+  if(!source||!target)return false;
+  try{resolveConnection(c,source.data,target.data)}catch{return false}
+  const reaches=(id,seen=new Set())=>{
+   if(id===c.source)return true;
+   if(seen.has(id))return false;
+   seen.add(id);
+   return edges.some(edge=>edge.source===id&&reaches(edge.target,seen));
+  };
+  return !reaches(c.target);
+ },[nodes,edges]);
+ const connect=useCallback(c=>{
+  if(!isValidConnection(c))return;
+  const handles=resolveConnection(c,nodes.find(n=>n.id===c.source).data,nodes.find(n=>n.id===c.target).data);
+  setEdges(current=>{
+   let number=current.length+1;
+   while(current.some(edge=>edge.id===`edge-${number}`))number++;
+   return addEdge({...c,...handles,id:`edge-${number}`,type:'smoothstep',label:handles.sourceHandle.slice(4),markerEnd:{type:MarkerType.ArrowClosed}},current);
+  });
+ },[isValidConnection,nodes,setEdges]);
  const emit=(name,text)=>setLogs(ls=>[...ls,{time:new Date().toLocaleTimeString('en-GB'),node:name,text}]);
  const tick=()=>{if(stateRef.current!=='running')return;const ordered=scheduleRef.current;const id=ordered[stepRef.current];if(!id){clearInterval(timerRef.current);stateRef.current='completed';setRunState('completed');setRuns(rs=>rs.map(r=>r.id===currentRunRef.current?{...r,status:'Completed (simulation)',nodes:nodes.map(n=>({...n,data:{...n.data,status:n.data.kind==='burp'?'waiting':'done'}})),edges,logs:ordered.map(id=>({time:'14:22:30',node:nodes.find(n=>n.id===id)?.data.title||id,text:'Fixture output ready (simulation)'}))}:r));emit('run','Simulation complete. Burp request remains undispatched.');return;}setNodes(ns=>ns.map(n=>n.id===id?{...n,data:{...n.data,status:n.data.kind==='burp'?'waiting':'done'}}:n));emit(nodes.find(n=>n.id===id)?.data.title||id,nodes.find(n=>n.id===id)?.data.kind==='burp'?'Proposed request queued for review. No traffic sent.':'Fixture output ready (simulation)');stepRef.current++;};
  const startSimulation=()=>{setLiveId(null);clearInterval(timerRef.current);const remaining=new Set(nodes.map(n=>n.id)),order=[];while(remaining.size){const ready=[...remaining].filter(id=>edges.filter(e=>e.target===id).every(e=>!remaining.has(e.source)));if(!ready.length){notify('Workflow has a cycle. Remove the cyclic connection before preview.');return;}ready.forEach(id=>{order.push(id);remaining.delete(id)})}scheduleRef.current=order;const id=`R-${2841+runs.length-1}`;currentRunRef.current=id;setRunId(id);setRuns(rs=>[{id,status:'Simulation',time:'Just now',nodeCount:nodes.length,nodes,edges},...rs]);setRunState('running');stateRef.current='running';stepRef.current=0;setLogs([]);setNodes(ns=>ns.map(n=>({...n,data:{...n.data,status:'pending'}})));setModal(null);setDock('Console');setMode('Runs');timerRef.current=setInterval(tick,700);notify('Dry-run simulation started. No tools or targets contacted.');};
  const stop=()=>{setRuns(rs=>rs.map(r=>r.id===currentRunRef.current&&r.status==='Simulation'?{...r,status:'Cancelled (simulation)'}:r));clearInterval(timerRef.current);stateRef.current='cancelled';setRunState('cancelled');emit('run','Simulation cancelled.');notify('Run cancelled')};
  const exportWorkflow=()=>{const blob=new Blob([JSON.stringify({schema:WORKFLOW_SCHEMA,nodes,edges,parallelism:parallel},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ai-tricky-workflow.json';a.click();URL.revokeObjectURL(a.href);notify('Workflow exported')};
- const importWorkflow=async e=>{try{let v=JSON.parse(await e.target.files[0].text());if(!v.schema&&(v.graph||v.nodes?.some(n=>n.kind)))v=await api('/catalog/import',{workflow:v});validateWorkflow(v,[...Object.keys(specs),'template'],templates.tools);stop();setLiveId(null);setNodes(v.nodes);setEdges(v.edges);setParallel(v.parallelism||4);setSelected(v.nodes[0]?.id);idRef.current=Math.max(0,...v.nodes.map(n=>Number(n.id)||0))+1;setTimeout(()=>flow.fitView({padding:.13}),50);setMode('Design');notify('Workflow imported')}catch{notify('Unable to import: choose a valid AI-tricky or legacy ReconForge workflow JSON.')}e.target.value=''};
+ const importWorkflow=async e=>{try{let v=JSON.parse(await e.target.files[0].text());if(!v.schema&&(v.graph||v.nodes?.some(n=>n.kind)))v=await api('/catalog/import',{workflow:v});validateWorkflow(v,[...Object.keys(specs),'template'],templates.tools);stop();setLiveId(null);setNodes(v.nodes);setEdges(namedEdges(v.nodes,v.edges));setParallel(v.parallelism||4);setSelected(v.nodes[0]?.id);idRef.current=Math.max(0,...v.nodes.map(n=>Number(n.id)||0))+1;setTimeout(()=>flow.fitView({padding:.13}),50);setMode('Design');notify('Workflow imported')}catch{notify('Unable to import: choose a valid AI-tricky or legacy ReconForge workflow JSON.')}e.target.value=''};
  const loadTemplate=async t=>{
   if(t.sourceCatalog==='trickest-oss'){
     try{
@@ -59,8 +106,8 @@ function AppContent(){
     }catch(error){notify(error.message)}
     return;
   }
-  if(t.sourceCatalog==='mini-tricky'){try{loadGraph(t);setTemplatesOpen(false);notify(`${t.name} loaded · CLI preflight required`)}catch(e){notify(e.message)}return;}setLiveId(null);try{validateWorkflow({schema:WORKFLOW_SCHEMA,nodes:t.nodes,edges:t.edges},['template'],templates.tools);stop();setNodes(structuredClone(t.nodes));setEdges(structuredClone(t.edges));setSelected(t.nodes[0]?.id);setInspectorTab('Configure');setMode('Design');setTemplatesOpen(false);setLogs([]);setTimeout(()=>flow.fitView({padding:.15}),80);notify(`${t.name} loaded · preview only; adapters required`)}catch(e){notify(e.message)}};
- const loadGraph=v=>{validateWorkflow(v,[...Object.keys(specs),'template'],templates.tools);clearInterval(timerRef.current);stateRef.current='idle';setRunState('idle');setLiveId(null);setNodes(structuredClone(v.nodes));setEdges(structuredClone(v.edges));setParallel(v.parallelism||4);setSelected(v.nodes[0]?.id);idRef.current=Math.max(0,...v.nodes.map(n=>Number(n.id)||0))+1;setInspectorTab('Configure');setMode('Design');setTimeout(()=>flow.fitView({padding:.15}),80)};
+  if(t.sourceCatalog==='mini-tricky'){try{loadGraph(t);setTemplatesOpen(false);notify(`${t.name} loaded · CLI preflight required`)}catch(e){notify(e.message)}return;}setLiveId(null);try{validateWorkflow({schema:WORKFLOW_SCHEMA,nodes:t.nodes,edges:t.edges},['template'],templates.tools);stop();setNodes(structuredClone(t.nodes));setEdges(namedEdges(t.nodes,t.edges));setSelected(t.nodes[0]?.id);setInspectorTab('Configure');setMode('Design');setTemplatesOpen(false);setLogs([]);setTimeout(()=>flow.fitView({padding:.15}),80);notify(`${t.name} loaded · preview only; adapters required`)}catch(e){notify(e.message)}};
+ const loadGraph=v=>{validateWorkflow(v,[...Object.keys(specs),'template'],templates.tools);clearInterval(timerRef.current);stateRef.current='idle';setRunState('idle');setLiveId(null);setNodes(structuredClone(v.nodes));setEdges(namedEdges(v.nodes,v.edges));setParallel(v.parallelism||4);setSelected(v.nodes[0]?.id);idRef.current=Math.max(0,...v.nodes.map(n=>Number(n.id)||0))+1;setInspectorTab('Configure');setMode('Design');setTimeout(()=>flow.fitView({padding:.15}),80)};
  const loadNative=()=>{loadGraph(nativeWorkflow());notify('Native workflow loaded. Select run targets in Local workspace.');};
  const addTemplateTool=t=>{if(isExecutableTemplate(t)){let id;do{id=`catalog-${idRef.current++}`}while(nodes.some(n=>n.id===id));setNodes(ns=>[...ns,catalogNode(id,t,{x:180+ns.length*15,y:180+ns.length*12})]);setMode('Design');setSelected(id);setInspectorTab('Configure');setInspector(true);setTemplatesOpen(false);notify(`${t.name} added · configure typed inputs`);return;}let id;do{id=`tool-${idRef.current++}`}while(nodes.some(n=>n.id===id));setNodes(ns=>[...ns,{id,type:'tool',position:{x:180+ns.length*15,y:180+ns.length*12},data:{kind:'template',templateId:t.id,title:t.name,description:'Template · preview only',inputs:t.inputs,output:t.output,status:'pending',result:'Fixture output',timeout:120,retries:0}}]);setSelected(id);setInspectorTab('Configure');setInspector(true);setTemplatesOpen(false);notify(`${t.name} added · live adapter required`)};
  const autoLayout=()=>{setNodes(ns=>ns.map((n,i)=>({...n,position:initialNodes.find(s=>s.id===n.id)?.position||{x:850+(i%2)*205,y:Math.floor(i/2)*190}})));setTimeout(()=>flow.fitView({padding:.12}),30)};

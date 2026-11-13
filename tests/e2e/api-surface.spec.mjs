@@ -1,0 +1,56 @@
+import {test, expect} from './fixtures.mjs';
+
+test('saved sources expose searchable API routes without sending traffic', async ({page, request}) => {
+  const calls = await (await request.get('/api/_qa/target-calls')).json();
+  await page.goto('/');
+  await page.getByRole('button', {name: 'Local workspace', exact: true}).click();
+  const workspace = page.getByRole('dialog', {name: 'Local assessment workspace'});
+  await workspace.getByRole('button', {name: 'API Surface', exact: true}).click();
+  const surface = workspace.getByRole('region', {name: 'API Surface', exact: true});
+  await surface.getByLabel('Source collection run').selectOption({index: 1});
+  const route = surface.getByRole('button', {name: /GET .*\/api\/users/});
+  await expect(route).toBeVisible();
+  await route.click();
+  await expect(surface.getByRole('region', {name: 'Endpoint evidence'})).toContainText('/app.js:1:1');
+  await surface.getByLabel('Filter endpoints').fill('sort');
+  await expect(route).toBeVisible();
+  await surface.getByLabel('Filter endpoints').fill('absent');
+  await expect(route).toHaveCount(0);
+  expect(await (await request.get('/api/_qa/target-calls')).json()).toEqual(calls);
+});
+
+test('tool inspector edits flags and values with separate required bindings', async ({page, request}) => {
+  await request.post('/api/support-data/install/bundled', {data: {}});
+  await page.goto('/');
+  await page.getByRole('button', {name: 'Local workspace', exact: true}).click();
+  const workspace = page.getByRole('dialog', {name: 'Local assessment workspace'});
+  await workspace.getByLabel('Domain, wildcard, IP, CIDR or HTTP(S) URL').fill('*.example.test');
+  await workspace.getByRole('button', {name: 'Add target', exact: true}).click();
+  await workspace.getByRole('button', {name: 'Load web recon with path fuzzing', exact: true}).click();
+  await workspace.getByRole('button', {name: 'Close local workspace'}).click();
+  await page.locator('.react-flow__node').filter({hasText: 'Optional path fuzzing'}).click();
+  const panel = page.getByRole('region', {name: 'Tool arguments'});
+  const filter = panel.getByRole('searchbox', {name: 'Filter arguments'});
+  await filter.fill('Stop on Flood');
+  await panel.getByRole('checkbox', {name: /Stop on Flood/}).check();
+  await filter.fill('Threads');
+  await panel.getByRole('spinbutton', {name: /Threads/}).fill('7');
+  await expect(panel).toContainText('2 configured');
+  await panel.getByText('Command preview', {exact: true}).click();
+  await expect(panel.locator('pre')).toContainText('"7"');
+  await filter.fill('Follow Redirects');
+  await expect(panel.getByRole('checkbox', {name: /Follow Redirects/})).toBeDisabled();
+  const bindings = page.getByRole('region', {name: 'Tool input bindings'});
+  await expect(bindings).toContainText('Required');
+  await bindings.getByLabel(/Wordlist/).selectOption({label: 'Small directory paths'});
+  await page.getByRole('button', {name: 'Local workspace', exact: true}).click();
+  await workspace.locator('.local-tabs').getByRole('button', {name: 'Workflows', exact: true}).click();
+  await workspace.getByLabel('Workflow name').fill('Configured ffuf');
+  await workspace.getByRole('button', {name: 'Save current canvas'}).click();
+  await expect(workspace.getByRole('status')).toContainText('Saved Configured ffuf');
+  const list = await (await request.get('/api/workflows')).json();
+  const saved = await (await request.get('/api/workflows/' + list.find(row => row.name === 'Configured ffuf').id)).json();
+  const fuzz = saved.graph.nodes.find(node => node.data.toolId === 'ffuf').data;
+  expect(fuzz.params).toMatchObject({'-sf': true, '-t': '7'});
+  expect(fuzz.inputRefs.wordlist).toBeTruthy();
+});

@@ -203,3 +203,43 @@
 .http-history-controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:14px 0}.http-history-controls label{display:flex;flex-direction:column;gap:6px;min-width:180px}.http-history-scroll{overflow-x:auto}.http-history table{width:100%;border-collapse:collapse;font-size:12px}.http-history th,.http-history td{padding:10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}.http-history td small{display:block;margin-top:6px;color:#92b5cc}.http-history td button{max-width:560px;overflow-wrap:anywhere;text-align:left}.http-history .report small{display:block;line-height:1.6}.http-history pre{max-height:520px;overflow:auto}.http-history [aria-pressed=true]{border-color:var(--cyan)}
 
 .agent-presets h4{margin:0 0 10px}.agent-presets fieldset{border:0;padding:0;margin:0}.agent-presets .field-label{display:flex;flex-direction:column;gap:7px;margin:14px 0}.preset-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.model-picker{min-width:0;display:flex;flex-direction:column;gap:10px}.model-picker .field-label{margin:0}.model-picker small{line-height:1.5;overflow-wrap:anywhere}.model-picker a{color:#58d3e1}.agent-presets input:not([type=checkbox]),.agent-presets select{width:100%}
+
+.api-surface-controls{display:flex;flex-wrap:wrap;align-items:end;gap:10px;margin:12px 0}
+.api-surface-controls label{display:grid;gap:5px;min-width:0;flex:1 1 125px}
+.api-surface-controls input,.api-surface-controls select{width:100%;min-width:0}
+.api-surface-scroll{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:6px}
+.api-surface table{width:100%;border-collapse:collapse;text-align:left;font-size:12px}
+.api-surface th,.api-surface td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+.api-surface th{background:#142239;position:sticky;top:0;z-index:1}
+.surface-endpoint{padding:0;text-align:left;border:0;background:none;color:#dbeafa;overflow-wrap:anywhere}
+.surface-endpoint b{color:var(--cyan)}
+.surface-endpoint[aria-expanded=true]{text-decoration:underline;text-underline-offset:3px}
+.surface-evidence{margin:12px 0;padding:12px;border:1px solid var(--line);border-radius:6px;overflow-wrap:anywhere}
+.surface-evidence ul,.api-surface details ul{padding-inline-start:20px}
+.surface-evidence li{margin:8px 0}
+.surface-evidence small{display:block;color:var(--muted)}
+.surface-evidence button{margin:5px 0 0 7px}
+.api-surface details{margin-top:12px}
+
+.tool-arguments,.tool-input-bindings{margin:16px 0;padding-top:12px;border-top:1px solid var(--line)}
+.tool-arg-heading{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tool-arg-heading h3,.tool-input-bindings h3{margin:0;font-size:14px}
+.tool-arg-heading>span,.tool-input-bindings label span small{color:var(--muted);font-size:11px}
+.tool-arg-filters{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+.tool-arg-filters input{flex:1 1 135px;min-width:0}
+.tool-arg-filters button{font-size:11px;padding:5px 8px}
+.tool-arg-filters button[aria-pressed=true]{border-color:var(--cyan);color:var(--cyan)}
+.tool-arg-row{margin:6px 0;padding:8px 9px;background:#0c192b;border:1px solid var(--line);border-radius:6px}
+.tool-arg-row.is-set{border-left:2px solid var(--cyan)}
+.tool-arg-title{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.catalog-inspector .tool-arg-title label{display:block;margin:0;font-size:12px;line-height:1.4}
+.catalog-inspector .tool-arg-title code{display:inline-block;margin-left:4px;overflow-wrap:anywhere}
+.catalog-inspector .tool-arg-title input[type=checkbox]{flex:none;align-self:center;accent-color:var(--cyan);margin:0}
+.tool-arg-row>input{margin-top:6px;width:100%}
+.tool-arg-row small{display:block;margin-top:4px}
+.tool-arg-reset{padding:0;border:0;background:none;color:#a5ddea;font-size:11px}
+.tool-arg-details{margin-top:10px;color:#b6cae4}
+.tool-arg-details summary{cursor:pointer;font-size:12px}
+.tool-arg-details pre{max-height:190px;overflow:auto;font:11px var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
+.tool-input-bindings label span{display:flex;justify-content:space-between;gap:8px}
+.tool-arg-row input[aria-invalid=true]{border-color:#e4998c}

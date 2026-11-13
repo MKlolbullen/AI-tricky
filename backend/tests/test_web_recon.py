@@ -127,7 +127,7 @@ def web_server():
                 '/app/main.js': ('application/javascript', 'x' * 17000 + ';import("./lazy.ts");\n//# sourceMappingURL=main.js.map'),
                 '/app/main.js.map': ('application/json', json.dumps({'version': 3, 'sources': ['webpack:///src/index.ts'], 'sourcesContent': ['const ok=true;']})),
                 '/app/bundle.webchunk': ('application/javascript', 'import("./lazy.ts");'),
-                '/app/lazy.ts': ('text/plain', 'const ok: boolean = true;'),
+                '/app/lazy.ts': ('text/plain', 'const ok: boolean = true; fetch("/app/next");'),
                 '/app/next': ('text/html', '<a href="redirect">Redirect</a>'),
             }
             if self.path == '/app/redirect':

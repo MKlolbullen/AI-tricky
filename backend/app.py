@@ -436,9 +436,9 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         return {'deleted': True}
 
     @app.get('/api/workflow-starters/web-recon')
-    async def web_recon_starter(fuzz: bool = False, scan: bool = False, review: bool = False):
+    async def web_recon_starter(fuzz: bool = False, scan: bool = False, review: bool = False, surface: bool = False):
         from .web_recon import recon_workflow
-        graph = recon_workflow(fuzz=fuzz, scan=scan, review=review)
+        graph = recon_workflow(fuzz=fuzz, scan=scan, review=review, surface=surface)
         return support_data.bind(graph, bundled_only=True)['graph'] if scan else graph
 
     @app.get('/api/workflow-starters/trickest/{identifier}')
@@ -468,7 +468,15 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     async def catalog_tool(tid: str):
         tool=TOOLS.get(tid)
         if not tool:raise HTTPException(404,'Catalog tool not found.')
-        return {**tool,'args':[{**a,'blocked_reason':blocked_flag(a)} for a in tool.get('args',[])],'readiness':tool_readiness(tool)}
+        from .support_data import requirements
+        bindings = {name: True for name in requirements(tool)}
+        for name in ('file', 'folder', 'sbom'):
+            if name in tool['inputs']:
+                bindings[name] = name == 'sbom' and any('{sbom_file}' in arg for arg in tool['command'])
+        return {**tool, 'args': [{**arg, 'blocked_reason': blocked_flag(arg)} for arg in tool.get('args', [])],
+                'bindings': [{'name': name, 'kind': 'folder' if name in ('folder', 'templates') else 'file',
+                              'required': required} for name, required in bindings.items()],
+                'readiness': tool_readiness(tool)}
 
     @app.get('/api/inputs')
     async def inputs():
@@ -820,6 +828,23 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     def model_usage(limit: int = 50, offset: int = 0):
         return usage.history(limit=limit, offset=offset)
 
+    @app.get('/api/runs/{rid}/api-surface')
+    def saved_api_surface(rid: str):
+        from .api_surface import analyze_surface
+        from .recovery import checked_reused_content
+        run = get_run(rid)
+        graph = run['config'].get('workflow') or {}
+        collectors = {node['id'] for node in graph.get('nodes', []) if node['data']['kind'] == 'native_web_assets'}
+        manifests = []
+        for node in store.nodes(rid):
+            result = node.get('result') or {}
+            if node['node_id'] not in collectors or node['status'] not in ('completed', 'reused') or not result.get('artifact_id'):
+                continue
+            manifests.extend(checked_reused_content(store, result['artifact_id']))
+        if not manifests:
+            raise HTTPException(404, 'This run has no saved Web source collector output.')
+        return analyze_surface(store, rid, manifests, run['config']['targets'], http_journal.endpoint_exchanges)
+
     @app.get('/api/runs/{rid}/model-usage')
     def run_model_usage(rid: str, limit: int = 50, offset: int = 0):
         get_run(rid)
@@ -1032,7 +1057,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                                      usage_role=role_override or next((key for key, role in team_leader.ROLES.items() if role['focus']==role_instructions), 'analyst'))
                         if assessor is None:extra['evidence_only']=True
                         return await role_assess(ctl,rid,extra['usage_role'],[],goal,disabled,**extra)
-                    result=await execute_workflow(rid,config,ctl,store,fetch,probe,analyze,asset_graph=asset_graph)
+                    result=await execute_workflow(rid,config,ctl,store,fetch,probe,analyze,asset_graph=asset_graph,http_journal=http_journal)
                 elif config['engine']=='inventory':
                     result=await inventory()
                 elif config['engine']=='team':

@@ -46,6 +46,7 @@ Design a typed workflow. Execute bounded checks. Preserve the request/response t
 | 🔌 **Provider choice** | Configure local model endpoints or supported remote providers, including OpenAI, Anthropic, Gemini, xAI and Venice. |
 | 🧪 **HTTP evidence journal** | Retain native requests/responses, errors, cancellations, binary captures and HAR exports. |
 | 🔍 **Authenticated object access** | Compare two test identities under one reviewed GET profile, with an ownership control and redacted evidence. [Setup](docs/CONTROLLED-VERIFICATION.md#authenticated-object-access) |
+| **API Surface** | Search endpoints inferred from saved JS, TypeScript and source maps, with source locations and matching HTTP history. [Usage](docs/API-SURFACE.md) |
 | 🟠 **Burp-compatible routing** | Route supported HTTP traffic through a local proxy and import saved Burp XML items. |
 | 🕸️ **Asset graph** | Explore typed hosts, services, technologies, files and other entities with provenance and run-to-run diffs. |
 | 🛡️ **AD & Entra review** | Scoped identity collection profiles, graph imports and bounded candidate-path analysis; not automated exploitation. |

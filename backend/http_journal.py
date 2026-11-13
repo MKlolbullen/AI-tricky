@@ -123,6 +123,15 @@ class HTTPJournal:
         return {'imported_ids':[r[0] for r in records],'items':len(records),'source':'burp_xml',
                 'note':'Stored as externally supplied captures. No requests were sent and no findings were verified.'}
 
+    def endpoint_exchanges(self, run_id, limit):
+        with self.store.connect() as c:
+            rows = c.execute("""SELECT id,url,source,json_extract(request,'$.method') AS method,
+                                json_extract(response,'$.status') AS status
+                                FROM http_exchanges WHERE run_id=? AND state IN ('completed','imported')
+                                AND response IS NOT NULL AND cancel_requested=0
+                                ORDER BY (source='native') DESC,started DESC,id LIMIT ?""", (run_id, limit + 1)).fetchall()
+        return rows[:limit], len(rows) > limit
+
     def history(self,*,run_id=None,q='',limit=50,offset=0):
         where=[];args=[]
         if run_id is not None:where.append('run_id=?');args.append(run_id)

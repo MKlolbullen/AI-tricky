@@ -5,11 +5,12 @@ export default function WebReconStarter({disabled, onLoad}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [review, setReview] = useState(false);
+  const [surface, setSurface] = useState(false);
 
   const load = async (options = {}) => {
     setBusy(true);
     setError('');
-    const query = new URLSearchParams({...options, review});
+    const query = new URLSearchParams({...options, review, surface});
     try {
       onLoad(await api('/workflow-starters/web-recon?' + query));
     } catch (error) {
@@ -25,6 +26,10 @@ export default function WebReconStarter({disabled, onLoad}) {
     <label className="http-toggle">
       <input type="checkbox" checked={review} disabled={disabled || busy} onChange={e => setReview(e.target.checked)}/>
       <span>Add specialist evidence review<small>Requires CAI. Analysts review saved HTTP evidence.</small></span>
+    </label>
+    <label className="http-toggle">
+      <input type="checkbox" checked={surface} disabled={disabled || busy} onChange={e => setSurface(e.target.checked)}/>
+      <span>Add API Surface analysis<small>Extract endpoints from saved JavaScript and source maps.</small></span>
     </label>
     <button className="secondary" disabled={disabled || busy} onClick={() => load()}>Load web recon workflow</button>{' '}
     <button className="secondary" disabled={disabled || busy} onClick={() => load({fuzz: true})}>Load web recon with path fuzzing</button>{' '}

@@ -12,6 +12,7 @@ from .scope import ScopeError, parse_target
 from .workflow_sockets import catalog_socket_values, incoming_routes
 from .recon_tools import TOOL_GROUPS, tool_check
 from .trickest_pack import GENERATORS, validate_wordlist
+from . import cli_scope
 from .http_routing import cli_routing, CLI_PROXY_FLAGS, DIRECT_NETWORK_TOOLS
 
 
@@ -64,9 +65,14 @@ def source_values(data,config):
 def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),node_ids=None):
     issues=[];binaries={};snapshots={};coverage=[];tool_checks={}
     routes = incoming_routes(graph)
+    isolation = None
+    sandbox_error = None
+    use_isolation = cli_scope.enforced(config)
     for n in graph['nodes']:
         if node_ids is not None and n['id'] not in node_ids:continue
         data=n['data'];kind=data['kind'];reason=[]
+        if use_isolation and kind == 'native_identity_collect':
+            reason.append('Directory collection is unavailable in the enforced CLI scope profile.')
         if kind in ('native_identity_collect','native_identity_paths'):
             from .identity_graph import check_scope
             try:
@@ -93,7 +99,15 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
             except ScopeError as exc:reason.append(str(exc))
         if kind=='catalog_tool':
             tool=TOOLS[data['toolId']]
-            coverage.append({'node_id':n['id'],'tool_id':tool['id'],'http_capture':'not_http' if tool['id'] in DIRECT_NETWORK_TOOLS or tool['adapter']['traffic'] in ('offline','passive') else 'external_proxy_history' if (config.get('http_routing') or {}).get('mode')=='proxy' and tool['id'] in CLI_PROXY_FLAGS else 'tool_output_only'})
+            sandboxed = use_isolation and tool['id'] == 'ffuf'
+            if data.get('require_cli_scope') and not use_isolation:
+                reason.append('This node requires Enforced CLI scope. Select it in Run setup.')
+            if use_isolation:
+                try:
+                    cli_scope.validate_node(data, config)
+                except ScopeError as exc:
+                    reason.append(str(exc))
+            coverage.append({'node_id':n['id'],'tool_id':tool['id'],'http_capture':'scoped_gateway' if sandboxed else 'not_http' if tool['id'] in DIRECT_NETWORK_TOOLS or tool['adapter']['traffic'] in ('offline','passive') else 'external_proxy_history' if (config.get('http_routing') or {}).get('mode')=='proxy' and tool['id'] in CLI_PROXY_FLAGS else 'tool_output_only'})
             try:cli_routing(tool,config)
             except ScopeError as exc:reason.append(str(exc))
             if tool['adapter']['mode']=='blocked':reason.append(tool['adapter']['reason'])
@@ -103,6 +117,8 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
             for typ,identifier in data.get('inputRefs',{}).items():
                 try:
                     path = registered_path(store, identifier, 'folder' if typ in ('folder', 'templates') else 'file')
+                    if typ == 'wordlist' and sandboxed:
+                        cli_scope.path_words(path)
                     if typ == 'wordlist' and tool['id'] in GENERATORS:
                         validate_wordlist(tool['id'], path)
                     snapshots[identifier] = store.input(identifier)
@@ -129,11 +145,20 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
                         binaries[tool_id] = pin_binary(tool)
                     except (ScopeError, OSError) as exc:
                         reason.append(str(exc))
+            if sandboxed and check_binaries and not reason:
+                if isolation is None and sandbox_error is None:
+                    try:
+                        isolation = cli_scope.preflight_sandbox(binaries['ffuf'])
+                    except ScopeError as exc:
+                        sandbox_error = str(exc)
+                if sandbox_error:
+                    reason.append(sandbox_error)
         if reason:issues.append({'node_id':n['id'],'reasons':list(dict.fromkeys(reason))})
-    return {'tool_checks': list(tool_checks.values()), 'capture_coverage':coverage,'ready':not issues,'issues':issues,'cli_binaries':binaries,'input_snapshots':snapshots,'catalog_tools':len({n['data']['toolId'] for n in graph['nodes'] if n['data']['kind']=='catalog_tool' and (node_ids is None or n['id'] in node_ids)}),'accounting':'Native operations count HTTP/TCP admissions. CLI operations count process launches; tool-internal network requests are not measured or limited by the native request cap.'}
+    return {'tool_checks': list(tool_checks.values()), 'capture_coverage':coverage,'ready':not issues,'issues':issues,'cli_binaries':binaries,'input_snapshots':snapshots,'catalog_tools':len({n['data']['toolId'] for n in graph['nodes'] if n['data']['kind']=='catalog_tool' and (node_ids is None or n['id'] in node_ids)}),'cli_scope': {'mode': 'enforced', 'sandbox_verified': isolation is not None} if use_isolation else None,
+            'cli_sandbox': isolation, 'accounting': 'Scoped ffuf requests use the native operation budget and HTTP history. CLI launches have a separate cap.' if use_isolation else 'Native operations count HTTP/TCP admissions. CLI operations count process launches; tool-internal network requests are not measured or limited by the native request cap.'}
 
 
-async def execute_catalog_node(rid,nid,data,streams,config,ctl,store):
+async def execute_catalog_node(rid,nid,data,streams,config,ctl,store,fetch=None):
     kind=data['kind']
     if kind=='catalog_source':
         values=source_values(data,config)
@@ -154,4 +179,4 @@ async def execute_catalog_node(rid,nid,data,streams,config,ctl,store):
         return [{'catalog_streams':{data['output']:values},'evidence_status':'OBSERVATION'}]
     if kind=='catalog_output':
         return [{'catalog_streams':streams,'report':f'Collected {sum(len(v) for v in streams.values())} records across {len(streams)} typed streams. See upstream CLI artifacts for provenance.','evidence_status':'OBSERVATION'}]
-    return await execute_cli(rid,nid,data,streams,config,ctl,store)
+    return await execute_cli(rid,nid,data,streams,config,ctl,store,fetch=fetch)

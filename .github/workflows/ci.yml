@@ -89,6 +89,44 @@ jobs:
           scripts/install-tools.sh --trickest-oss --yes --skip-toolchains --prefix="$RUNNER_TEMP/trickest-oss"
           AI_TRICKY_TRICKEST_BIN="$RUNNER_TEMP/trickest-oss/bin" python -m pytest backend/tests/test_trickest_pack.py -q
 
+  enforced-cli:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.26.4'
+          cache: false
+      - name: Install Bubblewrap for the runner
+        run: |
+          sudo apt-get -o Acquire::Retries=2 install --yes --no-install-recommends bubblewrap
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo apparmor_parser -r <<'PROFILE'
+          abi <abi/4.0>,
+          include <tunables/global>
+          profile bwrap /usr/bin/bwrap flags=(unconfined) {
+            userns,
+          }
+          PROFILE
+          fi
+          bwrap --unshare-user --unshare-net --disable-userns --ro-bind / / -- /usr/bin/true
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Verify pinned ffuf and network isolation on loopback fixtures
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          scripts/install-tools.sh --enforced-cli --yes --skip-toolchains --prefix="$RUNNER_TEMP/scoped-cli"
+          export AI_TRICKY_SCOPE_BIN="$RUNNER_TEMP/scoped-cli/bin"
+          export AI_TRICKY_FFUF_BIN="$AI_TRICKY_SCOPE_BIN/ffuf"
+          CGO_ENABLED=0 go build -trimpath -o "$AI_TRICKY_SCOPE_BIN/isolation-probe" backend/tests/fixtures/cli-scope-probe.go
+          python -m pytest backend/tests/test_cli_scope.py -q
+
   optional-cai:
     if: github.event_name == 'workflow_dispatch' && inputs.cai_sdk
     runs-on: ubuntu-latest

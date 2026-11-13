@@ -7,12 +7,13 @@ export default function WebReconStarter({disabled, onLoad}) {
   const [review, setReview] = useState(false);
   const [surface, setSurface] = useState(false);
 
-  const load = async (options = {}) => {
+  const load = async (options = {}, isolated = false) => {
     setBusy(true);
     setError('');
     const query = new URLSearchParams({...options, review, surface});
     try {
-      onLoad(await api('/workflow-starters/web-recon?' + query));
+      const path = isolated ? '/workflow-starters/enforced-ffuf' : '/workflow-starters/web-recon?' + query;
+      onLoad(await api(path), isolated ? 'enforced' : 'standard');
     } catch (error) {
       setError(error.message);
     } finally {
@@ -33,8 +34,9 @@ export default function WebReconStarter({disabled, onLoad}) {
     </label>
     <button className="secondary" disabled={disabled || busy} onClick={() => load()}>Load web recon workflow</button>{' '}
     <button className="secondary" disabled={disabled || busy} onClick={() => load({fuzz: true})}>Load web recon with path fuzzing</button>{' '}
-    <button className="secondary" disabled={disabled || busy} onClick={() => load({scan: true})}>Load web recon with Nuclei</button>
-    <small>Bind a wordlist for fuzzing or install the bundled support files for Nuclei. Loading only updates the canvas.</small>
+    <button className="secondary" disabled={disabled || busy} onClick={() => load({scan: true})}>Load web recon with Nuclei</button>{' '}
+    <button className="secondary" disabled={disabled || busy} onClick={() => load({}, true)}>Load scoped ffuf</button>
+    <small>Scoped ffuf uses selected HTTP(S) URLs and requires a path wordlist. Nuclei uses the bundled starter templates.</small>
     {error && <p role="alert">{error}</p>}
   </section>;
 }

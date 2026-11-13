@@ -183,3 +183,12 @@ preserve Burp-provided message bytes, validate URL and request authority,
 deduplicate explicit imports, and keep imported evidence distinct. Never
 turn a handoff into an automatic target request or reuse authenticated
 metadata-only captures as complete requests.
+
+## Enforced CLI scope
+
+The first enforced CLI profile uses pinned static ffuf with Bubblewrap on
+Linux. Keep the scanner in an isolated network namespace with the minimum
+filesystem mounts. The only relay dispatches exact wordlist-derived GETs
+through the existing scoped HTTP transport, shared budget and journal. Keep
+this mode fail closed across preflight, launches and workflow recovery.
+Use loopback fixtures to verify direct network denial and real ffuf capture.

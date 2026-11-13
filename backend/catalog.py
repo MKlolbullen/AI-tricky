@@ -67,6 +67,8 @@ def contract(data):
     if kind=='catalog_tool':
         tid=data.get('toolId');tool=TOOLS.get(tid) if isinstance(tid,str) else None
         if not tool:raise ScopeError('Unknown catalog tool.')
+        if 'require_cli_scope' in data and (tid != 'ffuf' or data['require_cli_scope'] is not True):
+            raise ScopeError('Only ffuf nodes can require enforced CLI scope.')
         validate_params(tool,data)
         inputs,outputs=tool['inputs'],tool['outputs']
     elif kind=='catalog_source':

@@ -18,7 +18,7 @@ def read_profiles(group):
     }
 
 
-PROFILES_BY_GROUP = {group: read_profiles(group) for group in ('web-recon', 'trickest-oss')}
+PROFILES_BY_GROUP = {group: read_profiles(group) for group in ('web-recon', 'trickest-oss', 'enforced-cli')}
 PROFILES = PROFILES_BY_GROUP['web-recon']
 TOOL_GROUPS = {tool: group for group, profiles in PROFILES_BY_GROUP.items() for tool in profiles}
 
@@ -85,6 +85,9 @@ def tool_check(tool, path=None):
     if main != package or version in (None, '(devel)'):
         return result
     result['installed_version'] = version
+    if tool == 'ffuf' and ['build', 'CGO_ENABLED=0'] not in metadata:
+        result['status'] = 'unverified'
+        return result
     result['status'] = 'tested_version' if version == tested_version else 'different_version'
     if result['status'] == 'tested_version':
         result['remediation'] = None

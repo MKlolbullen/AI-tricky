@@ -17,6 +17,7 @@ import tempfile
 from urllib.parse import urlsplit, urlunsplit
 
 from .catalog import TOOLS, registered_path, scoped_lines
+from . import cli_scope
 from .scope import ScopeError, authorize, parse_target
 from .trickest_pack import GENERATORS, candidate_output, prepare_generator
 
@@ -276,10 +277,14 @@ def output_streams(tool,text,files):
     return streams
 
 
-async def execute_cli(rid,nid,data,streams,config,ctl,store):
+async def execute_cli(rid,nid,data,streams,config,ctl,store,*,fetch=None):
     tool=TOOLS[data['toolId']]
     if tool['adapter']['mode']=='blocked':raise ScopeError(tool['adapter']['reason'])
     if not config.get('allow_cli'):raise ScopeError('CLI execution is disabled for this run.')
+    if data.get('require_cli_scope') and not cli_scope.enforced(config):
+        raise ScopeError('This node requires Enforced CLI scope.')
+    if cli_scope.enforced(config):
+        cli_scope.validate_node(data, config)
     pin=config.get('cli_binaries',{}).get(tool['id'])
     if not pin or not Path(pin['path']).is_file() or digest(pin['path'])!=pin['sha256']:raise ScopeError('Executable changed after preflight. Run preflight again.')
     # Credentials from the model/runtime environment are never inherited by tools.
@@ -344,74 +349,82 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store):
                 if pattern not in patterns:raise ScopeError('Use a bundled named GF pattern: '+', '.join(patterns))
                 destination=Path(env['HOME'])/'.gf';destination.mkdir()
                 (destination/(pattern+'.json')).write_text(json.dumps(patterns[pattern]))
-            input_paths={p for p in work.rglob('*') if p.is_file()}
-            proc=None;buffers={'stdout':bytearray(),'stderr':bytearray()};failure=None;returncode=None
-            async def read_stream(name,reader):
-                while chunk:=await reader.read(65536):
-                    buffers[name].extend(chunk)
-                    if len(buffers[name])>MAX_STREAM:raise CLIError('CLI output exceeded the stream limit.')
-            async def monitor_disk():
+            async with cli_scope.sandbox(rid,nid,data,config,ctl,store,fetch,work,argv,targets,context) as (command,gateway):
+                input_paths={p for p in work.rglob('*') if p.is_file()}
+                proc=None;buffers={'stdout':bytearray(),'stderr':bytearray()};failure=None;returncode=None
+                async def read_stream(name,reader):
+                    while chunk:=await reader.read(65536):
+                        buffers[name].extend(chunk)
+                        if len(buffers[name])>MAX_STREAM:raise CLIError('CLI output exceeded the stream limit.')
+                async def monitor_disk():
+                    while True:
+                        size=0
+                        for file in work.rglob('*'):
+                            with contextlib.suppress(FileNotFoundError):
+                                if file.is_file() and not file.is_symlink():size+=file.stat().st_size
+                        if size>40_000_000:raise CLIError('CLI workspace exceeded the disk limit.')
+                        await asyncio.sleep(.1)
                 while True:
-                    size=0
-                    for file in work.rglob('*'):
-                        with contextlib.suppress(FileNotFoundError):
-                            if file.is_file() and not file.is_symlink():size+=file.stat().st_size
-                    if size>40_000_000:raise CLIError('CLI workspace exceeded the disk limit.')
-                    await asyncio.sleep(.1)
-            while True:
-                await ctl.gate.wait()
-                async with ctl.lock:
-                    if ctl.cancelled:raise asyncio.CancelledError()
-                    if not ctl.gate.is_set():continue
-                    if ctl.cli_invocations>=config['max_cli_invocations']:raise ScopeError('CLI invocation budget exhausted.')
-                    if digest(pin['path'])!=pin['sha256']:raise ScopeError('Executable changed after preflight.')
-                    ctl.cli_invocations+=1;number=ctl.cli_invocations
-                    store.event(rid,'cli.admitted',{'node_id':nid,'tool_id':tool['id'],'invocation_number':number,'traffic':tool['adapter']['traffic']})
-                    break
-            try:
-                proc=await asyncio.create_subprocess_exec(*argv,cwd=work,env=env,stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE,start_new_session=os.name=='posix')
-                ctl.processes[proc.pid]=proc
-                # A pause/cancel racing with process creation is handled before stdin is delivered.
-                if ctl.cancelled:raise asyncio.CancelledError()
-                if not ctl.gate.is_set():pause_processes(ctl,True)
-                async def feed():
-                    try:
-                        proc.stdin.write(stdin_data);await proc.stdin.drain()
-                    except (BrokenPipeError,ConnectionResetError):pass
-                    finally:proc.stdin.close()
-                disk=asyncio.create_task(monitor_disk())
-                readers=[asyncio.create_task(read_stream('stdout',proc.stdout)),asyncio.create_task(read_stream('stderr',proc.stderr)),asyncio.create_task(feed())]
+                    await ctl.gate.wait()
+                    async with ctl.lock:
+                        if ctl.cancelled:raise asyncio.CancelledError()
+                        if not ctl.gate.is_set():continue
+                        if ctl.cli_invocations>=config['max_cli_invocations']:raise ScopeError('CLI invocation budget exhausted.')
+                        if digest(pin['path'])!=pin['sha256']:raise ScopeError('Executable changed after preflight.')
+                        ctl.cli_invocations+=1;number=ctl.cli_invocations
+                        store.event(rid,'cli.admitted',{'node_id':nid,'tool_id':tool['id'],'invocation_number':number,'traffic':tool['adapter']['traffic']})
+                        break
                 try:
-                    async with asyncio.timeout(min(data.get('timeout',120),config['max_seconds'])):
-                        done=asyncio.create_task(proc.wait())
-                        watched=[done,disk,*readers]
-                        while not done.done():
-                            finished,_=await asyncio.wait(watched,return_when=asyncio.FIRST_COMPLETED)
-                            for task in finished:
-                                if task.cancelled():raise asyncio.CancelledError()
-                                error=task.exception()
-                                if error:raise error
-                            watched=[t for t in watched if not t.done()]
-                        returncode=done.result()
+                    proc=await asyncio.create_subprocess_exec(*command,cwd=work,env=env,stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE,start_new_session=os.name=='posix')
+                    ctl.processes[proc.pid]=proc
+                    # A pause/cancel racing with process creation is handled before stdin is delivered.
+                    if ctl.cancelled:raise asyncio.CancelledError()
+                    if not ctl.gate.is_set():pause_processes(ctl,True)
+                    async def feed():
+                        try:
+                            proc.stdin.write(stdin_data);await proc.stdin.drain()
+                        except (BrokenPipeError,ConnectionResetError):pass
+                        finally:proc.stdin.close()
+                    disk=asyncio.create_task(monitor_disk())
+                    readers=[asyncio.create_task(read_stream('stdout',proc.stdout)),asyncio.create_task(read_stream('stderr',proc.stderr)),asyncio.create_task(feed())]
+                    try:
+                        async with asyncio.timeout(min(data.get('timeout',120),config['max_seconds'])):
+                            done=asyncio.create_task(proc.wait())
+                            watched=[done,disk,*readers]
+                            while not done.done():
+                                finished,_=await asyncio.wait(watched,return_when=asyncio.FIRST_COMPLETED)
+                                for task in finished:
+                                    if task.cancelled():raise asyncio.CancelledError()
+                                    error=task.exception()
+                                    if error:raise error
+                                watched=[t for t in watched if not t.done()]
+                            returncode=done.result()
+                            await stop_process(proc)
+                            await asyncio.gather(*readers)
+                    finally:
+                        disk.cancel();await asyncio.gather(disk,return_exceptions=True)
                         await stop_process(proc)
-                        await asyncio.gather(*readers)
+                        for task in readers:
+                            if not task.done():task.cancel()
+                        await asyncio.gather(*readers,return_exceptions=True)
+                except BaseException as exc:
+                    failure=type(exc).__name__
+                    if proc:await stop_process(proc)
+                    raise
                 finally:
-                    disk.cancel();await asyncio.gather(disk,return_exceptions=True)
-                    await stop_process(proc)
-                    for task in readers:
-                        if not task.done():task.cancel()
-                    await asyncio.gather(*readers,return_exceptions=True)
-            except BaseException as exc:
-                failure=type(exc).__name__
-                if proc:await stop_process(proc)
-                raise
-            finally:
-                if proc:
-                    await close_pipes(proc)
-                    ctl.processes.pop(proc.pid,None)
-                record={'tool_id':tool['id'],'invocation_number':number,'command':argv,'exit_code':returncode,'error':failure,'stdout':redact(bytes(buffers['stdout'][:MAX_STREAM]).decode(errors='replace')),'stderr':redact(bytes(buffers['stderr'][:MAX_STREAM]).decode(errors='replace')),'native_requests_counted':False,'http_capture':('external_proxy_history' if (config.get('http_routing') or {}).get('mode')=='proxy' and tool['id'] in CLI_PROXY_FLAGS else 'tool_output_only')}
-                aid=store.artifact(rid,f'cli-{number}-{tool["id"]}.json',record,node_id=nid);invocation_artifacts.append(aid)
-                store.event(rid,'cli.finished',{'node_id':nid,'tool_id':tool['id'],'artifact_id':aid,'exit_code':returncode,'error':failure})
+                    if proc:
+                        await close_pipes(proc)
+                        ctl.processes.pop(proc.pid,None)
+                    stdout = redact(bytes(buffers['stdout'][:MAX_STREAM]).decode(errors='replace'))
+                    if gateway is not None:
+                        stdout = gateway.remap_stdout(stdout)
+                    record={'tool_id':tool['id'],'invocation_number':number,'command':command,'exit_code':returncode,'error':failure,'stdout':stdout,'stderr':redact(bytes(buffers['stderr'][:MAX_STREAM]).decode(errors='replace')),'native_requests_counted':False,'http_capture':('external_proxy_history' if (config.get('http_routing') or {}).get('mode')=='proxy' and tool['id'] in CLI_PROXY_FLAGS else 'tool_output_only')}
+                    if gateway is not None:
+                        record.update(http_capture='scoped_gateway', native_requests_counted=True,
+                                      cli_scope={'mode': 'enforced', 'relay_attempts': gateway.requests,
+                                                 'denied': gateway.denied, 'exchange_ids': sorted(gateway.exchange_ids)})
+                    aid=store.artifact(rid,f'cli-{number}-{tool["id"]}.json',record,node_id=nid);invocation_artifacts.append(aid)
+                    store.event(rid,'cli.finished',{'node_id':nid,'tool_id':tool['id'],'artifact_id':aid,'exit_code':returncode,'error':failure})
             if returncode!=0:raise CLIError(f'{tool["id"]} exited with status {returncode}; inspect its CLI artifact.')
             generated=[];size=0
             for file in sorted(work.rglob('*')):

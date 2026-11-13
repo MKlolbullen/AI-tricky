@@ -235,12 +235,16 @@ class WorkflowRecoveries:
                   'goal': original.get('goal', 'Recover recorded workflow branches.'),
                   'ports': original.get('ports', [80, 443]), 'parallelism': original.get('parallelism', 4),
                   'cli_credential_keys': keys}
+        if original.get('cli_scope') == 'enforced':
+            config['cli_scope'] = 'enforced'
         config['http_routing']=options.get('http_routing') or original.get('http_routing') or HTTPRouting().model_dump()
         config['http_routing_binding']=routing_binding(config['http_routing'],self.store)
         ready = preflight(subgraph, config, self.store, credentials={k for k, v in credentials.items() if v}, node_ids=rerun)
         if not ready['ready']:
             raise ExecutionError('Recovery preflight failed: ' + ' '.join(dict.fromkeys(
                 r for issue in ready['issues'] for r in issue['reasons'])), 422)
+        if ready['cli_sandbox']:
+            config['cli_sandbox'] = ready['cli_sandbox']
         pins = {}
         for node in subgraph['nodes']:
             data = node['data']

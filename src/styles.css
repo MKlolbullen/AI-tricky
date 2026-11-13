@@ -243,3 +243,9 @@
 .tool-arg-details pre{max-height:190px;overflow:auto;font:11px var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
 .tool-input-bindings label span{display:flex;justify-content:space-between;gap:8px}
 .tool-arg-row input[aria-invalid=true]{border-color:#e4998c}
+
+.burp-pairing{margin:12px 0}
+.burp-pairing .field-label{margin-top:10px}
+.burp-repeater-action{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px}
+.burp-repeater-action small,.burp-pairing>small{display:block;margin:4px 0;color:var(--muted)}
+.burp-repeater-action [role=alert],.burp-pairing [role=alert]{color:#f5a79a}

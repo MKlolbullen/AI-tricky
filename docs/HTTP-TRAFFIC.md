@@ -39,7 +39,7 @@ Direct CLI mode stores tool output, not automatic complete exchanges. Supported 
 
 To retain CLI captures locally, export selected Burp history entries as **saved-items XML**, choose the matching run and **Import Burp saved-items XML**. Imports accept 1–100 items / 10 MB, including base64 binary messages. Every exported URL must fit that run's original scope; the entire batch is checked before persistence. Identical XML imported into the same run is idempotent. Reordered/edited exports have a different identity and may create additional records.
 
-Imports are labelled `burp_xml` / externally supplied evidence. They preserve exported headers and bounded bodies without replay, model calls, changing run counts or verifying findings. The exported URL is scope-checked; Host headers, upstream peer and other export metadata are not independently authenticated. This is explicit file synchronization, not live two-way synchronization of Burp edits or a Burp extension.
+Imports are labelled `burp_xml` / externally supplied evidence. They preserve exported headers and bounded bodies without replay, model calls, changing run counts or verifying findings. The exported URL is scope-checked; Host headers, upstream peer and other export metadata are not independently authenticated. Use the [local Burp bridge](BURP-BRIDGE.md) for selected exchanges directly from Burp and manual Repeater handoffs. XML imports remain available for file-based exchange transfer.
 
 ## API
 

@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import {api, downloadJSON} from './api.mjs';
+import {RepeaterButton} from './BurpBridge';
 
 export function APISurfaceTable({surface}) {
   const [query, setQuery] = useState('');
@@ -44,6 +45,7 @@ export function APISurfaceTable({surface}) {
       {detail.traffic.length > 0 && <><h5>Matching HTTP exchanges</h5><ul>{detail.traffic.map(row => <li key={row.exchange_id}>
         <span>{row.status} · {row.source === 'native' ? 'Native capture' : 'Imported capture'}</span>
         <button className="secondary" onClick={() => inspect('exchange', row.exchange_id)}>Download exchange</button>
+        <RepeaterButton exchangeId={row.exchange_id}/>
       </li>)}</ul></>}
     </section>}
     {error && <p role="alert">{error}</p>}

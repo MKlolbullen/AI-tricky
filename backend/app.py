@@ -32,6 +32,7 @@ from .support_data import SupportData
 from .team_routing import ModelRoute, validate_routes, execute_route
 from .http_routing import HTTPRouting, resolve_routing, routing_binding
 from .http_journal import HTTPJournal, request_message
+from .burp_bridge import BurpBridge, read_batch, web_only
 from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
@@ -189,6 +190,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
     support_data = SupportData(store)
     http_journal = HTTPJournal(store)
+    burp_bridge = BurpBridge(store, http_journal)
     agent_presets = AgentPresets(store)
     evidence = EvidenceIndex(store)
     asset_graph = AssetGraph(store)
@@ -893,6 +895,42 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     async def import_burp_history(rid: str,body: BurpImport):
         get_run(rid)
         return await asyncio.to_thread(http_journal.import_burp_xml,rid,body.xml)
+
+    @app.get('/api/runs/{rid}/burp-bridge')
+    def burp_bridge_status(rid: str):
+        get_run(rid)
+        return burp_bridge.status(rid)
+
+    @app.post('/api/runs/{rid}/burp-bridge/pair')
+    def pair_burp(rid: str, request: Request):
+        web_only(request)
+        return burp_bridge.pair(get_run(rid))
+
+    @app.post('/api/runs/{rid}/burp-bridge/disconnect')
+    def disconnect_burp(rid: str, request: Request):
+        web_only(request)
+        get_run(rid)
+        return burp_bridge.disconnect(rid)
+
+    @app.post('/api/runs/{rid}/burp-bridge/exchanges')
+    async def burp_import_exchanges(rid: str, request: Request):
+        authorization = request.headers.get('authorization', '')
+        burp_bridge.authenticate(rid, authorization)
+        batch = await read_batch(request)
+        return await asyncio.to_thread(burp_bridge.import_items, rid, authorization, batch)
+
+    @app.get('/api/runs/{rid}/burp-bridge/repeater')
+    def burp_repeater_pending(rid: str, request: Request):
+        return burp_bridge.pending(rid, request.headers.get('authorization', ''))
+
+    @app.post('/api/runs/{rid}/burp-bridge/repeater/{exchange_id}/ack')
+    def burp_repeater_ack(rid: str, exchange_id: str, request: Request):
+        return burp_bridge.acknowledge(rid, request.headers.get('authorization', ''), exchange_id)
+
+    @app.post('/api/http-history/{exchange_id}/repeater')
+    def queue_burp_repeater(exchange_id: str, request: Request):
+        web_only(request)
+        return burp_bridge.queue(exchange_id)
 
     async def execute(rid, config, ctl):
         target_scope = [parse_target(t) for t in config['targets']]

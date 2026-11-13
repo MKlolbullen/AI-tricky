@@ -32,3 +32,7 @@ are included with bundled builds.
 [Tree-sitter Python bindings](https://github.com/tree-sitter/py-tree-sitter) ·
 [JavaScript grammar](https://github.com/tree-sitter/tree-sitter-javascript) ·
 [TypeScript grammar](https://github.com/tree-sitter/tree-sitter-typescript)
+
+## Local Burp bridge
+
+The extension builds against the [Montoya API](https://github.com/PortSwigger/burp-extensions-montoya-api) supplied by Burp. Its JAR includes [Gson](https://github.com/google/gson) and [Error Prone Annotations](https://github.com/google/error-prone) under the Apache License, Version 2.0. The JAR includes their license and attribution.

@@ -173,3 +173,13 @@ source provenance, and distinguishes inference from matched native/imported
 HTTP exchanges. Keep argument editing in the selected tool's right inspector
 with visible flags, typed controls, defaults, and separate registered input
 bindings. Preserve server validation and adapter-owned flags.
+
+## Local Burp bridge
+
+The next authorized increment transfers selected exchanges through a Montoya
+extension and opens saved requests in Repeater for manual sending. Bind a
+short-lived in-memory pairing to one run. Reuse the HTTP journal,
+preserve Burp-provided message bytes, validate URL and request authority,
+deduplicate explicit imports, and keep imported evidence distinct. Never
+turn a handoff into an automatic target request or reuse authenticated
+metadata-only captures as complete requests.

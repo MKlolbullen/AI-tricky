@@ -47,7 +47,7 @@ Design a typed workflow. Execute bounded checks. Preserve the request/response t
 | 🧪 **HTTP evidence journal** | Retain native requests/responses, errors, cancellations, binary captures and HAR exports. |
 | 🔍 **Authenticated object access** | Compare two test identities under one reviewed GET profile, with an ownership control and redacted evidence. [Setup](docs/CONTROLLED-VERIFICATION.md#authenticated-object-access) |
 | **API Surface** | Search endpoints inferred from saved JS, TypeScript and source maps, with source locations and matching HTTP history. [Usage](docs/API-SURFACE.md) |
-| 🟠 **Burp-compatible routing** | Route supported HTTP traffic through a local proxy and import saved Burp XML items. |
+| 🟠 **Burp-compatible routing** | Route supported HTTP traffic through a local proxy, import selected Burp exchanges and open saved requests in Repeater. [Bridge setup](docs/BURP-BRIDGE.md) |
 | 🕸️ **Asset graph** | Explore typed hosts, services, technologies, files and other entities with provenance and run-to-run diffs. |
 | 🛡️ **AD & Entra review** | Scoped identity collection profiles, graph imports and bounded candidate-path analysis; not automated exploitation. |
 | 📋 **Findings workbench** | Durable observations, candidate findings, review decisions and comparisons between assessment runs. |
@@ -242,7 +242,7 @@ See [validation records](docs/VALIDATION.md) and the [CI workflow](https://githu
 
 - The platform is a **functional beta**; real-binary compatibility and broader OS validation are incomplete.
 - External scanners must be installed independently and may make requests outside native HTTP accounting.
-- Burp-compatible proxy routing and saved-items import are supported; **live bidirectional Burp/burpaderp sync is not**.
+- The local Burp bridge transfers selected exchanges and opens saved requests in Repeater for manual review. Continuous traffic synchronization is outside this release.
 - AD/Entra paths are candidate relationships requiring validation; no automatic identity exploitation is claimed.
 - CAI integration is optional, and model outputs are not independently verified findings.
 - The local API is intended for a **single trusted user**, not exposed multi-user hosting.
@@ -254,7 +254,7 @@ See [validation records](docs/VALIDATION.md) and the [CI workflow](https://githu
 - [ ] Expand constrained catalog adapters with explicit account/context contracts.
 - [ ] Improve evidence-age rules and controlled replay/recovery.
 - [ ] Strengthen identity testing coverage and review workflows.
-- [ ] Explore policy-controlled Burp/burpaderp and Strix integration.
+- [ ] Extend the local Burp bridge and explore policy-controlled Strix integration.
 - [ ] Refine operator UX, model compatibility checks and agent observability.
 
 ## 🤝 Contributing

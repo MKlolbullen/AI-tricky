@@ -4,6 +4,7 @@ from datetime import datetime
 import json
 import uuid
 import hashlib
+import re
 import xml.etree.ElementTree as ET
 from urllib.parse import urlsplit, parse_qsl
 
@@ -32,6 +33,46 @@ def request_message(url,headers=None,*,request_target=None):
     host=p.netloc
     pairs=list((headers or {'Host':host,'User-Agent':'AI-tricky/0.8.0','Accept-Encoding':'identity'}).items())
     return message('GET '+target+' HTTP/1.1',pairs,method='GET',url=url,http_version='HTTP/1.1',request_target=target)
+
+
+HTTP_TOKEN = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+
+
+def parse_saved_message(raw, *, url=None, bridge=False):
+    head, separator, body = raw.partition(b'\r\n\r\n')
+    if not separator or len(head) + (4 if bridge else 0) > MAX_HEADERS:
+        raise ScopeError('HTTP item needs a bounded CRLF header block.')
+    if bridge and len(body) > MAX_BODY:
+        raise ScopeError('HTTP item body exceeds 128 KiB.')
+    lines = head.decode('latin1').split('\r\n')
+    parts = lines[0].split(' ', 2)
+    headers = []
+    for line in lines[1:]:
+        if bridge and line.startswith(':'):
+            name, sep, value = line[1:].partition(':')
+            name = ':' + name
+        else:
+            name, sep, value = line.partition(':')
+        if not sep:
+            raise ScopeError('Unsupported HTTP header line in Burp item.')
+        if bridge and (not HTTP_TOKEN.fullmatch(name.lstrip(':')) or any(ord(c) < 32 and c != '\t' or ord(c) == 127 for c in value)):
+            raise ScopeError('Unsupported HTTP header in Burp exchange.')
+        headers.append([name, value.strip()])
+    if len(headers) > 100:
+        raise ScopeError('HTTP item exceeds 100 headers.')
+    if url is not None:
+        if len(parts) != 3 or not parts[2].startswith('HTTP/') or (bridge and (not HTTP_TOKEN.fullmatch(parts[0]) or not re.fullmatch(r'HTTP/(?:1\.[01]|2(?:\.0)?|3(?:\.0)?)', parts[2]))):
+            raise ScopeError('Invalid saved request line.')
+        result = message(lines[0], headers, body, method=parts[0], request_target=parts[1], http_version=parts[2], url=url)
+    else:
+        if len(parts) < 2 or not parts[0].startswith('HTTP/') or not re.fullmatch(r'[1-5][0-9]{2}', parts[1]):
+            raise ScopeError('Invalid saved response line.')
+        result = message(lines[0], headers, body, status=int(parts[1]), reason=parts[2] if len(parts) > 2 else '', http_version=parts[0])
+    result['raw_headers_base64'] = base64.b64encode(head + separator).decode()
+    result['representation'] = 'burp_api_message_bytes' if bridge else 'exported_http_headers_and_captured_body'
+    if bridge:
+        result['headers_truncated'] = False  # Raw headers were checked against the budget above.
+    return result
 
 
 class HTTPJournal:
@@ -87,30 +128,12 @@ class HTTPJournal:
             raw=element.text or ''
             try:return base64.b64decode(''.join(raw.split()),validate=True) if element.get('base64')=='true' else raw.encode('utf-8')
             except ValueError:raise ScopeError('Invalid base64 in Burp HTTP item.') from None
-        def parse(raw,*,url=None):
-            head,separator,body=raw.partition(b'\r\n\r\n')
-            if not separator or len(head)>MAX_HEADERS:raise ScopeError('HTTP item needs a bounded CRLF header block.')
-            lines=head.decode('latin1').split('\r\n');parts=lines[0].split(' ',2);headers=[]
-            for line in lines[1:]:
-                if ':' not in line:raise ScopeError('Unsupported HTTP header line in Burp item.')
-                k,v=line.split(':',1);headers.append([k,v.strip()])
-            if len(headers)>100:raise ScopeError('HTTP item exceeds 100 headers.')
-            if url:
-                if len(parts)!=3 or not parts[2].startswith('HTTP/'):raise ScopeError('Invalid saved request line.')
-                result=message(lines[0],headers,body,method=parts[0],request_target=parts[1],http_version=parts[2],url=url)
-            else:
-                if len(parts)<2 or not parts[0].startswith('HTTP/') or not parts[1].isdigit() or not 100<=int(parts[1])<=599:
-                    raise ScopeError('Invalid saved response line.')
-                result=message(lines[0],headers,body,status=int(parts[1]),reason=parts[2] if len(parts)>2 else '',http_version=parts[0])
-            result['raw_headers_base64']=base64.b64encode(head+b'\r\n\r\n').decode()
-            result['representation']='exported_http_headers_and_captured_body'
-            return result
         for index,item in enumerate(items):
             url=item.findtext('url') or '';authorize(url,scopes)
             request=item.find('request');response=item.find('response')
             if request is None:raise ScopeError('A saved request is required for each imported item.')
             records.append((str(uuid.uuid5(uuid.NAMESPACE_URL,rid+fingerprint+str(index))),url,
-                parse(decode(request),url=url),parse(decode(response)) if response is not None and response.text else None,
+                parse_saved_message(decode(request),url=url),parse_saved_message(decode(response)) if response is not None and response.text else None,
                 (item.findtext('time') or '')[:120]))
         # Parse and scope-check the entire batch before any persistence.
         with self.store.connect() as c:

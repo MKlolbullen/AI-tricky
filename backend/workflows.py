@@ -154,10 +154,12 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
         if kind in CATALOG_KINDS:
             from .catalog_execution import incoming_streams, execute_catalog_node
             streams=incoming_streams(routes[nid], outputs)
-            return await execute_catalog_node(rid,nid,by_id[nid]['data'],streams,config,ctl,store)
+            return await execute_catalog_node(rid,nid,by_id[nid]['data'],streams,config,ctl,store,fetch=fetch)
         if kind == 'native_scope':
             return [{'target': t, 'kind': parse_target(t).kind} for t in config['targets']]
         if kind=='native_identity_collect':
+            if config.get('cli_scope') == 'enforced':
+                raise ScopeError('Directory collection is unavailable in the enforced CLI scope profile.')
             from .identity_tools import collect
             return await collect(rid,nid,by_id[nid]['data'],config,ctl,store)
         if kind=='native_identity_paths':

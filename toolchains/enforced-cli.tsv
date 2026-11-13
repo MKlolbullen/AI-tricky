@@ -1,0 +1,2 @@
+# Tool ID, Go package, Go module version (tab-separated)
+ffuf	github.com/ffuf/ffuf/v2	v2.1.0

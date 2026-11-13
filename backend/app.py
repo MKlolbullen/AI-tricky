@@ -69,6 +69,7 @@ class RunInput(BaseModel):
     max_hosts: int = Field(default=64, ge=1, le=256)
     ports: list[int] = Field(default_factory=lambda:[22,80,443,8080,8443], min_length=1, max_length=16)
     allow_cli: bool = False
+    cli_scope: Literal['standard','enforced'] = 'standard'
     max_cli_invocations: int = Field(default=64, ge=1, le=256)
     max_seconds: int = Field(default=240, ge=1, le=3600)
     cli_credential_keys: list[str] = Field(default_factory=list,max_length=30)
@@ -442,6 +443,11 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         from .web_recon import recon_workflow
         graph = recon_workflow(fuzz=fuzz, scan=scan, review=review, surface=surface)
         return support_data.bind(graph, bundled_only=True)['graph'] if scan else graph
+
+    @app.get('/api/workflow-starters/enforced-ffuf')
+    def enforced_ffuf_starter():
+        from .web_recon import recon_workflow
+        return support_data.bind(recon_workflow(isolated_ffuf=True), bundled_only=True)['graph']
 
     @app.get('/api/workflow-starters/trickest/{identifier}')
     def trickest_starter(identifier: str):
@@ -1191,6 +1197,8 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         if any(not 1 <= p <= 65535 for p in body.ports):
             raise HTTPException(422, 'TCP ports must be integers from 1 to 65535.')
         if not body.target_ids and body.engine!='workflow':raise HTTPException(422,'Select at least one entered target.')
+        if body.cli_scope == 'enforced' and body.engine != 'workflow':
+            raise HTTPException(422, 'Enforced CLI scope is available for workflows.')
         if body.engine == 'workflow':
             validate_workflow(body.workflow, live=True)
         if body.engine in ('team','workflow'):
@@ -1229,7 +1237,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             resolve_team_models(config)
         if body.engine!='workflow':return {'ready':True,'issues':[]}
         result=catalog_preflight(body.workflow,config,store,check_binaries=body.allow_http,credentials=configured_secret_keys())
-        return {k:v for k,v in result.items() if k not in ('cli_binaries','input_snapshots')}
+        return {k:v for k,v in result.items() if k not in ('cli_binaries','input_snapshots','cli_sandbox')}
 
     @app.post('/api/runs', status_code=201)
     async def create_run(body: RunInput):
@@ -1240,6 +1248,8 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                 ready=await asyncio.to_thread(catalog_preflight,body.workflow,config,store,credentials=configured_secret_keys())
                 if not ready['ready']:raise HTTPException(422,{'message':'Catalog preflight failed.','issues':ready['issues']})
                 config.update(cli_binaries=ready['cli_binaries'],input_snapshots=ready['input_snapshots'])
+                if ready['cli_sandbox']:
+                    config['cli_sandbox'] = ready['cli_sandbox']
             # Resolve the selected model for a team run in the request path so the
             # provider gate (409/422) applies before the run is created. The
             # resolved config (with its key) is passed to the control object only.

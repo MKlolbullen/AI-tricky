@@ -46,6 +46,7 @@ Design a typed workflow. Execute bounded checks. Preserve the request/response t
 | 🔌 **Provider choice** | Configure local model endpoints or supported remote providers, including OpenAI, Anthropic, Gemini, xAI and Venice. |
 | 🧪 **HTTP evidence journal** | Retain native requests/responses, errors, cancellations, binary captures and HAR exports. |
 | 🔍 **Authenticated object access** | Compare two test identities under one reviewed GET profile, with an ownership control and redacted evidence. [Setup](docs/CONTROLLED-VERIFICATION.md#authenticated-object-access) |
+| **Enforced CLI scope** | Run ffuf path discovery in Linux network isolation with the native request budget and HTTP history. [Setup](docs/CLI-SCOPE.md) |
 | **API Surface** | Search endpoints inferred from saved JS, TypeScript and source maps, with source locations and matching HTTP history. [Usage](docs/API-SURFACE.md) |
 | 🟠 **Burp-compatible routing** | Route supported HTTP traffic through a local proxy, import selected Burp exchanges and open saved requests in Repeater. [Bridge setup](docs/BURP-BRIDGE.md) |
 | 🕸️ **Asset graph** | Explore typed hosts, services, technologies, files and other entities with provenance and run-to-run diffs. |

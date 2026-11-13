@@ -10,6 +10,7 @@
 #
 # Usage:
 #   scripts/install-tools.sh --web-recon     # pinned starter binaries
+#   scripts/install-tools.sh --enforced-cli # pinned ffuf and private relay
 #   scripts/install-tools.sh --trickest-oss  # pinned mksub and mkpath
 #   scripts/install-tools.sh                 # install everything it can
 #   scripts/install-tools.sh --list          # print the tool/method table, exit
@@ -49,7 +50,7 @@ GO_VERSION="1.26.4"
 for arg in "$@"; do
   case "$arg" in
     --list)            LIST_ONLY=1 ;;
-    --web-recon|--trickest-oss) INSTALL_PROFILE="${arg#--}" ;;
+    --web-recon|--trickest-oss|--enforced-cli) INSTALL_PROFILE="${arg#--}" ;;
     --yes|-y)          ASSUME_YES=1 ;;
     --skip-toolchains) SKIP_TOOLCHAINS=1 ;;
     --tools=*)         ONLY_TOOLS="${arg#*=}" ;;
@@ -489,6 +490,8 @@ install_logged() {
 
 install_locked_go() {
   local name="$1" spec="$2" stage status=0
+  local build_env=()
+  if [[ "$INSTALL_PROFILE" == enforced-cli ]]; then build_env+=(CGO_ENABLED=0); fi
   if ! have_go || ! have python3; then
     R_FAIL+=("$name"); fail "$name (requires the Go compiler and Python 3)"; return 1
   fi
@@ -496,7 +499,7 @@ install_locked_go() {
     R_SKIP+=("$name"); skip "$name (pinned version already installed)"; return 0
   fi
   stage="$(mktemp -d "$BIN/.build.XXXXXXXX")" || { R_FAIL+=("$name"); return 1; }
-  install_logged "$name" env GOBIN="$stage" GOFLAGS=-mod=mod go install "$spec" &&
+  install_logged "$name" env GOBIN="$stage" GOFLAGS=-mod=mod "${build_env[@]}" go install "$spec" &&
     python3 "$HERE/check-recon-tools.py" --profile "$INSTALL_PROFILE" --tool "$name" --binary "$stage/$name" >> "$LOG_DIR/$name.log" 2>&1 &&
     mv -f "$stage/$name" "$BIN/$name" || status=$?
   rm -rf "$stage"
@@ -591,6 +594,18 @@ Install pinned support data and register it in the local workspace:
 Or use Local workspace → Inputs → Templates, resolvers and wordlists.
 Installing data does not bind it to a workflow or start an assessment.
 EOF
+
+if [[ "$INSTALL_PROFILE" == enforced-cli && "${#R_FAIL[@]}" == 0 && -x "$BIN/ffuf" ]]; then
+  relay_stage="$(mktemp -d "$BIN/.relay.XXXXXXXX")" || exit 1
+  if install_logged ai-tricky-cli-relay env CGO_ENABLED=0 go build -trimpath -o "$relay_stage/ai-tricky-cli-relay" "$ROOT/integrations/cli-scope/relay.go" &&
+      mv -f "$relay_stage/ai-tricky-cli-relay" "$BIN/ai-tricky-cli-relay"; then
+    ok 'ai-tricky-cli-relay'
+  else
+    fail 'CLI scope relay build failed; see installer diagnostics.'
+    R_FAIL+=(ai-tricky-cli-relay)
+  fi
+  rm -rf "$relay_stage"
+fi
 
 # The pinned profile requires every selected binary to install successfully.
 if [[ -n "$INSTALL_PROFILE" && ${#R_FAIL[@]} -gt 0 ]]; then exit 1; fi

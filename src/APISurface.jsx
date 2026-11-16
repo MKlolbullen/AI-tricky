@@ -2,11 +2,15 @@ import React, {useEffect, useState} from 'react';
 import {api, downloadJSON} from './api.mjs';
 import {RepeaterButton} from './BurpBridge';
 
-export function APISurfaceTable({surface}) {
+const ProposalExecution = React.lazy(() => import('./ProposalExecution'));
+
+export function APISurfaceTable({surface, runId, onRun}) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState('');
+  const [matrixPlan, setMatrixPlan] = useState(null);
+  const [planning, setPlanning] = useState(false);
   const filter = query.trim().toLowerCase();
   const rows = surface.endpoints.filter(row => (!status || row.status === status) &&
     `${row.method} ${row.url} ${row.parameters.join(' ')}`.toLowerCase().includes(filter));
@@ -19,6 +23,19 @@ export function APISurfaceTable({surface}) {
       downloadJSON(`${kind}-${id}.json`, record);
     } catch (failure) {
       setError(failure.message);
+    }
+  };
+
+  const planMatrix = async (endpoint, exchange) => {
+    setError('');
+    setPlanning(true);
+    try {
+      const plan = await api(`/runs/${runId}/api-surface/${endpoint}/exchanges/${exchange}/verification-plan`, {});
+      setMatrixPlan({endpoint, plan});
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      setPlanning(false);
     }
   };
 
@@ -46,7 +63,13 @@ export function APISurfaceTable({surface}) {
         <span>{row.status} · {row.source === 'native' ? 'Native capture' : 'Imported capture'}</span>
         <button className="secondary" onClick={() => inspect('exchange', row.exchange_id)}>Download exchange</button>
         <RepeaterButton exchangeId={row.exchange_id}/>
+        {onRun && detail.method === 'GET' && row.source === 'native' &&
+          <button className="secondary" disabled={planning} onClick={() => planMatrix(detail.id, row.exchange_id)}>Set up access matrix</button>}
       </li>)}</ul></>}
+      {matrixPlan?.endpoint === detail.id && <React.Suspense fallback={<p>Loading execution review…</p>}>
+        <ProposalExecution key={matrixPlan.plan.id} plan={matrixPlan.plan} proposal={matrixPlan.plan.proposals[0]}
+          initialProfile="access_matrix" onRun={onRun}/>
+      </React.Suspense>}
     </section>}
     {error && <p role="alert">{error}</p>}
     <details><summary>Analysis coverage</summary><ul>{surface.coverage_limits.map(note => <li key={note}>{note}</li>)}</ul>
@@ -55,7 +78,7 @@ export function APISurfaceTable({surface}) {
   </section>;
 }
 
-export default function APISurface({runs, initialRun}) {
+export default function APISurface({runs, initialRun, onRun}) {
   const [runId, setRunId] = useState(initialRun || '');
   const [surface, setSurface] = useState(null);
   const [error, setError] = useState('');
@@ -85,6 +108,6 @@ export default function APISurface({runs, initialRun}) {
     {!candidates.length && <p>Run a workflow with a Web source collector to populate this view.</p>}
     {busy && <p role="status">Analyzing saved sources…</p>}
     {error && <p role="alert">{error}</p>}
-    {surface && <APISurfaceTable key={runId} surface={surface}/>}
+    {surface && <APISurfaceTable key={runId} surface={surface} runId={runId} onRun={onRun}/>}
   </section>;
 }

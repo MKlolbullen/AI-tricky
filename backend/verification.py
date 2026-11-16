@@ -2,7 +2,8 @@
 import re
 
 from .observations import digest
-from .access_verification import PROFILE_ID
+from .access_verification import PROFILE_ID, successful_control, usable_access_capture
+from . import access_matrix
 
 SCHEMA = 'ai-tricky.verification/v1'
 VERSION = '1'
@@ -14,6 +15,8 @@ PROFILES = {
                     'expected_signal': 'The variant response permits the fixed test origin or anonymous wildcard access.'},
     PROFILE_ID: {'title': 'Authenticated object access',
                  'expected_signal': 'After both identity controls succeed, the second identity receives the matching owner object response.'},
+    access_matrix.PROFILE_ID: {'title': 'Multi-identity access matrix',
+                               'expected_signal': 'Observed access is compared with the declared allow/deny expectation for each cell.'},
 }
 COMPARE_HEADERS = ('content-type', 'server', 'content-security-policy', 'strict-transport-security',
                    'x-content-type-options', 'access-control-allow-origin', 'access-control-allow-credentials', 'vary')
@@ -25,7 +28,7 @@ def profiles():
 
 
 def operation_count(profile_id):
-    return 3 if profile_id == PROFILE_ID else 2
+    return {PROFILE_ID: 3, access_matrix.PROFILE_ID: access_matrix.OPERATIONS}.get(profile_id, 2)
 
 
 def contract(profile_id, url, node_id='followup-test', finding_id=None, *, access=None):
@@ -49,8 +52,13 @@ def contract(profile_id, url, node_id='followup-test', finding_id=None, *, acces
                 ('other', url, 'other_identity_id'),
             )
         ])
+    elif profile_id == access_matrix.PROFILE_ID:
+        if access is None:
+            raise ValueError('Select three identities, two objects and the expected access policy.')
+        result.update(access=access, credentials='session_bearer', native_operations=access_matrix.OPERATIONS,
+                      requests=access_matrix.requests(url, access))
     elif access is not None:
-        raise ValueError('Test identities require the authenticated object access profile.')
+        raise ValueError('Test identities require an authenticated verification profile.')
     return {**result, 'contract_hash': digest(result)}
 
 
@@ -77,6 +85,15 @@ def request_spec(config, node_id, step, url):
     return request
 
 
+def request_marker(binding, request):
+    options = binding['access']['options']
+    if binding['profile_id'] == access_matrix.PROFILE_ID:
+        key = ('first_object', 'second_object')[request['object_index']]
+    else:
+        key = 'control_object' if request['role'] == 'control' else 'owner_object'
+    return options['json_pointer'], options[key]
+
+
 def capture_summary(store, response, request, run_id=None, node_id=None):
     aid = response.get('artifact_id')
     data = store.content(aid) if aid else response
@@ -99,18 +116,6 @@ def capture_summary(store, response, request, run_id=None, node_id=None):
                        resource_marker_matched=data.get('resource_marker_matched', False),
                        exchange_id=data.get('http_exchange_id'))
     return capture
-
-
-def usable_access_capture(capture):
-    fingerprint = capture.get('body_fingerprint')
-    return (capture.get('artifact_id') and not capture.get('error') and not capture.get('truncated')
-            and capture.get('connected_ip') and isinstance(fingerprint, str)
-            and re.fullmatch(r'[a-f0-9]{64}', fingerprint))
-
-
-def successful_control(capture):
-    return bool(usable_access_capture(capture) and capture['status'] == 200
-                and capture['resource_marker_matched'])
 
 
 def evaluate_access(binding, captures, result, interruption):
@@ -166,6 +171,8 @@ def evaluate(binding, captures, *, interruption=None):
                   'This is a profile-specific observation, not a verified vulnerability or a finding review decision.',
                   'Only two unauthenticated GETs to the bound URL are covered; redirects are not followed.',
                   'No cookies, authorization credentials, browser execution or preflight requests are included.']}
+    if binding['profile_id'] == access_matrix.PROFILE_ID:
+        return access_matrix.evaluate(binding, captures, result, interruption)
     if binding['profile_id'] == PROFILE_ID:
         return evaluate_access(binding, captures, result, interruption)
     reasons = []
@@ -225,9 +232,17 @@ async def execute_pair(rid, node_id, config, urls, fetch, store):
         raise ValueError('Verification source differs from its approved URL.')
     captures, interruption = [], None
     try:
+        controls = {}
+        matrix = binding['profile_id'] == access_matrix.PROFILE_ID
         for step, request in enumerate(binding['requests']):
+            if matrix and step >= access_matrix.OBJECTS and not controls.get(request['object_index']):
+                continue
             response = await fetch(request['url'], node_id=node_id, verification_step=step)
             captures.append(capture_summary(store, response, request, rid, node_id))
+            if matrix:
+                if step < access_matrix.OBJECTS:
+                    controls[request['object_index']] = successful_control(captures[-1])
+                continue
             if response.get('error'):
                 break
             if binding['profile_id'] == PROFILE_ID and step < 2:
@@ -269,6 +284,7 @@ def read_result(store, rid):
     saved = next((a for a in reversed(artifacts) if a['name'] == 'verification-comparison.json'), None)
     if saved:
         result = {**store.content(saved['id']), 'comparison_artifact_id': saved['id'], 'run_status': run['status'], 'evidence_current': True}
+        missing = set()
         for capture in result['captures']:
             if not capture.get('artifact_id'):
                 continue
@@ -277,9 +293,17 @@ def read_result(store, rid):
             except KeyError:
                 current = False
             if not current:
-                result.update(evidence_current=False, recorded_outcome=result['outcome'], outcome='inconclusive')
-                result['coverage_limits'] = result['coverage_limits'] + ['A capture changed or is unavailable. Inspect the original saved comparison before relying on it.']
-                break
+                missing.add(capture['artifact_id'])
+        if missing:
+            result.update(evidence_current=False, recorded_outcome=result['outcome'], outcome='inconclusive')
+            if binding['profile_id'] == access_matrix.PROFILE_ID:
+                report = evaluate(binding, [c for c in result['captures'] if c['artifact_id'] not in missing],
+                                  interruption='Capture changed or is unavailable')
+                recorded = {c['request']['role']: c['outcome'] for c in result['cells']}
+                result.update(cells=[{**cell, 'recorded_outcome': recorded[cell['request']['role']]}
+                                     for cell in report['cells']],
+                              summary=report['summary'], facts=report['facts'])
+            result['coverage_limits'] = result['coverage_limits'] + ['A capture changed or is unavailable. Inspect the original saved comparison before relying on it.']
         return result
     captures = []
     for artifact in artifacts:
@@ -288,7 +312,7 @@ def read_result(store, rid):
             request = data.get('verification_request')
             if request in binding['requests']:
                 captures.append(capture_summary(store, {'artifact_id': artifact['id']}, request, rid, binding['node_id']))
-    return {**evaluate(binding, captures, interruption='Awaiting paired completion' if run['status'] in ('queued', 'running', 'paused') else run['status']),
+    return {**evaluate(binding, captures, interruption='Awaiting check completion' if run['status'] in ('queued', 'running', 'paused') else run['status']),
             'run_id': rid, 'approval': run['config']['proposal_execution'], 'run_status': run['status'], 'comparison_artifact_id': None}
 
 

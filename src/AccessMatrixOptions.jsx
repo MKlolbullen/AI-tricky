@@ -1,9 +1,10 @@
-import React from 'react';
+import React, {useId} from 'react';
 import TestIdentitySettings from './TestIdentitySettings';
 
 const rowLabels = ['Object A owner', 'Object B owner', 'Third test identity'];
 
 export default function AccessMatrixOptions({target, value, onChange}) {
+  const rowId = useId();
   const update = (key, next) => onChange({...value, [key]: next});
   const changeRow = (index, next) => update('rows', value.rows.map((row, i) => i === index ? {...row, ...next} : row));
   const remove = id => update('rows', value.rows.map(row => row.identity_id === id ? {...row, identity_id: ''} : row));
@@ -26,11 +27,11 @@ export default function AccessMatrixOptions({target, value, onChange}) {
       <table className="verification-matrix" aria-label="Expected access by identity">
         <thead><tr><th scope="col">Identity</th><th scope="col">Object A</th><th scope="col">Object B</th></tr></thead>
         <tbody>{value.rows.map((row, i) => <tr key={i}>
-          <th scope="row"><label>{rowLabels[i]}<select required value={row.identity_id} onChange={e => changeRow(i, {identity_id: e.target.value})}>
+          <th scope="row"><label htmlFor={rowId + i}>{rowLabels[i]}</label><select id={rowId + i} required value={row.identity_id} onChange={e => changeRow(i, {identity_id: e.target.value})}>
             <option value="">Select test identity</option>
             {identities.filter(test => !value.rows.some((other, j) => j !== i && other.identity_id === test.id))
               .map(test => <option value={test.id} key={test.id}>{test.label}</option>)}
-          </select></label></th>
+          </select></th>
           {row.expected.map((expected, column) => <td key={column}>
             {column === i ? <span>Allow · owner control</span> : <select required aria-label={rowLabels[i] + (column ? ' on object B' : ' on object A')}
               value={expected} onChange={e => changeRow(i, {expected: row.expected.map((access, j) => j === column ? e.target.value : access)})}>

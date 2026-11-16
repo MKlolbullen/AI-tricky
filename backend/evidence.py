@@ -31,6 +31,8 @@ class EvidenceIndex:
                 artifact_id TEXT NOT NULL, parser_version TEXT NOT NULL, observation_id TEXT NOT NULL,
                 PRIMARY KEY(artifact_id,parser_version,observation_id));
             CREATE INDEX IF NOT EXISTS observation_versions_active ON observation_versions(parser_version,observation_id);
+            CREATE TABLE IF NOT EXISTS observation_http_exchanges(
+                observation_id TEXT PRIMARY KEY, exchange_id TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS findings(
                 id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE NOT NULL, asset TEXT NOT NULL,
                 source TEXT NOT NULL, title TEXT NOT NULL, severity TEXT NOT NULL,
@@ -95,6 +97,17 @@ class EvidenceIndex:
                                                 'rationale': rationale, 'confidence': 'unknown'}, 'evidence_ids': ids})
         return records
 
+    @staticmethod
+    def scoped_exchange(c, artifact, asset, exchange_id):
+        row = c.execute("""SELECT url,json_extract(response,'$.status') AS status FROM http_exchanges
+                           WHERE id=? AND run_id=? AND node_id IS ? AND source='native'
+                           AND state='completed' AND cancel_requested=0
+                           AND json_extract(request,'$.method')='GET'""",
+                        (exchange_id, artifact['run_id'], artifact['node_id'])).fetchone()
+        if row and canonical_asset(row['url']) == asset:
+            return row['status']
+        return None
+
     def index_pending(self, run_id=None):
         """Index append-only artifacts in transactions; historical runs need no rewrite."""
         with self.store.connect() as c:
@@ -117,7 +130,13 @@ class EvidenceIndex:
                 # load their base64 payloads merely to populate the evidence index.
                 eligible = artifact['name'] == 'tcp-inventory.json' or re.fullmatch(r'(?:http|cli|node)-[A-Za-z0-9_-]+\.json', artifact['name'])
                 content = json.loads(c.execute('SELECT content FROM artifacts WHERE id=?', (artifact['id'],)).fetchone()['content']) if eligible else None
-                records, report = parse_artifact(artifact['name'], content)
+                scoped_lookup = None
+                if (isinstance(content, dict) and content.get('http_capture') == 'scoped_gateway'
+                        and c.execute("SELECT 1 FROM sqlite_master WHERE name='http_exchanges'").fetchone()):
+                    def scoped_lookup(asset, exchange_id):
+                        return self.scoped_exchange(c, artifact, asset, exchange_id)
+                records, report = (parse_artifact(artifact['name'], content, scoped_lookup=scoped_lookup)
+                                   if scoped_lookup else parse_artifact(artifact['name'], content))
                 model_records = self._model_records(c, artifact, content)
                 records.extend(model_records)
                 if model_records:
@@ -131,6 +150,8 @@ class EvidenceIndex:
                     oid = c.execute('''SELECT id FROM observations WHERE artifact_id=? AND fingerprint=? AND value_hash=?''',
                                     (artifact['id'], record['fingerprint'], record['value_hash'])).fetchone()['id']
                     c.execute('INSERT OR IGNORE INTO observation_versions VALUES(?,?,?)', (artifact['id'], PARSER_VERSION, oid))
+                    if exchange_id := record.get('exchange_id'):
+                        c.execute('INSERT OR IGNORE INTO observation_http_exchanges VALUES(?,?)', (oid, exchange_id))
                     finding = record.get('finding')
                     if finding:
                         fid = str(uuid.uuid4())
@@ -161,6 +182,7 @@ class EvidenceIndex:
             clause = ' FROM observations o JOIN observation_versions v ON v.observation_id=o.id WHERE ' + ' AND '.join(where)
             total = c.execute('SELECT COUNT(*)' + clause, args).fetchone()[0]
             rows = c.execute('''SELECT o.*,
+                             (SELECT exchange_id FROM observation_http_exchanges WHERE observation_id=o.id) AS exchange_id,
                              CASE WHEN (SELECT captured_at FROM artifacts WHERE id=o.artifact_id) IS NULL
                              THEN 'run-start (legacy)' ELSE 'capture' END AS time_basis''' + clause +
                              ' ORDER BY o.observed_at DESC,o.id LIMIT ? OFFSET ?', [*args, limit, offset]).fetchall()

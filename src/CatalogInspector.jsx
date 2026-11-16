@@ -16,8 +16,8 @@ export default function CatalogInspector({node,edges,onChange}){
  const params=data.params||{};
  const argsDetail=data.require_cli_scope && detail ? {
   ...detail,
-  args:detail.args.map(arg=>['-mc','-fc','-fs'].includes(arg.flag)?arg:{
-   ...arg,blocked_reason:arg.blocked_reason||'The enforced ffuf profile controls this setting.',
+  args:detail.args.map(arg=>data.toolId==='ffuf'&&['-mc','-fc','-fs'].includes(arg.flag)?arg:{
+   ...arg,blocked_reason:arg.blocked_reason||'The enforced scanner profile controls this setting.',
   }),
  } : detail;
  const change=(key,value)=>{const next={...params};if(value===undefined||value==='')delete next[key];else next[key]=value;onChange({params:next})};

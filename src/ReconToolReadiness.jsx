@@ -5,8 +5,11 @@ const labels = {
   different_version: 'Different version',
   unverified: 'Version unavailable',
   wrong_binary: 'Wrong executable',
+  incompatible_platform: 'Incompatible platform',
   missing: 'Missing executable',
 };
+
+export const toolStatusLabel = status => labels[status] || status;
 
 export default function ReconToolReadiness({checks}) {
   if (!checks?.length) return null;
@@ -14,7 +17,7 @@ export default function ReconToolReadiness({checks}) {
     <h4>Pinned tools</h4>
     <ul>
       {checks.map(tool => <li key={tool.tool_id}>
-        <strong>{tool.tool_id} · {labels[tool.status]}</strong>
+        <strong>{tool.tool_id} · {toolStatusLabel(tool.status)}</strong>
         <p>{tool.path && <code>{tool.path}</code>}{tool.installed_version && <span> · {tool.installed_version}</span>}</p>
         {tool.remediation && <p>Tested with {tool.tested_version}. Install using <code>{tool.remediation}</code> and put its bin directory first on PATH.</p>}
       </li>)}

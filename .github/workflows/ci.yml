@@ -117,7 +117,7 @@ jobs:
           fi
           bwrap --unshare-user --unshare-net --disable-userns --ro-bind / / -- /usr/bin/true
       - run: python -m pip install -r requirements-dev.txt
-      - name: Verify pinned ffuf and network isolation on loopback fixtures
+      - name: Verify pinned scanners and network isolation on loopback fixtures
         env:
           GOTOOLCHAIN: local
         run: |
@@ -126,6 +126,61 @@ jobs:
           export AI_TRICKY_FFUF_BIN="$AI_TRICKY_SCOPE_BIN/ffuf"
           CGO_ENABLED=0 go build -trimpath -o "$AI_TRICKY_SCOPE_BIN/isolation-probe" backend/tests/fixtures/cli-scope-probe.go
           python -m pytest backend/tests/test_cli_scope.py -q
+
+  linux-scanner-beta:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: '1.26.4'
+          cache: false
+      - run: npm ci
+      - run: scripts/build-binary.sh
+      - run: scripts/package-linux-beta.sh
+      - name: Smoke-test the extracted beta
+        run: |
+          archive=ai-tricky-linux-amd64-beta.tar.gz
+          (cd dist-bin && sha256sum -c "$archive.sha256")
+          mkdir -p "$RUNNER_TEMP/scanner-beta" "$RUNNER_TEMP/scanner-beta-home"
+          tar -xf "dist-bin/$archive" -C "$RUNNER_TEMP/scanner-beta"
+          cd "$RUNNER_TEMP/scanner-beta/ai-tricky-linux-amd64-beta"
+          export HOME="$RUNNER_TEMP/scanner-beta-home" AI_TRICKY_DATA_DIR="$RUNNER_TEMP/scanner-beta-data"
+          export AI_TRICKY_PORT=8794
+          ./scripts/install-tools.sh --enforced-cli --yes --skip-toolchains
+          ./ai-tricky &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true; wait "$app_pid" || true' EXIT
+          curl -fsS --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:8794/api/scanner-profiles -o profiles.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          profiles = json.loads(Path('profiles.json').read_text())['profiles']
+          tools = next(profile['tools'] for profile in profiles if profile['id'] == 'enforced-cli')
+          assert {tool['tool_id'] for tool in tools} == {'ffuf', 'httprobe'}
+          for tool in tools:
+              assert tool['status'] == 'tested_version', tool
+              assert Path(tool['path']).parent == Path(tool['default_bin']), tool
+          PY
+          curl -fsS -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:8794/api/support-data/install/bundled -o /dev/null
+          curl -fsS http://127.0.0.1:8794/ -o /dev/null
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: linux-scanner-beta
+          path: |
+            dist-bin/ai-tricky-linux-amd64-beta.tar.gz
+            dist-bin/ai-tricky-linux-amd64-beta.tar.gz.sha256
+          if-no-files-found: error
 
   optional-cai:
     if: github.event_name == 'workflow_dispatch' && inputs.cai_sdk

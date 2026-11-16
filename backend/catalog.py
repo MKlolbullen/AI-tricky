@@ -4,10 +4,10 @@ import ipaddress
 import json
 import os
 import re
-import shutil
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from .recon_tools import resolve_tool
 from .scope import ScopeError, authorize, network_hosts, parse_target
 
 ROOT=Path(__file__).resolve().parent.parent
@@ -65,10 +65,11 @@ def contract(data):
     kind=data.get('kind')
     if any(k in data for k in ('command','executable','environment','env','shell','cwd')):raise ScopeError('Execution commands and environment are server-owned.')
     if kind=='catalog_tool':
+        from .cli_scope import SCANNERS
         tid=data.get('toolId');tool=TOOLS.get(tid) if isinstance(tid,str) else None
         if not tool:raise ScopeError('Unknown catalog tool.')
-        if 'require_cli_scope' in data and (tid != 'ffuf' or data['require_cli_scope'] is not True):
-            raise ScopeError('Only ffuf nodes can require enforced CLI scope.')
+        if 'require_cli_scope' in data and (tid not in SCANNERS or data['require_cli_scope'] is not True):
+            raise ScopeError('Only supported scanner nodes can require enforced CLI scope.')
         validate_params(tool,data)
         inputs,outputs=tool['inputs'],tool['outputs']
     elif kind=='catalog_source':
@@ -124,7 +125,7 @@ def convert_mini(value):
 
 
 def tool_readiness(tool):
-    binary=shutil.which(tool['command'][0])
+    binary=resolve_tool(tool['command'][0])
     reason=tool['adapter']['reason']
     return {'id':tool['id'],'adapter':tool['adapter']['mode'],'binary_found':bool(binary),'state':'restricted' if reason else 'available' if binary else 'missing_binary','reason':reason,'binary':str(Path(binary).resolve()) if binary else None,'identity_verified':False}
 

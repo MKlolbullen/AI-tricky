@@ -190,7 +190,7 @@ async def collect_assets(values, config, data, fetch, store, node_id):
              'evidence_status': 'OBSERVATION'}]
 
 
-def recon_workflow(*, fuzz=False, scan=False, review=False, surface=False, isolated_ffuf=False):
+def recon_workflow(*, fuzz=False, scan=False, review=False, surface=False, isolated_ffuf=False, isolated_probe=False):
     """Independent curated starter; leaves the pinned migration catalog intact."""
     from .catalog import TOOLS
     from .workflows import REGISTRY, SCHEMA, validate_workflow
@@ -210,6 +210,18 @@ def recon_workflow(*, fuzz=False, scan=False, review=False, surface=False, isola
     def edge(src, dst, typ, incoming=None):
         edges.append({'id': f'{src}-{dst}', 'source': src, 'target': dst, 'type': 'smoothstep',
                       'sourceHandle': 'out:' + typ, 'targetHandle': 'in:' + (incoming or typ), 'label': typ})
+
+    if isolated_probe:
+        node('targets', 'catalog_source', 0, 100, sourceType='targets', inputs=[], outputs=['targets'],
+             output='targets', title='Selected hosts and URLs', value='')
+        node('probe', 'catalog_tool', 220, 100, toolId='httprobe', title='Scoped httprobe', require_cli_scope=True)
+        node('results', 'catalog_output', 440, 100, inputs=['any'], outputs=['report'], output='report',
+             title='Reachable URLs')
+        edge('targets', 'probe', 'targets')
+        edge('probe', 'results', 'url', 'any')
+        graph = {'schema': SCHEMA, 'nodes': nodes, 'edges': edges, 'parallelism': 1}
+        validate_workflow(graph, live=True)
+        return graph
 
     if isolated_ffuf:
         node('urls', 'catalog_source', 0, 100, sourceType='url', inputs=[], outputs=['url'], output='url',

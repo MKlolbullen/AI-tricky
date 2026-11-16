@@ -10,7 +10,7 @@
 #
 # Usage:
 #   scripts/install-tools.sh --web-recon     # pinned starter binaries
-#   scripts/install-tools.sh --enforced-cli # pinned ffuf and private relay
+#   scripts/install-tools.sh --enforced-cli # pinned ffuf, httprobe and private relay
 #   scripts/install-tools.sh --trickest-oss  # pinned mksub and mkpath
 #   scripts/install-tools.sh                 # install everything it can
 #   scripts/install-tools.sh --list          # print the tool/method table, exit
@@ -143,12 +143,23 @@ have_go() {
   [[ "$(go version 2>/dev/null)" == "go version go"* ]]
 }
 
+usable_go() {
+  if [[ -n "$INSTALL_PROFILE" ]]; then
+    [[ "$(go version 2>/dev/null)" == "go version go$GO_VERSION "* ]]
+  else
+    have_go
+  fi
+}
+
 ensure_go() {
-  if ! have_go && [[ -x "$OPT/go/bin/go" ]]; then
+  if ! usable_go && [[ -x "$OPT/go/bin/go" ]]; then
     export PATH="$OPT/go/bin:$PATH"
   fi
-  if have_go; then ok "$(go version)"; else
-    [[ "$SKIP_TOOLCHAINS" == 1 ]] && { warn "go not found (--skip-toolchains)"; return 1; }
+  if usable_go; then ok "$(go version)"; else
+    [[ "$SKIP_TOOLCHAINS" == 1 ]] && { warn "Required Go compiler unavailable (--skip-toolchains; pinned profiles use Go $GO_VERSION)"; return 1; }
+    for dependency in curl python3 tar; do
+      have "$dependency" || { fail "Install $dependency before bootstrapping Go."; return 1; }
+    done
     say "Installing Go $GO_VERSION to $OPT/go"
     local tgz="go${GO_VERSION}.${OS}-${GOARCH}.tar.gz" expected actual stage
     have python3 || { fail "Python 3 is required to verify the Go archive"; return 1; }
@@ -168,7 +179,7 @@ print(next(f["sha256"] for release in json.load(sys.stdin) for f in release["fil
       fi
     fi
     rm -rf "$stage"
-    have_go || { fail "Go install failed"; return 1; }
+    usable_go || { fail "Go install failed"; return 1; }
   fi
   if [[ -n "$INSTALL_PROFILE" ]]; then
     export GOBIN="$BIN"
@@ -476,7 +487,11 @@ if ! confirm "Install tools now?"; then echo "Aborted."; exit 0; fi
 mkdir -p "$BIN" "$OPT/logs" || exit 1
 LOG_DIR="$(mktemp -d "$OPT/logs/install.XXXXXXXX")" || exit 1
 say "Preparing toolchains"
-ensure_base
+if [[ -n "$INSTALL_PROFILE" ]]; then
+  export GOTOOLCHAIN=local
+else
+  ensure_base
+fi
 [[ "$NEED_GO"   == 1 ]] && { ensure_go   || warn "Go tools will be skipped"; }
 [[ "$NEED_RUST" == 1 ]] && { ensure_rust || warn "Rust tools will be skipped"; }
 [[ "$NEED_PIPX" == 1 ]] && { ensure_pipx || warn "pipx tools will be skipped"; }
@@ -492,11 +507,11 @@ install_locked_go() {
   local name="$1" spec="$2" stage status=0
   local build_env=()
   if [[ "$INSTALL_PROFILE" == enforced-cli ]]; then build_env+=(CGO_ENABLED=0); fi
-  if ! have_go || ! have python3; then
-    R_FAIL+=("$name"); fail "$name (requires the Go compiler and Python 3)"; return 1
-  fi
   if [[ -x "$BIN/$name" ]] && python3 "$HERE/check-recon-tools.py" --profile "$INSTALL_PROFILE" --tool "$name" --binary "$BIN/$name" >/dev/null; then
     R_SKIP+=("$name"); skip "$name (pinned version already installed)"; return 0
+  fi
+  if ! usable_go || ! have python3; then
+    R_FAIL+=("$name"); fail "$name (requires Go $GO_VERSION and Python 3)"; return 1
   fi
   stage="$(mktemp -d "$BIN/.build.XXXXXXXX")" || { R_FAIL+=("$name"); return 1; }
   install_logged "$name" env GOBIN="$stage" GOFLAGS=-mod=mod "${build_env[@]}" go install "$spec" &&
@@ -561,6 +576,18 @@ while IFS='|' read -r name cat method source; do
   install_one "$name" "$method" "$source" || true
 done <<< "$MANIFEST"
 
+if [[ "$INSTALL_PROFILE" == enforced-cli && "${#R_FAIL[@]}" == 0 ]]; then
+  relay_stage="$(mktemp -d "$BIN/.relay.XXXXXXXX")" || exit 1
+  if usable_go && install_logged ai-tricky-cli-relay env CGO_ENABLED=0 go build -trimpath -o "$relay_stage/ai-tricky-cli-relay" "$ROOT/integrations/cli-scope/relay.go" &&
+      mv -f "$relay_stage/ai-tricky-cli-relay" "$BIN/ai-tricky-cli-relay"; then
+    ok 'ai-tricky-cli-relay'
+  else
+    fail 'CLI scope relay build failed; see installer diagnostics.'
+    R_FAIL+=(ai-tricky-cli-relay)
+  fi
+  rm -rf "$relay_stage"
+fi
+
 # ---- summary -----------------------------------------------------------------
 echo
 say "Summary"
@@ -587,25 +614,9 @@ Then verify what AI-tricky can now see:
   * Templates catalog → readiness badges, or
   * Local workspace → Run setup → "Check workflow readiness".
 
-Install pinned support data and register it in the local workspace:
-  python3 scripts/setup-support-data.py
-  python3 scripts/setup-support-data.py --install nuclei-templates --install jaeles-signatures
-
-Or use Local workspace → Inputs → Templates, resolvers and wordlists.
+Install bundled templates, resolvers and wordlists in Local workspace → Inputs.
 Installing data does not bind it to a workflow or start an assessment.
 EOF
-
-if [[ "$INSTALL_PROFILE" == enforced-cli && "${#R_FAIL[@]}" == 0 && -x "$BIN/ffuf" ]]; then
-  relay_stage="$(mktemp -d "$BIN/.relay.XXXXXXXX")" || exit 1
-  if install_logged ai-tricky-cli-relay env CGO_ENABLED=0 go build -trimpath -o "$relay_stage/ai-tricky-cli-relay" "$ROOT/integrations/cli-scope/relay.go" &&
-      mv -f "$relay_stage/ai-tricky-cli-relay" "$BIN/ai-tricky-cli-relay"; then
-    ok 'ai-tricky-cli-relay'
-  else
-    fail 'CLI scope relay build failed; see installer diagnostics.'
-    R_FAIL+=(ai-tricky-cli-relay)
-  fi
-  rm -rf "$relay_stage"
-fi
 
 # The pinned profile requires every selected binary to install successfully.
 if [[ -n "$INSTALL_PROFILE" && ${#R_FAIL[@]} -gt 0 ]]; then exit 1; fi

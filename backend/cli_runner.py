@@ -18,6 +18,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from .catalog import TOOLS, registered_path, scoped_lines
 from . import cli_scope
+from .recon_tools import resolve_tool
 from .scope import ScopeError, authorize, parse_target
 from .trickest_pack import GENERATORS, candidate_output, prepare_generator
 
@@ -38,8 +39,8 @@ def digest(path):
     return h.hexdigest()
 
 
-def pin_binary(tool):
-    path=shutil.which(tool['command'][0])
+def pin_binary(tool, *, group=None):
+    path=resolve_tool(tool['command'][0], group=group)
     if not path:raise ScopeError(f"Missing executable: {tool['command'][0]}.")
     path=Path(path).resolve()
     if not path.is_file():raise ScopeError('Executable must be a regular file.')
@@ -301,8 +302,9 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store,*,fetch=None):
             if len(secret)>=4:value=value.replace(secret,'[REDACTED]')
         return value
     total_streams={k:[] for k in tool['outputs']};invocation_artifacts=[]
+    scoped_probe = cli_scope.enforced(config) and tool['id'] == 'httprobe'
     # Scalar adapters fan out instead of silently using only the first target.
-    scalar=any('{targets}' in p or '{domain}' in p for p in tool['command'])
+    scalar=scoped_probe or any('{targets}' in p or '{domain}' in p for p in tool['command'])
     streams=dict(streams)
     # Filter before scalar fan-out as well as immediately before dispatch: one
     # unapproved discovery must not prevent the remaining approved hosts running.
@@ -320,6 +322,10 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store,*,fetch=None):
         streams['targets'] = list(dict.fromkeys(streams['targets'] + streams.pop('url')))
     batch_type = next((typ for typ in ('targets', 'url', 'domain', 'file') if streams.get(typ)), None)
     base = streams[batch_type] if batch_type else [None]
+    if scoped_probe:
+        base = cli_scope.probe_urls(base, config) if batch_type else []
+        if not base:
+            raise ScopeError('Connect authorized targets to enforced httprobe.')
     batches = [[value] for value in base] if scalar else [base]
     if len(batches)>config['max_hosts']:raise ScopeError('Scalar CLI fan-out exceeds the run host cap.')
     for batch in batches:
@@ -341,7 +347,7 @@ async def execute_cli(rid,nid,data,streams,config,ctl,store,*,fetch=None):
                 for key in ('SSL_CERT_FILE','REQUESTS_CA_BUNDLE','CURL_CA_BUNDLE'):env[key]=str(bundle)
             if tool['id']=='hakrawler':argv=[pin['path']]+[a for a in argv[1:] if a not in ('-url',context.get('targets'))]
             stdin_lines=targets if tool['adapter']['stdin'] or tool['id']=='hakrawler' else []
-            stdin_data=('\n'.join(stdin_lines)+'\n').encode() if stdin_lines else b''
+            stdin_data = cli_scope.PROBE_STDIN if scoped_probe else ('\n'.join(stdin_lines)+'\n').encode() if stdin_lines else b''
             env['HOME']=str(work/'home');env['USERPROFILE']=env['HOME'];Path(env['HOME']).mkdir(exist_ok=True)
             if tool['id']=='gf':
                 patterns=json.loads((Path(__file__).parent/'gf-patterns.json').read_text())

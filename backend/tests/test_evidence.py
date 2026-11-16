@@ -2,6 +2,7 @@ import concurrent.futures
 import json
 
 import pytest
+import backend.observations as observations_module
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
@@ -43,7 +44,7 @@ def test_common_tool_output_contracts(tool, output, kind, asset):
     rows, report = parse_cli(tool, output)
     assert len(rows) == 1
     assert rows[0]['kind'] == kind and rows[0]['asset'] == asset
-    assert report['supported'] and report['parser_version'] == '2'
+    assert report['supported'] and report['parser_version'] == observations_module.PARSER_VERSION
 
 
 @pytest.mark.parametrize('tool', ['httpx', 'dnsx', 'naabu', 'nmap', 'katana', 'nuclei', 'unimplemented'])

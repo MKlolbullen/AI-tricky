@@ -66,7 +66,7 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
     issues=[];binaries={};snapshots={};coverage=[];tool_checks={}
     routes = incoming_routes(graph)
     isolation = None
-    sandbox_error = None
+    sandbox_checks = {}
     use_isolation = cli_scope.enforced(config)
     for n in graph['nodes']:
         if node_ids is not None and n['id'] not in node_ids:continue
@@ -99,7 +99,7 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
             except ScopeError as exc:reason.append(str(exc))
         if kind=='catalog_tool':
             tool=TOOLS[data['toolId']]
-            sandboxed = use_isolation and tool['id'] == 'ffuf'
+            sandboxed = use_isolation and tool['id'] in cli_scope.SCANNERS
             if data.get('require_cli_scope') and not use_isolation:
                 reason.append('This node requires Enforced CLI scope. Select it in Run setup.')
             if use_isolation:
@@ -117,7 +117,7 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
             for typ,identifier in data.get('inputRefs',{}).items():
                 try:
                     path = registered_path(store, identifier, 'folder' if typ in ('folder', 'templates') else 'file')
-                    if typ == 'wordlist' and sandboxed:
+                    if typ == 'wordlist' and sandboxed and tool['id'] == 'ffuf':
                         cli_scope.path_words(path)
                     if typ == 'wordlist' and tool['id'] in GENERATORS:
                         validate_wordlist(tool['id'], path)
@@ -136,26 +136,32 @@ def preflight(graph,config,store,*,check_binaries=True,credentials=frozenset(),n
             if check_binaries and tool['adapter']['mode']!='blocked':
                 tool_id = tool['id']
                 if tool_id in TOOL_GROUPS and tool_id not in tool_checks:
-                    tool_checks[tool_id] = tool_check(tool_id)
+                    tool_checks[tool_id] = tool_check(tool_id, group='enforced-cli' if sandboxed else None)
                 check = tool_checks.get(tool_id)
                 if check and check['status'] == 'wrong_binary':
                     reason.append(f'{tool_id} resolves to a different Go package. {check["remediation"]}')
+                elif check and check['status'] == 'incompatible_platform':
+                    reason.append(f'{tool_id} was built for {check["build_target"]}. {check["remediation"]}')
                 elif tool_id not in binaries:
                     try:
-                        binaries[tool_id] = pin_binary(tool)
+                        binaries[tool_id] = pin_binary(tool, group='enforced-cli' if sandboxed else None)
                     except (ScopeError, OSError) as exc:
                         reason.append(str(exc))
             if sandboxed and check_binaries and not reason:
-                if isolation is None and sandbox_error is None:
+                if tool_id not in sandbox_checks:
                     try:
-                        isolation = cli_scope.preflight_sandbox(binaries['ffuf'])
+                        pins = cli_scope.preflight_sandbox(binaries[tool_id], tool_id)
+                        if isolation is not None and pins != isolation:
+                            raise ScopeError('CLI helpers changed during preflight. Check readiness again.')
+                        isolation = pins
+                        sandbox_checks[tool_id] = None
                     except ScopeError as exc:
-                        sandbox_error = str(exc)
-                if sandbox_error:
-                    reason.append(sandbox_error)
+                        sandbox_checks[tool_id] = str(exc)
+                if sandbox_checks[tool_id]:
+                    reason.append(sandbox_checks[tool_id])
         if reason:issues.append({'node_id':n['id'],'reasons':list(dict.fromkeys(reason))})
-    return {'tool_checks': list(tool_checks.values()), 'capture_coverage':coverage,'ready':not issues,'issues':issues,'cli_binaries':binaries,'input_snapshots':snapshots,'catalog_tools':len({n['data']['toolId'] for n in graph['nodes'] if n['data']['kind']=='catalog_tool' and (node_ids is None or n['id'] in node_ids)}),'cli_scope': {'mode': 'enforced', 'sandbox_verified': isolation is not None} if use_isolation else None,
-            'cli_sandbox': isolation, 'accounting': 'Scoped ffuf requests use the native operation budget and HTTP history. CLI launches have a separate cap.' if use_isolation else 'Native operations count HTTP/TCP admissions. CLI operations count process launches; tool-internal network requests are not measured or limited by the native request cap.'}
+    return {'tool_checks': list(tool_checks.values()), 'capture_coverage':coverage,'ready':not issues,'issues':issues,'cli_binaries':binaries,'input_snapshots':snapshots,'catalog_tools':len({n['data']['toolId'] for n in graph['nodes'] if n['data']['kind']=='catalog_tool' and (node_ids is None or n['id'] in node_ids)}),'cli_scope': {'mode': 'enforced', 'sandbox_verified': isolation is not None and not any(sandbox_checks.values())} if use_isolation else None,
+            'cli_sandbox': isolation, 'accounting': 'Scoped scanner requests use the native operation budget and HTTP history. CLI launches have a separate cap.' if use_isolation else 'Native operations count HTTP/TCP admissions. CLI operations count process launches; tool-internal network requests are not measured or limited by the native request cap.'}
 
 
 async def execute_catalog_node(rid,nid,data,streams,config,ctl,store,fetch=None):

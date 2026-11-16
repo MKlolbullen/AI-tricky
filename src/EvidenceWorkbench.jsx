@@ -41,7 +41,7 @@ export function EvidenceViewer({artifact, close}) {
   </section>;
 }
 
-export function ObservationBrowser({runs}) {
+export function ObservationBrowser({runs, onExchange}) {
   const [runId, setRunId] = useState(''), [kind, setKind] = useState(''), [q, setQ] = useState('');
   const [offset, setOffset] = useState(0), [page, setPage] = useState({items: [], total: 0});
   const [selected, setSelected] = useState(null), [capture, setCapture] = useState(null);
@@ -71,7 +71,7 @@ export function ObservationBrowser({runs}) {
       <Pager page={page} offset={offset} setOffset={setOffset}/></div>
       <aside className="evidence-detail">{selected ? <><span className="tag">OBSERVATION</span><h3>{selected.asset}</h3>
         <dl><dt>Source</dt><dd>{selected.source}</dd><dt>Parser</dt><dd>{selected.parser_version}</dd><dt>Run</dt><dd>{selected.run_id}</dd><dt>Node</dt><dd>{selected.node_id || 'Assessment'}</dd><dt>Time basis</dt><dd>{selected.time_basis}</dd></dl>
-        <pre>{JSON.stringify(selected.data, null, 2)}</pre><button className="secondary" onClick={() => setCapture({id: selected.artifact_id})}>Inspect original capture</button></> : <p>Select an observation to inspect its normalized data and provenance.</p>}</aside>
+        <pre>{JSON.stringify(selected.data, null, 2)}</pre><button className="secondary" onClick={() => setCapture({id: selected.artifact_id})}>Inspect original capture</button>{selected.exchange_id && <button className="secondary" onClick={() => onExchange(selected)}>Open HTTP exchange</button>}</> : <p>Select an observation to inspect its normalized data and provenance.</p>}</aside>
     </div>{capture && <EvidenceViewer artifact={capture} close={() => setCapture(null)}/>}
   </section>;
 }

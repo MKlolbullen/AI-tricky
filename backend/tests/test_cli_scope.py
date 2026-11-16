@@ -151,6 +151,14 @@ def test_helper_change_while_launch_waits_blocks_admission(tmp_path, monkeypatch
         verify(pins)
 
     monkeypatch.setattr(cli_scope, 'verify_pins', recorded)
+    # The admission test only verifies executable changes. The real
+    # namespace test separately exercises Unix sockets and the kernel.
+    async def listener(*args, **kwargs):
+        async def closed():
+            pass
+        return SimpleNamespace(close=lambda: None, wait_closed=closed)
+
+    monkeypatch.setattr(asyncio, 'start_unix_server', listener)
 
     async def fetch(url, *, node_id):
         raise AssertionError('No target request is expected.')
@@ -294,6 +302,9 @@ def test_real_ffuf_journals_only_in_scope_requests_within_budget(tmp_path, monke
             matched = [json.loads(row) for row in record['stdout'].splitlines()]
             assert {row['url'] for row in matched} == {base + '/ok', base + '/redirect'}
             assert {row['http_exchange_id'] for row in matched} == {row['id'] for row in history}
+            endpoints = client.get('/api/observations', params={'run_id': rid, 'kind': 'endpoint'}).json()['items']
+            assert {row['exchange_id'] for row in endpoints} == {row['id'] for row in history}
+            assert all(row['source'] == 'ffuf' for row in endpoints)
     finally:
         server.shutdown()
         server.server_close()
@@ -325,3 +336,63 @@ def test_real_ffuf_absolute_proxy_request_and_jsonl(tmp_path, gateway):
     asyncio.run(run())
     assert calls == [('https://example.test/app/allowed', 'fuzz')]
     assert relay.denied == 1
+
+
+def test_probe_targets_expand_only_authorized_concrete_hosts_and_exact_urls():
+    scope = {'targets': ['*.example.test', 'https://fixture.test:8443/app']}
+    assert cli_scope.probe_urls(['child.example.test', 'https://fixture.test:8443/app/next?q=1'], scope) == [
+        'https://child.example.test/', 'http://child.example.test/', 'https://fixture.test:8443/app/next?q=1',
+    ]
+    for target in ('example.test', '*.example.test', 'https://fixture.test:8443/outside'):
+        with pytest.raises(ScopeError):
+            cli_scope.probe_urls([target], scope)
+
+
+@pytest.mark.skipif(not BIN_DIR, reason='Requires pinned Linux isolation binaries')
+def test_real_httprobe_uses_scoped_get_and_journal(tmp_path, monkeypatch):
+    monkeypatch.setenv('PATH', os.pathsep.join((BIN_DIR, os.environ['PATH'])))
+    requests = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            requests.append(self.path)
+            self.send_response(302)
+            self.send_header('Location', '/outside')
+            self.end_headers()
+
+        def log_message(self, *_):
+            pass
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with TestClient(create_app(tmp_path / 'state')) as client:
+            url = f'http://127.0.0.1:{server.server_port}/app/probe'
+            target = client.post('/api/targets', json={'value': url}).json()
+            graph = client.get('/api/workflow-starters/enforced-httprobe').json()
+            options = {'engine': 'workflow', 'workflow': graph, 'target_ids': [target['id']],
+                       'cli_scope': 'enforced', 'allow_cli': True, 'allow_http': True, 'max_requests': 1}
+            check = client.post('/api/runs/preflight', json=options).json()
+            assert check['ready'] and check['cli_scope']['sandbox_verified'], check
+            assert not requests
+            response = client.post('/api/runs', json=options)
+            assert response.status_code == 201, response.text
+            rid = response.json()['id']
+            from backend.tests.test_local import wait_done
+            run = wait_done(client, rid)
+            assert run['status'] == 'completed', run
+            assert run['result']['request_count'] == run['result']['cli_invocation_count'] == 1
+            assert requests == ['/app/probe']
+            exchange, = client.get('/api/http-history', params={'run_id': rid}).json()['items']
+            endpoint, = client.get('/api/observations', params={'run_id': rid, 'kind': 'endpoint'}).json()['items']
+            assert (endpoint['source'], endpoint['asset'], endpoint['exchange_id']) == ('httprobe', url, exchange['id'])
+            assert endpoint['data'] == {'status': 302}
+            nodes = client.get(f'/api/runs/{rid}/nodes').json()
+            probe = next(n for n in nodes if n['node_id'] == 'probe')
+            output = client.get('/api/artifacts/' + probe['result']['artifact_id']).json()
+            assert output[0]['catalog_streams']['url'] == [url]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()

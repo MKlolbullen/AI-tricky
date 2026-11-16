@@ -449,6 +449,16 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         from .web_recon import recon_workflow
         return support_data.bind(recon_workflow(isolated_ffuf=True), bundled_only=True)['graph']
 
+    @app.get('/api/workflow-starters/enforced-httprobe')
+    def enforced_httprobe_starter():
+        from .web_recon import recon_workflow
+        return recon_workflow(isolated_probe=True)
+
+    @app.get('/api/scanner-profiles')
+    def scanner_profiles():
+        from .scanner_profiles import status
+        return status(support_data)
+
     @app.get('/api/workflow-starters/trickest/{identifier}')
     def trickest_starter(identifier: str):
         from .trickest_pack import workflow

@@ -205,3 +205,12 @@ Run both owner controls first. An invalid control leaves only its column
 unmeasured. Require a positive read by the same identity on the same peer
 before interpreting a 403/404 as a denial. Preserve redacted journal evidence
 and the operator's explicit finding review.
+
+## Scanner profile reliability
+
+Check scanner versions and usable bundled inputs locally. Prefer explicit
+PATH entries and recognize tools in the default pinned profile directories.
+Provide a checksum for the Ubuntu 24.04 x86-64 beta package. Scoped httprobe
+uses the same isolated relay as ffuf and sends only approved exact GETs.
+Normalize scoped matches only when a same-run, same-node journal exchange
+matches the endpoint. Keep exchange IDs out of observation comparison hashes.

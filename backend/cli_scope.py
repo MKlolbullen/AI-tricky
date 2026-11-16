@@ -1,4 +1,4 @@
-"""Linux network isolation and a path-only scoped HTTP relay for pinned ffuf."""
+"""Linux network isolation and an exact-route HTTP relay for pinned scanners."""
 
 import asyncio
 import base64
@@ -15,10 +15,12 @@ import sys
 import tempfile
 from urllib.parse import urlsplit, urlunsplit
 
-from .recon_tools import tool_check
+from .recon_tools import resolve_tool, tool_check
 from .scope import ScopeError, authorize, parse_target
 
 MODE = 'enforced'
+SCANNERS = {'ffuf': '-V', 'httprobe': '-h'}
+PROBE_STDIN = b'127.0.0.1\n'
 PROXY = 'http://127.0.0.1:28080'
 RELAY_TARGET = 'http://127.0.0.1:28080/FUZZ'
 EXIT_HEADERS = {'content-length', 'transfer-encoding', 'connection', 'keep-alive', 'proxy-connection', 'upgrade', 'trailer', 'te'}
@@ -34,16 +36,24 @@ def enforced(config):
 
 
 def validate_node(data, config):
-    if data.get('toolId') != 'ffuf':
-        raise ScopeError('Enforced CLI scope currently supports only ffuf path discovery.')
+    tool_id = data.get('toolId')
+    if tool_id not in SCANNERS:
+        raise ScopeError('Enforced CLI scope supports only ffuf and httprobe.')
     if (config.get('http_routing') or {}).get('mode') == 'proxy':
         raise ScopeError('Enforced CLI scope uses AI-tricky’s direct scoped transport. Select Direct HTTP routing.')
-    if data.get('inputRefs', {}).keys() - {'wordlist'}:
-        raise ScopeError('Enforced ffuf accepts only a registered or connected path wordlist.')
     if not config.get('targets'):
         raise ScopeError('Select entered targets for the scoped CLI gateway.')
-    if any(name not in FILTER_FLAGS for name, value in data.get('params', {}).items() if value is not False and value != ''):
-        raise ScopeError('Enforced ffuf supports match codes, filter codes and filter size. Remove other argument overrides.')
+    if tool_id == 'ffuf':
+        if data.get('inputRefs', {}).keys() - {'wordlist'}:
+            raise ScopeError('Enforced ffuf accepts only a registered or connected path wordlist.')
+        flags = FILTER_FLAGS
+    else:
+        if data.get('inputRefs'):
+            raise ScopeError('Enforced httprobe uses typed target inputs.')
+        flags = set()
+    if any(name not in flags for name, value in data.get('params', {}).items() if value is not False and value != ''):
+        raise ScopeError('Enforced ffuf accepts only match/filter overrides.' if tool_id == 'ffuf' else
+                         'Enforced httprobe uses fixed GET settings. Remove argument overrides.')
 
 
 def executable_pin(path):
@@ -70,25 +80,32 @@ def sandbox_prefix(pins):
             '--ro-bind', pins['relay']['path'], '/relay']
 
 
-def probe_sandbox(pins, scanner):
+def probe_sandbox(pins, scanner, check_flag):
     try:
         result = subprocess.run([*sandbox_prefix(pins), '--ro-bind', scanner, '/scanner',
-                                 '--', '/relay', '/scanner', '-V'],
+                                 '--', '/relay', '/scanner', check_flag],
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
                                 env={}, timeout=5, check=False)
     except (OSError, subprocess.TimeoutExpired):
         raise ScopeError('The Linux CLI sandbox could not start. Check bubblewrap and user namespace support.') from None
     if result.returncode:
-        raise ScopeError('The isolated scanner could not start. Check Bubblewrap user/network namespace permissions and install the static ffuf profile.')
+        raise ScopeError('The isolated scanner could not start. Check Bubblewrap user/network namespace permissions and the pinned static scanner.')
 
 
-def preflight_sandbox(ffuf_pin):
+def preflight_sandbox(scanner_pin, tool_id='ffuf'):
     if sys.platform != 'linux':
         raise ScopeError('Enforced CLI scope requires Linux and bubblewrap.')
-    if tool_check('ffuf', ffuf_pin['path'])['status'] != 'tested_version':
-        raise ScopeError('Enforced CLI scope requires pinned ffuf v2.1.0. Run scripts/install-tools.sh --enforced-cli.')
-    pins = {'bwrap': executable_pin(shutil.which('bwrap')), 'relay': executable_pin(shutil.which('ai-tricky-cli-relay'))}
-    probe_sandbox(pins, ffuf_pin['path'])
+    check = tool_check(tool_id, scanner_pin['path'], group='enforced-cli')
+    if check['status'] != 'tested_version':
+        raise ScopeError(f'Enforced CLI scope requires static {tool_id} {check["tested_version"]}. {check["remediation"]}')
+    bwrap = shutil.which('bwrap')
+    relay = resolve_tool('ai-tricky-cli-relay', group='enforced-cli')
+    if not bwrap:
+        raise ScopeError('Bubblewrap is missing. Install your distribution’s bubblewrap package.')
+    if not relay:
+        raise ScopeError('The CLI relay is missing. Run scripts/install-tools.sh --enforced-cli.')
+    pins = {'bwrap': executable_pin(bwrap), 'relay': executable_pin(relay)}
+    probe_sandbox(pins, scanner_pin['path'], SCANNERS[tool_id])
     return pins
 
 
@@ -130,10 +147,27 @@ def target_urls(seed, wordlist, config):
     return result
 
 
+def probe_urls(values, config):
+    scope = [parse_target(value) for value in config['targets']]
+    urls = {}
+    for value in values:
+        if '://' in value:
+            urls[authorize(value, scope).url] = None
+            continue
+        host = parse_target(value)
+        if host.kind not in ('ip', 'domain'):
+            raise ScopeError('Enforced httprobe accepts concrete hosts or explicit HTTP(S) URLs.')
+        authority = f'[{host.host}]' if ':' in host.host else host.host
+        for scheme in ('https', 'http'):
+            urls[authorize(f'{scheme}://{authority}/', scope).url] = None
+    return list(urls)
+
+
 class ScopedGateway:
-    def __init__(self, rid, nid, config, ctl, store, fetch, allowed_urls):
+    def __init__(self, rid, nid, config, ctl, store, fetch, allowed_urls, *, tool_id='ffuf'):
         self.rid, self.nid, self.config, self.ctl = rid, nid, config, ctl
         self.store, self.fetch, self.allowed_urls = store, fetch, allowed_urls
+        self.tool_id = tool_id
         self.tasks = set()
         self.denied = 0
         self.requests = 0
@@ -144,7 +178,7 @@ class ScopedGateway:
     def denied_request(self, reason):
         self.denied += 1
         if self.denied <= MAX_DENIAL_EVENTS:
-            self.store.event(self.rid, 'cli.scope_denied', {'node_id': self.nid, 'tool_id': 'ffuf', 'reason': reason})
+            self.store.event(self.rid, 'cli.scope_denied', {'node_id': self.nid, 'tool_id': self.tool_id, 'reason': reason})
 
     def accept(self, reader, writer):
         if len(self.tasks) >= 16:
@@ -191,12 +225,11 @@ class ScopedGateway:
             return 403, [], b''
         url = self.allowed_urls.get(path)
         if url is None:
-            self.denied_request('Route was not in the bound wordlist.')
+            self.denied_request('Route was outside the approved invocation.')
             return 403, [], b''
         if self.ctl.cancelled:
             return 503, [], b''
-        # One destination request per bound route keeps traffic at most one
-        # GET per wordlist entry and each ffuf row tied to one exchange.
+        # Each bound route may dispatch once per invocation.
         if path in self.admitted:
             self.denied_request('Route was already requested in this invocation.')
             return 403, [], b''
@@ -214,7 +247,12 @@ class ScopedGateway:
         return capture['status'], capture['headers'], base64.b64decode(capture['body_base64'])
 
     def remap_stdout(self, text):
-        # ffuf emits JSONL. Keep only rows tied to a journaled gateway response.
+        # httprobe prints the private listener when it receives an HTTP response.
+        # A local 503 can look reachable to httprobe, so require a saved response.
+        if self.tool_id == 'httprobe':
+            if '/' in self.exchanges and PROXY in text.splitlines():
+                return json.dumps({'url': self.allowed_urls['/'], 'http_exchange_id': self.exchanges['/']})
+            return ''
         kept = []
         for line in text.splitlines():
             try:
@@ -238,14 +276,26 @@ async def sandbox(rid, nid, data, config, ctl, store, fetch, work, argv, targets
         yield argv, None
         return
     validate_node(data, config)
+    tool_id = data['toolId']
     if fetch is None or len(targets) != 1:
-        raise ScopeError('Enforced ffuf requires one scoped URL and the application HTTP gateway.')
+        raise ScopeError('Enforced scanners require one scoped URL per invocation.')
     pins = config.get('cli_sandbox')
     verify_pins(pins)
-    allowed = target_urls(targets[0], context['wordlist_file'], config)
-    bounded = work / 'scoped-paths.txt'
-    bounded.write_text(''.join(path[1:] + '\n' for path in allowed), encoding='ascii')
-    gateway = ScopedGateway(rid, nid, config, ctl, store, fetch, allowed)
+    mounts = []
+    if tool_id == 'ffuf':
+        allowed = target_urls(targets[0], context['wordlist_file'], config)
+        bounded = work / 'scoped-paths.txt'
+        bounded.write_text(''.join(path[1:] + '\n' for path in allowed), encoding='ascii')
+        mounts = ['--ro-bind', str(bounded), '/words']
+        args = ['-w', '/words', '-u', RELAY_TARGET, '-x', PROXY,
+                '-noninteractive', '-s', '-json', '-t', '4', '-timeout', '12']
+        for name in sorted(FILTER_FLAGS):
+            if value := data.get('params', {}).get(name):
+                args.extend([name, value])
+    else:
+        allowed = {'/': authorize(targets[0], [parse_target(value) for value in config['targets']]).url}
+        args = ['-s', '-p', 'http:' + str(urlsplit(PROXY).port), '-c', '2', '-t', '12000']
+    gateway = ScopedGateway(rid, nid, config, ctl, store, fetch, allowed, tool_id=tool_id)
     with tempfile.TemporaryDirectory(prefix='aits-') as directory:
         socket_path = str(Path(directory) / 'relay.sock')
         try:
@@ -255,13 +305,8 @@ async def sandbox(rid, nid, data, config, ctl, store, fetch, work, argv, targets
         try:
             # Mount only the static scanner, relay, immutable wordlist and the
             # gateway socket. No host filesystem, host network or host /proc.
-            command = [*sandbox_prefix(pins), '--ro-bind', argv[0], '/scanner',
-                       '--ro-bind', str(bounded), '/words', '--ro-bind', socket_path, '/gateway',
-                       '--', '/relay', '/scanner', '-w', '/words', '-u', RELAY_TARGET,
-                       '-x', PROXY, '-noninteractive', '-s', '-json', '-t', '4', '-timeout', '12']
-            for name in sorted(FILTER_FLAGS):
-                if value := data.get('params', {}).get(name):
-                    command.extend([name, value])
+            command = [*sandbox_prefix(pins), '--ro-bind', argv[0], '/scanner', *mounts,
+                       '--ro-bind', socket_path, '/gateway', '--', '/relay', '/scanner', *args]
             yield command, gateway
         finally:
             server.close()

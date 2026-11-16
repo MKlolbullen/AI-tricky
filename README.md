@@ -47,7 +47,7 @@ Design a typed workflow. Execute bounded checks. Preserve the request/response t
 | 🧪 **HTTP evidence journal** | Retain native requests/responses, errors, cancellations, binary captures and HAR exports. |
 | 🔍 **Authenticated object access** | Compare two test identities under one reviewed GET profile, with an ownership control and redacted evidence. [Setup](docs/CONTROLLED-VERIFICATION.md#authenticated-object-access) |
 | **Multi-identity access matrix** | Compare expected access for three test identities across two saved GET resources, with approval and redacted per-cell evidence. [Usage](docs/CONTROLLED-VERIFICATION.md#multi-identity-access-matrix) |
-| **Enforced CLI scope** | Run ffuf path discovery in Linux network isolation with the native request budget and HTTP history. [Setup](docs/CLI-SCOPE.md) |
+| **Enforced CLI scope** | Run ffuf and httprobe in Linux network isolation with the native request budget and HTTP history. [Setup](docs/CLI-SCOPE.md) |
 | **API Surface** | Search endpoints inferred from saved JS, TypeScript and source maps, with source locations and matching HTTP history. [Usage](docs/API-SURFACE.md) |
 | 🟠 **Burp-compatible routing** | Route supported HTTP traffic through a local proxy, import selected Burp exchanges and open saved requests in Repeater. [Bridge setup](docs/BURP-BRIDGE.md) |
 | 🕸️ **Asset graph** | Explore typed hosts, services, technologies, files and other entities with provenance and run-to-run diffs. |
@@ -133,6 +133,12 @@ A platform-specific binary can be built with:
 ```
 
 The standalone binary bundles the native application, **not** external scanners or the optional CAI SDK. Building requires development dependencies; running the finished binary does not require Python or Node.
+
+### Linux scanner beta
+
+Download the standalone app and pinned scanner installer from the
+**linux-scanner-beta** CI artifact. Use **Local workspace → Scanner profiles**
+to inspect tool versions, capture coverage and input readiness. [Linux beta setup](docs/SCANNER-PROFILES.md)
 
 ### Your first assessment
 

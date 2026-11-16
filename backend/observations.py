@@ -5,7 +5,7 @@ import json
 import re
 from urllib.parse import urlsplit, urlunsplit
 
-PARSER_VERSION = '2'
+PARSER_VERSION = '3'
 SEVERITIES = {'info', 'low', 'medium', 'high', 'critical'}
 CLI_PARSERS = {'httpx', 'dnsx', 'naabu', 'nmap', 'katana', 'nuclei', 'nuclei-takeover'}
 
@@ -160,7 +160,32 @@ def parse_cli(tool, stdout):
                      'parser_version': PARSER_VERSION, 'tool': tool}
 
 
-def parse_artifact(name, content):
+def scoped_endpoints(content, lookup):
+    records, skipped = [], 0
+    scope = content.get('cli_scope')
+    exchange_ids = scope.get('exchange_ids') if isinstance(scope, dict) and scope.get('mode') == 'enforced' else []
+    bound = {item for item in exchange_ids if isinstance(item, str)} if isinstance(exchange_ids, list) else set()
+    for line in str(content.get('stdout', '')).splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            row = None
+        asset = canonical_asset(row.get('url')) if isinstance(row, dict) else None
+        exchange_id = row.get('http_exchange_id') if asset and asset.startswith(('http://', 'https://')) else None
+        status = lookup(asset, exchange_id) if lookup and isinstance(exchange_id, str) and exchange_id in bound else None
+        if type(status) is int and 100 <= status <= 599:
+            records.append({**observation('endpoint', asset, content['tool_id'], {'status': status}),
+                            'exchange_id': exchange_id})
+        else:
+            skipped += 1
+    return records, {'supported': True, 'parsed_records': len(records), 'unparsed_lines': skipped,
+                     'tool': content['tool_id'], 'parser_version': PARSER_VERSION,
+                     'partial': bool(skipped or not bound or scope.get('denied'))}
+
+
+def parse_artifact(name, content, *, scoped_lookup=None):
     """Only known capture formats are indexed; raw evidence always remains available."""
     if name.startswith('http-') and isinstance(content, dict):
         record = http_observation(content, 'native-http')
@@ -171,7 +196,10 @@ def parse_artifact(name, content):
         return [r for r in records if r], {'supported': True, 'parser_version': PARSER_VERSION,
                                          'partial': any(isinstance(r, dict) and r.get('state') in ('blocked', 'budget_exhausted', 'error') for r in content)}
     if name.startswith('cli-') and isinstance(content, dict) and isinstance(content.get('tool_id'), str):
-        records, report = parse_cli(content['tool_id'], content.get('stdout', ''))
-        report['partial'] = content.get('exit_code') != 0 or bool(content.get('error'))
+        if content.get('http_capture') == 'scoped_gateway' and content['tool_id'] in ('ffuf', 'httprobe'):
+            records, report = scoped_endpoints(content, scoped_lookup)
+        else:
+            records, report = parse_cli(content['tool_id'], content.get('stdout', ''))
+        report['partial'] = bool(report.get('partial') or content.get('exit_code') != 0 or content.get('error'))
         return records, report
     return [], {'supported': False, 'parser_version': PARSER_VERSION}

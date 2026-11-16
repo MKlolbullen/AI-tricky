@@ -6,8 +6,8 @@ function bytes(value){return Uint8Array.from(atob(value||''),c=>c.charCodeAt(0))
 function preview(message){if(!message)return 'No response was captured.';return new TextDecoder().decode(bytes(message.raw_headers_base64))+'\n'+new TextDecoder().decode(bytes(message.body_base64)).slice(0,16000)}
 function downloadBody(message,name){const url=URL.createObjectURL(new Blob([bytes(message.body_base64)],{type:'application/octet-stream'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 
-export default function HTTPHistory({runs=[],initialRunId=''}){
- const [runId,setRunId]=useState(initialRunId),[q,setQ]=useState(''),[offset,setOffset]=useState(0),[page,setPage]=useState(null),[selected,setSelected]=useState(''),[detail,setDetail]=useState(null),[view,setView]=useState('Request'),[error,setError]=useState(''),[message,setMessage]=useState('');
+export default function HTTPHistory({runs=[],initialRunId='',initialExchangeId=''}){
+ const [runId,setRunId]=useState(initialRunId),[q,setQ]=useState(''),[offset,setOffset]=useState(0),[page,setPage]=useState(null),[selected,setSelected]=useState(initialExchangeId),[detail,setDetail]=useState(null),[view,setView]=useState('Request'),[error,setError]=useState(''),[message,setMessage]=useState('');
  const [revision,setRevision]=useState(0);
  const query=`?limit=25&offset=${offset}${runId?'&run_id='+encodeURIComponent(runId):''}${q?'&q='+encodeURIComponent(q):''}`;
  const refresh=()=>setRevision(value=>value+1);

@@ -7,12 +7,12 @@ export default function WebReconStarter({disabled, onLoad}) {
   const [review, setReview] = useState(false);
   const [surface, setSurface] = useState(false);
 
-  const load = async (options = {}, isolated = false) => {
+  const load = async (options = {}, isolated = null) => {
     setBusy(true);
     setError('');
     const query = new URLSearchParams({...options, review, surface});
     try {
-      const path = isolated ? '/workflow-starters/enforced-ffuf' : '/workflow-starters/web-recon?' + query;
+      const path = isolated ? '/workflow-starters/enforced-' + isolated : '/workflow-starters/web-recon?' + query;
       onLoad(await api(path), isolated ? 'enforced' : 'standard');
     } catch (error) {
       setError(error.message);
@@ -35,7 +35,8 @@ export default function WebReconStarter({disabled, onLoad}) {
     <button className="secondary" disabled={disabled || busy} onClick={() => load()}>Load web recon workflow</button>{' '}
     <button className="secondary" disabled={disabled || busy} onClick={() => load({fuzz: true})}>Load web recon with path fuzzing</button>{' '}
     <button className="secondary" disabled={disabled || busy} onClick={() => load({scan: true})}>Load web recon with Nuclei</button>{' '}
-    <button className="secondary" disabled={disabled || busy} onClick={() => load({}, true)}>Load scoped ffuf</button>
+    <button className="secondary" disabled={disabled || busy} onClick={() => load({}, 'ffuf')}>Load scoped ffuf</button>{' '}
+    <button className="secondary" disabled={disabled || busy} onClick={() => load({}, 'httprobe')}>Load scoped httprobe</button>
     <small>Scoped ffuf uses selected HTTP(S) URLs and requires a path wordlist. Nuclei uses the bundled starter templates.</small>
     {error && <p role="alert">{error}</p>}
   </section>;

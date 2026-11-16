@@ -155,7 +155,7 @@ class WorkflowRecoveries:
         if config.get('engine') != 'workflow' or not config.get('allow_http'):
             raise ExecutionError('Recovery requires a recorded execution of a workflow, not a plan.')
         if config.get('verification'):
-            raise ExecutionError('Paired verification requires a fresh proposal execution review; it cannot recover one side of a pair.')
+            raise ExecutionError('Controlled verification requires a fresh proposal execution review for the complete request set.')
         validate_workflow(config['workflow'], live=True)
         return source
 

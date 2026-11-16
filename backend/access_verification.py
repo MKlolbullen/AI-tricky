@@ -3,12 +3,15 @@
 from dataclasses import dataclass, field
 import hmac
 import ipaddress
+from itertools import combinations
 import json
 import re
 import threading
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from typing import Annotated
+
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from .scope import ScopeError, authorize, parse_url
 
@@ -55,28 +58,42 @@ class IdentityInput(BaseModel):
         return value
 
 
+def valid_pointer(value):
+    if not value.startswith('/') or re.search(r'~(?![01])', value) or not value.isprintable():
+        raise ValueError('Use a JSON Pointer such as /id or /data/id.')
+    return value
+
+
+def valid_object(value):
+    if not value.isprintable() or not value.strip():
+        raise ValueError('Enter the expected resource ID.')
+    return value
+
+
+JsonPointer = Annotated[str, Field(min_length=1, max_length=256), AfterValidator(valid_pointer)]
+ObjectIdentifier = Annotated[str, Field(min_length=1, max_length=128), AfterValidator(valid_object)]
+IdentityIdentifier = Annotated[str, Field(pattern=r'^[0-9a-f-]{36}$')]
+
+
 class ObjectAccessInput(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
-    owner_identity_id: str = Field(pattern=r'^[0-9a-f-]{36}$')
-    other_identity_id: str = Field(pattern=r'^[0-9a-f-]{36}$')
+    owner_identity_id: IdentityIdentifier
+    other_identity_id: IdentityIdentifier
     control_url: str = Field(min_length=1, max_length=2048)
-    json_pointer: str = Field(default='/id', min_length=1, max_length=256)
-    owner_object: str = Field(min_length=1, max_length=128)
-    control_object: str = Field(min_length=1, max_length=128)
+    json_pointer: JsonPointer = '/id'
+    owner_object: ObjectIdentifier
+    control_object: ObjectIdentifier
 
-    @field_validator('json_pointer')
-    @classmethod
-    def valid_pointer(cls, value):
-        if not value.startswith('/') or re.search(r'~(?![01])', value) or not value.isprintable():
-            raise ValueError('Use a JSON Pointer such as /id or /data/id.')
-        return value
 
-    @field_validator('owner_object', 'control_object')
-    @classmethod
-    def valid_object(cls, value):
-        if not value.isprintable() or not value.strip():
-            raise ValueError('Enter the expected resource ID.')
-        return value
+def usable_access_capture(capture):
+    fingerprint = capture.get('body_fingerprint')
+    return (capture.get('artifact_id') and not capture.get('error') and not capture.get('truncated')
+            and capture.get('connected_ip') and isinstance(fingerprint, str)
+            and re.fullmatch(r'[a-f0-9]{64}', fingerprint))
+
+
+def successful_control(capture):
+    return bool(usable_access_capture(capture) and capture['status'] == 200 and capture['resource_marker_matched'])
 
 
 @dataclass(frozen=True)
@@ -130,16 +147,19 @@ class TestIdentities:
             raise ScopeError('Choose a separate control object on the same authorized origin.')
         if options['owner_object'] == options['control_object']:
             raise ScopeError('Choose distinct expected IDs for the owner and control objects.')
+        identities = self.bind(resource, [owner_id, other_id])
+        return {'options': {**options, 'control_url': control.url}, 'identities': identities}
+
+    def bind(self, resource, identifiers):
         with self._lock:
-            owner, other = self._items.get(owner_id), self._items.get(other_id)
-        if not owner or not other:
-            raise ScopeError('Register both test identities before preparing the review.')
-        if hmac.compare_digest(owner.token, other.token):
-            raise ScopeError('Use distinct bearer tokens for the two test identities.')
-        if owner.origin != origin(resource) or other.origin != origin(resource):
-            raise ScopeError('Both test identities must be bound to the resource origin.')
-        return {'options': {**options, 'control_url': control.url},
-                'identities': [owner.public(), other.public()]}
+            identities = [self._items.get(identifier) for identifier in identifiers]
+        if any(identity is None for identity in identities):
+            raise ScopeError('Register every selected test identity before preparing the review.')
+        if any(hmac.compare_digest(a.token, b.token) for a, b in combinations(identities, 2)):
+            raise ScopeError('Use a distinct bearer token for every test identity.')
+        if any(identity.origin != origin(resource) for identity in identities):
+            raise ScopeError('All test identities must be bound to the resource origin.')
+        return [identity.public() for identity in identities]
 
     def snapshot(self, access):
         with self._lock:

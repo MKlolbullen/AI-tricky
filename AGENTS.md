@@ -195,3 +195,13 @@ Use loopback fixtures to verify direct network denial and real ffuf capture.
 Recheck helper hashes at admission after pauses, dispatch each bound path at
 most once per invocation, and bind the source run's enforcement mode into
 proposal reviews. Never downgrade an enforced source run to standard mode.
+
+## Multi-identity access matrix
+
+The first matrix compares three session-only bearer identities against two
+bound, same-origin GET resources. Start from a saved native HTTP observation
+or an evidence-bound proposal. Review the exact requests before dispatch.
+Run both owner controls first. An invalid control leaves only its column
+unmeasured. Require a positive read by the same identity on the same peer
+before interpreting a 403/404 as a denial. Preserve redacted journal evidence
+and the operator's explicit finding review.

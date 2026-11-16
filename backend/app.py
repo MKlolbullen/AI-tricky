@@ -853,6 +853,22 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             raise HTTPException(404, 'This run has no saved Web source collector output.')
         return analyze_surface(store, rid, manifests, run['config']['targets'], http_journal.endpoint_exchanges)
 
+    @app.post('/api/runs/{rid}/api-surface/{endpoint_id}/exchanges/{exchange_id}/verification-plan', status_code=201)
+    def api_surface_verification_plan(rid: str, endpoint_id: str, exchange_id: str):
+        surface = saved_api_surface(rid)
+        endpoint = next((row for row in surface['endpoints'] if row['id'] == endpoint_id), None)
+        if not endpoint or endpoint['method'] != 'GET' or not any(
+                row['exchange_id'] == exchange_id and row['source'] == 'native' for row in endpoint['traffic']):
+            raise HTTPException(422, 'Select a native GET capture linked to this endpoint and source run.')
+        try:
+            exchange = http_journal.get(exchange_id)
+        except KeyError:
+            raise HTTPException(404, 'The linked HTTP exchange is unavailable.') from None
+        if (exchange['run_id'] != rid or exchange['state'] != 'completed' or exchange['cancel_requested']
+                or not exchange['artifact_id'] or exchange['source'] != 'native'):
+            raise HTTPException(422, 'This exchange is unavailable for access verification.')
+        return proposal_planner.plan_for_http_capture(rid, exchange['artifact_id'], exchange['url'])
+
     @app.get('/api/runs/{rid}/model-usage')
     def run_model_usage(rid: str, limit: int = 50, offset: int = 0):
         get_run(rid)
@@ -949,12 +965,11 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             if verification_step is not None:
                 request = verification.request_spec(config, node_id, verification_step, url)
                 if 'identity_id' in request:
-                    options = config['verification']['access']['options']
                     identity = ctl.verification_identities.get(request['identity_id'])
                     if identity is None or ctl.verification_fingerprint_key is None:
                         return {'error': 'The approved test identity is unavailable.'}
-                    expected = options['control_object'] if request['role'] == 'control' else options['owner_object']
-                    authentication = AuthenticatedRequest(identity, options['json_pointer'], expected,
+                    pointer, expected = verification.request_marker(config['verification'], request)
+                    authentication = AuthenticatedRequest(identity, pointer, expected,
                                                           ctl.verification_fingerprint_key)
             while True:
                 await ctl.gate.wait()

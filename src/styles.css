@@ -113,6 +113,17 @@
 .verification-card details { margin: 12px 0; }
 .verification-card pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow: auto; font-size: 11px; }
 
+.verification-matrix-objects { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 16px; }
+.verification-matrix-objects code { display: block; overflow-wrap: anywhere; margin: 8px 0; }
+.verification-matrix { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 12px 0; }
+.verification-matrix th, .verification-matrix td { padding: 9px 6px; text-align: left; vertical-align: top; border-bottom: 1px solid #263746; overflow-wrap: anywhere; }
+.verification-matrix select { min-width: 0; width: 100%; }
+.verification-matrix small { display: block; margin: 3px 0; }
+.verification-matrix .matrix-cell .secondary { margin-top: 6px; }
+.verification-matrix .matrix-cell.matched strong { color: #78dfc4; }
+.verification-matrix .matrix-cell.unexpected strong { color: #ffab9c; }
+.verification-matrix .matrix-cell.inconclusive strong { color: #e5c783; }
+
 /* Credentials settings */
 .credentials-saved{display:flex;align-items:center;gap:8px;color:#1bc9ba;font-size:12px;margin:0 0 14px}
 .credentials-saved svg{color:#1bc9ba;flex-shrink:0}

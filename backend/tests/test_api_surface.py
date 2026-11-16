@@ -78,5 +78,15 @@ def test_api_surface_node_and_saved_run_use_the_same_offline_analysis(tmp_path, 
         assert artifact['counts']['documents'] > 0
         assert artifact['endpoints'][0]['url'] == base + '/app/next'
         assert artifact['endpoints'][0]['status'] == 'observed'
+        endpoint = artifact['endpoints'][0]
+        exchange = endpoint['traffic'][0]['exchange_id']
+        route = f'/api/runs/{rid}/api-surface/{endpoint["id"]}/exchanges/'
+        assert client.post(route + 'foreign/verification-plan', json={}).status_code == 422
+        prepared = client.post(route + exchange + '/verification-plan', json={})
+        assert prepared.status_code == 201, prepared.text
+        plan = prepared.json()
+        assert plan['run_id'] == rid and not plan['model_called']
+        assert plan['proposals'][0]['action']['target'] == endpoint['url']
+        assert handler.calls == before
         starter = client.get('/api/workflow-starters/web-recon?surface=true').json()
         assert any(node['data']['kind'] == 'native_api_surface' for node in starter['nodes'])

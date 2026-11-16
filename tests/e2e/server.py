@@ -12,13 +12,14 @@ from fastapi.routing import APIRoute
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from backend.app import create_app
+from backend.http_journal import HTTPJournal, message, request_message
 from backend.store import Store, now
 from backend.proposals import ProposalPlanner
 from backend.team import run_team
 from backend.model_usage import ModelUsage, TOKEN_FIELDS
 
 
-def seed(store, fixture_url):
+def seed(store, fixture_url, journal):
     target = store.add_target(fixture_url + '/')
     surface_run = store.new_run({'engine': 'workflow', 'targets': [fixture_url + '/'], 'workflow': {'nodes': [
         {'id': 'qa-web-source', 'data': {'kind': 'native_web_assets'}},
@@ -29,6 +30,10 @@ def seed(store, fixture_url):
         {'url': bundle, 'kind': 'js', 'status': 200, 'artifact_id': capture},
     ]}], node_id='qa-web-source')
     store.node_status(surface_run, 'qa-web-source', 'completed', {'artifact_id': source_output, 'records': 1})
+    resource = fixture_url + '/api/users'
+    observed = store.artifact(surface_run, 'http-2.json', {'url': resource, 'status': 200}, node_id='qa-web-source')
+    exchange = journal.begin(surface_run, 'qa-web-source', 2, resource, {'mode': 'direct'}, request_message(resource))
+    journal.finish(exchange, artifact_id=observed, response=message('HTTP/1.1 200 OK', [], status=200))
     store.status(surface_run, 'completed', {'report': 'Saved API Surface fixture.'})
     # Interrupted workflow fixture: only the selected recovery dispatch will
     # contact the loopback HTTP server. Seeding/previewing has no target access.
@@ -132,6 +137,14 @@ if __name__ == '__main__':
             self.calls.append({'path': self.path, 'origin': self.headers.get('Origin'),
                                'cookie': bool(self.headers.get('Cookie')), 'authorization': bool(self.headers.get('Authorization'))})
             token = self.headers.get('Authorization')
+            if self.path in ('/api/users', '/matrix-control'):
+                expired = token == 'Bearer qa-matrix-expired'
+                self.send_response(401 if expired else 200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                marker = None if expired else 'first' if self.path == '/api/users' else 'second'
+                self.wfile.write(json.dumps({'id': marker}).encode())
+                return
             if self.path in ('/approved', '/control') and token in ('Bearer qa-owner-token', 'Bearer qa-other-token'):
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
@@ -152,7 +165,8 @@ if __name__ == '__main__':
     with tempfile.TemporaryDirectory(prefix='ai-tricky-browser-') as directory:
         store = Store(Path(directory))
         fixture_url = f'http://127.0.0.1:{fixture.server_port}'
-        seed(store, fixture_url)
+        journal = HTTPJournal(store)
+        seed(store, fixture_url, journal)
         app = create_app(directory)
         def reset_fixture():
             # Test-only route: every browser case gets fresh evidence, approvals and run IDs.
@@ -160,7 +174,7 @@ if __name__ == '__main__':
                 tables = [r['name'] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
                 for table in tables:
                     c.execute('DELETE FROM "' + table + '"')
-            seed(store, fixture_url)
+            seed(store, fixture_url, journal)
             FixtureHandler.calls.clear()
             return {'reset': True}
         app.router.routes.insert(0, APIRoute('/api/_qa/reset', reset_fixture, methods=['POST']))

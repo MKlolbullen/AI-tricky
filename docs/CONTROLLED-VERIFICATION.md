@@ -75,6 +75,36 @@ Fingerprints use an ephemeral run key and compare within a single run. HAR
 exports identify the metadata capture mode. The review receipt contains
 identity labels, IDs and exact approved requests. It contains no bearer values.
 
+## Multi-identity access matrix
+
+In **API Surface**, open a GET endpoint and choose **Set up access matrix**
+on a matching native capture. You can also select **Multi-identity access
+matrix** when reviewing a saved native HTTP proposal. The saved GET supplies
+object A. Enter object B on the same authorized origin and select three
+distinct session-only bearer identities. Choose the owner of each object,
+a third identity and the expected allow/deny policy for every other cell.
+The owner cells are required allow controls. Both object IDs must be
+distinct and extractable with the same JSON Pointer.
+
+Review the exact GETs, identities, expectations, scope and six-operation
+budget before approving once. Object A and B owner controls run first.
+A failed control skips later checks for that object. Checks for the other
+object can still proceed. The profile uses direct HTTPS with verified TLS,
+or direct loopback HTTP for labs.
+
+| Observed signal | Requirements |
+| --- | --- |
+| Allow | Complete HTTP 200 with the expected resource ID on the same peer as the owner control. An exact body match is recorded separately. |
+| Deny | HTTP 403/404 without the resource marker, a body distinct from the owner response, and a successful resource read by the same identity on that peer. |
+| Inconclusive | Failed control, HTTP 401, unestablished session, redirect, missing or incomplete evidence, ambiguous response or different peer. |
+
+**Runs → Controlled verification** shows the expected and observed signal,
+plus the redacted capture for each measured cell. Unexpected access is a
+policy discrepancy for review. The resource ID establishes which object
+was returned. Field-level exposure calls for separate evidence. Removing
+or changing a stored capture invalidates its dependent conclusions in the
+read view and preserves the original comparison for audit.
+
 ## Findings and review
 
 Only a finding supported by a cited proposal observation can be linked. Approved verification runs appear in that finding's workbench, alongside baseline/variant capture inspection and export. Intact linked HTTP captures become available to the existing explicit, revision-checked review form. A comparison artifact itself is not a substitute for an HTTP capture.
@@ -90,6 +120,7 @@ Verification never changes severity, confidence, status, first/last-seen timesta
 | POST | `/api/verification/identities/{id}/remove` | Remove an identity and invalidate its pending reviews on next read or dispatch |
 | GET | `/api/agent/proposals/{plan}/{proposal}/verification-findings` | Findings supported by cited observations |
 | POST | `/api/agent/proposals/{plan}/{proposal}/executions` | Prepare a profile with optional finding link and `object_access` controls for the authenticated profile |
+| POST | `/api/runs/{run}/api-surface/{endpoint}/exchanges/{exchange}/verification-plan` | Save a native HTTP proposal from a linked GET capture without dispatching |
 | GET | `/api/runs/{run}/verification` | Persisted comparison or current partial/inconclusive receipt |
 | GET | `/api/findings/{finding}/verification` | Latest 50 linked approved checks |
 

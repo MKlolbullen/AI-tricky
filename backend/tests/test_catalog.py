@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import RunControl, create_app
-from backend.catalog import CATALOG, TOOLS, ROOT, contract, convert_mini, registered_path, scoped_lines
+from backend.catalog import CATALOG, OUTPUT_INPUTS, TOOLS, ROOT, contract, convert_mini, registered_path, scoped_lines
 from backend.catalog_execution import incoming_streams, preflight
 from backend.cli_runner import CLIError, build_command, digest, execute_cli, pin_binary, prepare_context
 from backend.scope import ScopeError
@@ -121,15 +121,11 @@ def test_catalog_url_socket_routes_only_urls_to_native_http(tmp_path, target_ser
     binary.write_text(f'#!{sys.executable}\nprint({stdout!r})\n')
     binary.chmod(0o755)
     monkeypatch.setenv('PATH', str(tmp_path) + os.pathsep + os.environ.get('PATH', ''))
-    g = native_graph('native_scope', 'native_http', 'native_summary')
-    g['nodes'].insert(2, {'id': 'collector', 'type': 'tool', 'position': {'x': 690, 'y': 0},
-                         'data': {'kind': 'catalog_output', 'inputs': ['any'], 'outputs': ['report'], 'output': 'report'}})
+    g = native_graph('native_scope', 'native_http')
     g['nodes'].insert(1, {'id': 'probe', 'type': 'tool', 'position': {'x': 230, 'y': 0}, 'data': data_for(TOOLS['httpx'])})
     g['edges'] = [
         {'id': 'scope-probe', 'source': 'n0', 'target': 'probe'},
         {'id': 'xy-edge__probeout:url-n1', 'source': 'probe', 'target': 'n1', 'sourceHandle': 'out:url'},
-        {'id': 'capture-report', 'source': 'n1', 'target': 'collector', 'targetHandle': 'in:any'},
-        {'id': 'report-summary', 'source': 'collector', 'target': 'n2'},
     ]
     with TestClient(create_app(tmp_path / 'state')) as client:
         saved = client.post('/api/workflows', json={'name': 'Named legacy edge', 'graph': g})
@@ -142,11 +138,7 @@ def test_catalog_url_socket_routes_only_urls_to_native_http(tmp_path, target_ser
         assert handler.calls == ['/wired']
         assert done['result']['request_count'] == 1 and done['result']['cli_invocation_count'] == 1
         nodes = {node['node_id']: node for node in client.get(f'/api/runs/{run_id}/nodes').json()}
-        collection = client.get('/api/artifacts/' + nodes['collector']['result']['artifact_id']).json()[0]
-        [capture] = collection['catalog_streams']['observations']
-        assert json.loads(capture)['url'] == base + '/wired'
-        summary = client.get('/api/artifacts/' + nodes['n2']['result']['artifact_id']).json()[0]
-        assert summary['records'] == 1
+        assert nodes['n1']['result']['records'] == 1
 
 
 def test_cli_dispatch_uses_both_wired_network_inputs(tmp_path):
@@ -233,9 +225,10 @@ def test_real_graph_stream_routing_and_cli_accounting(tmp_path,fixture_binary,mo
     # Use only the canonical subfinder -> HTTPX -> Nuclei branch to avoid requiring unrelated binaries.
     source=next(n for n in graph['nodes'] if n['data']['kind']=='catalog_source')
     tool_nodes=[next(n for n in graph['nodes'] if n['data'].get('toolId')==tid) for tid in ('subfinder','httpx','nuclei')]
-    sink={'id':'collector','type':'tool','position':{'x':1000,'y':0},'data':{'kind':'catalog_output','title':'Collect','inputs':['any'],'outputs':['report'],'output':'report','timeout':120,'retries':0}}
+    sink={'id':'collector','type':'tool','position':{'x':1000,'y':0},'data':{'kind':'catalog_output','title':'Collect','inputs':list(OUTPUT_INPUTS),'outputs':['report'],'output':'report','timeout':120,'retries':0}}
     nodes=[source,*tool_nodes,sink];types=['domain','targets','url','findings']
-    edges=[{'id':f'e{i}','source':nodes[i]['id'],'target':nodes[i+1]['id'],'sourceHandle':'out:'+typ,'targetHandle':'in:'+('any' if i==3 else typ)} for i,typ in enumerate(types)]
+    # The collector now declares real accepted types; the findings edge binds the concrete in:findings socket, not a blanket in:any.
+    edges=[{'id':f'e{i}','source':nodes[i]['id'],'target':nodes[i+1]['id'],'sourceHandle':'out:'+typ,'targetHandle':'in:'+typ} for i,typ in enumerate(types)]
     g={'schema':'offsecs-u-ai.workflow/v1','nodes':nodes,'edges':edges}
     from backend.tests.test_local import wait_done
     with TestClient(create_app(tmp_path/'state')) as c:

@@ -1,0 +1,230 @@
+{
+  "id": "tpl-web-app-assessment",
+  "name": "Web Application Assessment",
+  "category": "Web Assessment",
+  "tags": ["web", "owasp", "recon", "api", "authz", "methodology"],
+  "schema": "offsecs-u-ai.workflow/v1",
+  "targets": ["domain", "url", "targets"],
+  "description": "Structured web application assessment covering automated recon, endpoint/API discovery, vulnerability scanning, authentication & access control, and specialist agent review. Inspired by 0xlolbullen.com Web Application Penetration Testing methodology (OWASP Top 10, business logic, modern technologies).",
+  "availability": "adapter-required",
+  "engine": null,
+  "source": "https://0xlolbullen.com/pentest-methodology",
+  "provenance": "Derived from Victor Åhgren / 0xlolbullen.com Web Application Penetration Testing methodology. Uses mini-tricky catalog tools + native AI-tricky capabilities.",
+  "sourceCatalog": "curated",
+  "nodes": [
+    {
+      "id": "input-scope",
+      "type": "tool",
+      "position": {"x": 60, "y": 200},
+      "data": {
+        "kind": "catalog_source",
+        "sourceType": "domain",
+        "inputs": [],
+        "outputs": ["domain"],
+        "output": "domain",
+        "title": "Authorized Scope (Domain / URL)",
+        "description": "Exact host, *.example.com, or scoped URL origin",
+        "timeout": 120,
+        "retries": 0,
+        "status": "pending",
+        "result": "Not run"
+      }
+    },
+    {
+      "id": "tool-subfinder",
+      "type": "tool",
+      "position": {"x": 340, "y": 120},
+      "data": {
+        "kind": "catalog_tool",
+        "toolId": "subfinder",
+        "inputs": ["domain"],
+        "outputs": ["targets"],
+        "output": "targets",
+        "params": {},
+        "title": "Subdomain Discovery",
+        "description": "Passive + active subdomain enumeration",
+        "timeout": 300,
+        "retries": 0,
+        "status": "pending",
+        "result": "Not run"
+      }
+    },
+    {
+      "id": "tool-httpx",
+      "type": "tool",
+      "position": {"x": 620, "y": 120},
+      "data": {
+        "kind": "catalog_tool",
+        "toolId": "httpx",
+        "inputs": ["targets"],
+        "outputs": ["targets", "url"],
+        "output": "targets",
+        "params": {},
+        "title": "Live Host Probing",
+        "description": "HTTP probing, tech detection, status codes",
+        "timeout": 300,
+        "retries": 0,
+        "status": "pending",
+        "result": "Not run"
+      }
+    },
+    {
+      "id": "tool-katana",
+      "type": "tool",
+      "position": {"x": 900, "y": 60},
+      "data": {
+        "kind": "catalog_tool",
+        "toolId": "katana",
+        "inputs": ["targets", "url"],
+        "outputs": ["url", "targets"],
+        "output": "url",
+        "params": {},
+        "title": "Crawling & Endpoint Discovery",
+        "description": "Katana crawl for links, forms, parameters",
+        "timeout": 300,
+        "retries": 0,
+        "status": "pending",
+        "result": "Not run"
+      }
+    },
+    {
+      "id": "tool-js-analysis",
+      "type": "tool",
+      "position": {"x": 900, "y": 200},
+      "data": {
+        "kind": "catalog_tool",
+        "toolId": "getjs",
+        "inputs": ["url", "targets"],
+        "outputs": ["url"],
+        "output": "url",
+        "params": {},
+        "title": "JS / Source Map Collection",
+        "description": "Extract JS endpoints, secrets, source maps (feeds API Surface)",
+        "timeout": 180,
+        "retries": 0,
+        "status": "pending",
+        "result": "Not run"
+      }
+    },
+    {
+      "id": "tool-nuclei",
+      "type": "tool",
+      "position": {"x": 1180, "y": 120},
+      "data": {
+        "kind": "catalog_tool",
+        "toolId": "nuclei",
+        "inputs": ["targets", "url"],
+        "outputs": ["findings"],
+        "output": "findings",
+        "params": {},
+        "title": "Vulnerability Scanning",
+        "description": "Nuclei templates for OWASP-aligned checks",
+        "timeout": 600,
+        "retries": 0,
+        "status": "pending",
+        "result": "Not run"
+      }
+    },
+    {
+      "id": "tool-ffuf",
+      "type": "tool",
+      "position": {"x": 1180, "y": 280},
+      "data": {
+        "kind": "catalog_tool",
+        "toolId": "ffuf",
+        "inputs": ["url", "wordlist"],
+        "outputs": ["url", "targets"],
+        "output": "url",
+        "params": {},
+        "title": "Directory / Parameter Fuzzing",
+        "description": "Bounded FFUF for hidden paths (requires registered wordlist)",
+        "timeout": 300,
+        "retries": 0,
+        "status": "pending",
+        "result": "Not run"
+      }
+    },
+    {
+      "id": "native-api-surface",
+      "type": "tool",
+      "position": {"x": 1460, "y": 80},
+      "data": {
+        "kind": "native_api_surface",
+        "inputs": ["url"],
+        "outputs": ["observations"],
+        "output": "observations",
+        "title": "API Surface from JS/TS",
+        "description": "Infer endpoints from collected JS, TypeScript, source maps + HTTP history",
+        "timeout": 120,
+        "retries": 0,
+        "status": "pending",
+        "result": "Not run"
+      }
+    },
+    {
+      "id": "native-identity",
+      "type": "tool",
+      "position": {"x": 1460, "y": 240},
+      "data": {
+        "kind": "native_identity",
+        "inputs": ["url"],
+        "outputs": ["observations"],
+        "output": "observations",
+        "title": "Auth & Access Control Review",
+        "description": "Multi-identity access matrix or authenticated object access",
+        "timeout": 120,
+        "retries": 0,
+        "status": "pending",
+        "result": "Not run"
+      }
+    },
+    {
+      "id": "native-team",
+      "type": "tool",
+      "position": {"x": 1740, "y": 160},
+      "data": {
+        "kind": "native_team",
+        "inputs": ["observations", "findings"],
+        "outputs": ["report"],
+        "output": "report",
+        "title": "Specialist Agent Team Review",
+        "description": "Evidence-only multi-role CAI team. Candidates only.",
+        "timeout": 300,
+        "retries": 0,
+        "status": "pending",
+        "result": "Not run"
+      }
+    },
+    {
+      "id": "output-artifacts",
+      "type": "tool",
+      "position": {"x": 2020, "y": 160},
+      "data": {
+        "kind": "catalog_output",
+        "inputs": ["any"],
+        "outputs": ["report"],
+        "output": "report",
+        "title": "Findings & Evidence Workbench",
+        "description": "Durable observations, candidate findings, asset graph updates",
+        "timeout": 120,
+        "retries": 0,
+        "status": "pending",
+        "result": "Not run"
+      }
+    }
+  ],
+  "edges": [
+    {"id": "e1", "source": "input-scope", "target": "tool-subfinder"},
+    {"id": "e2", "source": "tool-subfinder", "target": "tool-httpx"},
+    {"id": "e3", "source": "tool-httpx", "target": "tool-katana"},
+    {"id": "e4", "source": "tool-httpx", "target": "tool-js-analysis"},
+    {"id": "e5", "source": "tool-katana", "target": "tool-nuclei"},
+    {"id": "e6", "source": "tool-httpx", "target": "tool-ffuf"},
+    {"id": "e7", "source": "tool-js-analysis", "target": "native-api-surface"},
+    {"id": "e8", "source": "tool-katana", "target": "native-identity"},
+    {"id": "e9", "source": "tool-nuclei", "target": "native-team"},
+    {"id": "e10", "source": "native-api-surface", "target": "native-team"},
+    {"id": "e11", "source": "native-identity", "target": "native-team"},
+    {"id": "e12", "source": "native-team", "target": "output-artifacts"}
+  ]
+}

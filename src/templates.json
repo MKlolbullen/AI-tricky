@@ -1,1 +1,7 @@
-PLACEHOLDER_WILL_BE_REPLACED_BY_FULL_JSON
+{
+  "schema": "offsecs-u-ai.templates/v1",
+  "version": 1,
+  "catalogScope": "Curated independent equivalents and one attributed MIT pipeline adaptation. Not a copy of the complete hosted Trickest catalog.",
+  "tools": [],
+  "workflows": []
+}

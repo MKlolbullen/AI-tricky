@@ -253,8 +253,10 @@ class SupportData:
 
     def bind(self, graph, *, bundled_only=False):
         from .workflows import validate_workflow
+        from .workflow_sockets import incoming_routes
         validate_workflow(graph,live=True)
         result=copy.deepcopy(graph);available={};changes=[];missing=[]
+        routes = incoming_routes(graph)
         entries = self.manifest['bundled'] + ([] if bundled_only else self.manifest['remote'])
         for entry in entries:
             for row in self._checked_inputs(entry,validate=True):
@@ -263,7 +265,7 @@ class SupportData:
             data=node['data']
             if data['kind']!='catalog_tool':continue
             refs=dict(data.get('inputRefs',{}))
-            connected={(e.get('targetHandle') or 'in:'+next(n for n in result['nodes'] if n['id']==e['source'])['data']['output']).removeprefix('in:') for e in result['edges'] if e['target']==node['id']}
+            connected = {input_type for _, _, input_type in routes[node['id']]}
             for slot,role in requirements(TOOLS[data['toolId']]).items():
                 if slot in refs or slot in connected:continue
                 if role in available:

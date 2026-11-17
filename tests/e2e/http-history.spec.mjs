@@ -70,3 +70,30 @@ test('Burp saved-items import persists binary evidence without replay or duplica
  expect(await readFile(await (await pending).path())).toEqual(Buffer.from([0,255]));
  expect(await (await request.get('/api/_qa/target-calls')).json()).toHaveLength(0);
 });
+
+test('Burp pairing imports a chosen exchange and stages it for Repeater without target traffic', async ({page, request}) => {
+ const run = await (await request.get('/api/runs/qa-execution')).json();
+ const w = await workspace(page, 'HTTP history');
+ await w.getByRole('combobox', {name: 'Traffic run', exact: true}).selectOption(run.id);
+ const bridge = w.getByRole('region', {name: 'Local Burp bridge'});
+ await bridge.getByRole('button', {name: 'Generate Burp pairing'}).click();
+ const key = JSON.parse(await bridge.getByLabel('Burp pairing', {exact: true}).inputValue());
+ expect(key.runId).toBe(run.id);
+ const base = `/api/runs/${run.id}/burp-bridge`;
+ const headers = {Authorization: `Bearer ${key.token}`};
+ const origin = new URL(run.config.targets[0]);
+ const raw = Buffer.from(`GET /bridge HTTP/1.1\r\nHost: ${origin.host}\r\n\r\n`).toString('base64');
+ const url = new URL('/bridge', origin).href;
+ const imported = await request.post(`${base}/exchanges`, {headers, data: {items: [{url, request: raw}]}});
+ expect(imported.ok()).toBe(true);
+ await w.getByRole('button', {name: 'GET '+url, exact: true}).click();
+ const saved = w.getByRole('region', {name: 'Saved HTTP exchange', exact: true});
+ await saved.getByRole('button', {name: 'Open in Burp Repeater'}).click();
+ await expect(saved.getByRole('status')).toContainText('Queued for Repeater');
+ const delivery = (await (await request.get(`${base}/repeater`, {headers})).json()).item;
+ expect(delivery.request).toBe(raw);
+ await bridge.getByRole('button', {name: 'Revoke Burp pairing'}).click();
+ await expect(bridge.getByRole('status')).toContainText('Pairing revoked');
+ expect((await request.get(`${base}/repeater`, {headers})).status()).toBe(401);
+ expect(await (await request.get('/api/_qa/target-calls')).json()).toHaveLength(0);
+});

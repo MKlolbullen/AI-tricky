@@ -22,7 +22,7 @@ def main():
     profiles = PROFILES_BY_GROUP[args.profile]
     if args.tool and args.tool not in profiles:
         parser.error('Select a tool from the chosen profile.')
-    results = [tool_check(tool, args.binary) for tool in ([args.tool] if args.tool else profiles)]
+    results = [tool_check(tool, args.binary, group=args.profile) for tool in ([args.tool] if args.tool else profiles)]
     print(json.dumps(results, indent=2))
     return int(any(result['status'] != 'tested_version' for result in results))
 

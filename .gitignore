@@ -30,3 +30,5 @@ results/
 htmlcov/
 test-results/
 playwright-report/
+
+/integrations/burp-bridge/target/

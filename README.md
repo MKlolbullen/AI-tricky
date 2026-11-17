@@ -46,7 +46,10 @@ Design a typed workflow. Execute bounded checks. Preserve the request/response t
 | 🔌 **Provider choice** | Configure local model endpoints or supported remote providers, including OpenAI, Anthropic, Gemini, xAI and Venice. |
 | 🧪 **HTTP evidence journal** | Retain native requests/responses, errors, cancellations, binary captures and HAR exports. |
 | 🔍 **Authenticated object access** | Compare two test identities under one reviewed GET profile, with an ownership control and redacted evidence. [Setup](docs/CONTROLLED-VERIFICATION.md#authenticated-object-access) |
-| 🟠 **Burp-compatible routing** | Route supported HTTP traffic through a local proxy and import saved Burp XML items. |
+| **Multi-identity access matrix** | Compare expected access for three test identities across two saved GET resources, with approval and redacted per-cell evidence. [Usage](docs/CONTROLLED-VERIFICATION.md#multi-identity-access-matrix) |
+| **Enforced CLI scope** | Run ffuf and httprobe in Linux network isolation with the native request budget and HTTP history. [Setup](docs/CLI-SCOPE.md) |
+| **API Surface** | Search endpoints inferred from saved JS, TypeScript and source maps, with source locations and matching HTTP history. [Usage](docs/API-SURFACE.md) |
+| 🟠 **Burp-compatible routing** | Route supported HTTP traffic through a local proxy, import selected Burp exchanges and open saved requests in Repeater. [Bridge setup](docs/BURP-BRIDGE.md) |
 | 🕸️ **Asset graph** | Explore typed hosts, services, technologies, files and other entities with provenance and run-to-run diffs. |
 | 🛡️ **AD & Entra review** | Scoped identity collection profiles, graph imports and bounded candidate-path analysis; not automated exploitation. |
 | 📋 **Findings workbench** | Durable observations, candidate findings, review decisions and comparisons between assessment runs. |
@@ -130,6 +133,12 @@ A platform-specific binary can be built with:
 ```
 
 The standalone binary bundles the native application, **not** external scanners or the optional CAI SDK. Building requires development dependencies; running the finished binary does not require Python or Node.
+
+### Linux scanner beta
+
+Download the standalone app and pinned scanner installer from the
+**linux-scanner-beta** CI artifact. Use **Local workspace → Scanner profiles**
+to inspect tool versions, capture coverage and input readiness. [Linux beta setup](docs/SCANNER-PROFILES.md)
 
 ### Your first assessment
 
@@ -241,7 +250,7 @@ See [validation records](docs/VALIDATION.md) and the [CI workflow](https://githu
 
 - The platform is a **functional beta**; real-binary compatibility and broader OS validation are incomplete.
 - External scanners must be installed independently and may make requests outside native HTTP accounting.
-- Burp-compatible proxy routing and saved-items import are supported; **live bidirectional Burp/burpaderp sync is not**.
+- The local Burp bridge transfers selected exchanges and opens saved requests in Repeater for manual review. Continuous traffic synchronization is outside this release.
 - AD/Entra paths are candidate relationships requiring validation; no automatic identity exploitation is claimed.
 - CAI integration is optional, and model outputs are not independently verified findings.
 - The local API is intended for a **single trusted user**, not exposed multi-user hosting.
@@ -253,7 +262,7 @@ See [validation records](docs/VALIDATION.md) and the [CI workflow](https://githu
 - [ ] Expand constrained catalog adapters with explicit account/context contracts.
 - [ ] Improve evidence-age rules and controlled replay/recovery.
 - [ ] Strengthen identity testing coverage and review workflows.
-- [ ] Explore policy-controlled Burp/burpaderp and Strix integration.
+- [ ] Extend the local Burp bridge and explore policy-controlled Strix integration.
 - [ ] Refine operator UX, model compatibility checks and agent observability.
 
 ## 🤝 Contributing

@@ -190,7 +190,7 @@ async def collect_assets(values, config, data, fetch, store, node_id):
              'evidence_status': 'OBSERVATION'}]
 
 
-def recon_workflow(*, fuzz=False, scan=False, review=False):
+def recon_workflow(*, fuzz=False, scan=False, review=False, surface=False, isolated_ffuf=False, isolated_probe=False):
     """Independent curated starter; leaves the pinned migration catalog intact."""
     from .catalog import TOOLS, OUTPUT_INPUTS, MERGE_INPUTS
     from .workflows import REGISTRY, SCHEMA, validate_workflow
@@ -211,6 +211,32 @@ def recon_workflow(*, fuzz=False, scan=False, review=False):
         edges.append({'id': f'{src}-{dst}', 'source': src, 'target': dst, 'type': 'smoothstep',
                       'sourceHandle': 'out:' + typ, 'targetHandle': 'in:' + (incoming or typ), 'label': typ})
 
+    if isolated_probe:
+        node('targets', 'catalog_source', 0, 100, sourceType='targets', inputs=[], outputs=['targets'],
+             output='targets', title='Selected hosts and URLs', value='')
+        node('probe', 'catalog_tool', 220, 100, toolId='httprobe', title='Scoped httprobe', require_cli_scope=True)
+        node('results', 'catalog_output', 440, 100, inputs=list(OUTPUT_INPUTS), outputs=['report'], output='report',
+             title='Reachable URLs')
+        edge('targets', 'probe', 'targets')
+        edge('probe', 'results', 'url')
+        graph = {'schema': SCHEMA, 'nodes': nodes, 'edges': edges, 'parallelism': 1}
+        validate_workflow(graph, live=True)
+        return graph
+
+    if isolated_ffuf:
+        node('urls', 'catalog_source', 0, 100, sourceType='url', inputs=[], outputs=['url'], output='url',
+             title='Selected HTTP(S) URLs', value='')
+        node('fuzz', 'catalog_tool', 440, 100, toolId='ffuf', title='Scoped ffuf path discovery', require_cli_scope=True)
+        node('results', 'catalog_output', 660, 100, inputs=list(OUTPUT_INPUTS), outputs=['report'], output='report',
+             title='Path observations')
+        node('fuzz-targets', 'catalog_merge', 220, 100, inputs=list(MERGE_INPUTS['targets']), outputs=['targets'], output='targets', title='Selected fuzzing URLs')
+        edge('urls', 'fuzz-targets', 'url')
+        edge('fuzz-targets', 'fuzz', 'targets')
+        edge('fuzz', 'results', 'findings')
+        graph = {'schema': SCHEMA, 'nodes': nodes, 'edges': edges, 'parallelism': 1}
+        validate_workflow(graph, live=True)
+        return graph
+
     node('domains', 'catalog_source', 0, 100, sourceType='domain', inputs=[], outputs=['domain'], output='domain',
          title='Selected enumeration domains', value='')
     for nid, y in [('subfinder', 0), ('assetfinder', 200)]:
@@ -228,6 +254,9 @@ def recon_workflow(*, fuzz=False, scan=False, review=False):
     node('sources', 'native_web_assets', 1610 if review else 1380, 100)
     node('summary', 'native_summary', 1840 if review else 1610, 100)
     edge('sources', 'summary', 'report')
+    if surface:
+        node('api-surface', 'native_api_surface', 1840 if review else 1610, 310)
+        edge('sources', 'api-surface', 'report')
     if review:
         node('capture', 'native_http', 1380, 100)
         edge('urls', 'capture', 'url')

@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from .catalog import TOOLS, OUTPUT_INPUTS, scoped_lines, tool_readiness
 from .catalog_execution import preflight
 from .evidence import EvidenceIndex
-from .observations import PARSER_VERSION, digest, encoded
+from .observations import canonical_asset, PARSER_VERSION, digest, encoded
 from .scope import ScopeError, authorize, network_hosts, parse_target
 from .store import now
 from .workflows import REGISTRY, SCHEMA, validate_workflow
@@ -236,6 +236,23 @@ class ProposalPlanner:
         return {'schema': SCHEMA_ID, 'run_id': run_id, 'scope': run['config']['targets'], 'run_config': config,
                 'observations': records, 'artifact_hashes': hashes, 'actions': actions, 'max_risk': max_risk,
                 'catalog_hash': catalog_hash(), 'parser_version': PARSER_VERSION, 'coverage_limits': limits}
+
+    def plan_for_http_capture(self, run_id, artifact_id, url):
+        self.evidence.index_pending(run_id)
+        with self.store.connect() as c:
+            row = c.execute("""SELECT o.id FROM observations o JOIN observation_versions v
+                               ON o.id=v.observation_id WHERE o.run_id=? AND o.artifact_id=?
+                               AND o.asset=? AND o.kind='http' AND v.parser_version=?""",
+                            (run_id, artifact_id, canonical_asset(url), PARSER_VERSION)).fetchone()
+        if row is None:
+            raise ScopeError('This exchange needs a current HTTP observation before it can be reviewed.')
+        goal = 'Compare expected access for the saved GET resource.'
+        context = self.context(run_id, [row['id']], goal)
+        context['actions'] = [action for action in context['actions']
+                              if action['adapter_id'] == 'native_http' and action['target'] == url]
+        if not context['actions']:
+            raise ScopeError('The saved request is outside the original run scope.')
+        return self.save(goal, context)
 
     def prompt(self, goal, context):
         model_actions = [{k: a[k] for k in ('id', 'adapter_id', 'input_type', 'target', 'risk', 'title', 'signal', 'observation_ids', 'cost')}

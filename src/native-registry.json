@@ -3,6 +3,7 @@
   "native_tcp": {"name":"TCP inventory","inputs":["targets"],"output":"services","description":"Bounded native TCP connect checks"},
   "native_http": {"name":"HTTP evidence","inputs":["targets","services","url"],"output":"observations","description":"Scoped GET; no redirect following"},
   "native_web_assets": {"name":"Web source collector","inputs":["url","observations"],"output":"report","description":"Bounded scoped collection of linked scripts, chunks, source maps and pages; saved HTTP captures and manifest"},
+  "native_api_surface": {"name":"API Surface","inputs":["report"],"output":"endpoints","description":"Infer endpoints offline from saved web sources and match them to HTTP history"},
   "native_summary": {"name":"Evidence summary","inputs":["services","observations","report"],"output":"report","description":"Observation counts and coverage limits"},
   "native_cai": {"name":"CAI evidence analyst","inputs":["observations"],"output":"report","description":"Analyze captured evidence; no target tools"},
   "native_team": {"name":"CAI team analyst","inputs":["observations"],"output":"report","description":"Five-role CAI team reviews captured evidence; no target tools"},

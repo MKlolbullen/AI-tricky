@@ -1,14 +1,24 @@
 import React, {useEffect, useState} from 'react';
 import {api, downloadJSON} from './api.mjs';
 const HTTPRoutingSettings=React.lazy(()=>import('./HTTPRoutingSettings'));
+const AccessMatrixOptions = React.lazy(() => import('./AccessMatrixOptions'));
 const ObjectAccessOptions = React.lazy(() => import('./ObjectAccessOptions'));
 
-export default function ProposalExecution({plan, proposal, onRun}) {
-  const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
+const newMatrix = () => ({
+  rows: [
+    {identity_id: '', expected: ['allow', '']},
+    {identity_id: '', expected: ['', 'allow']},
+    {identity_id: '', expected: ['', '']},
+  ],
+  second_url: '', first_object: '', second_object: '', json_pointer: '/id',
+});
+
+export default function ProposalExecution({plan, proposal, onRun, initialProfile = null}) {
+  const [open, setOpen] = useState(Boolean(initialProfile)), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [inputs, setInputs] = useState([]), [history, setHistory] = useState([]), [review, setReview] = useState(null);
   const [profiles, setProfiles] = useState([]), [findings, setFindings] = useState([]);
   const [approved, setApproved] = useState(false), [clock, setClock] = useState(Date.now());
-  const [options, setOptions] = useState({allow_cli: false, max_requests: 1, max_cli_invocations: 1, max_hosts: 64, max_seconds: 120, http_routing:{mode:'direct',proxy_url:'http://127.0.0.1:8080',ca_input_id:null}, input_refs: {}, verification_profile: null, finding_id: null});
+  const [options, setOptions] = useState({allow_cli: false, max_requests: initialProfile === 'access_matrix' ? 6 : 1, max_cli_invocations: 1, max_hosts: 64, max_seconds: 120, http_routing:{mode:'direct',proxy_url:'http://127.0.0.1:8080',ca_input_id:null}, input_refs: {}, verification_profile: initialProfile, finding_id: null, access_matrix: initialProfile === 'access_matrix' ? newMatrix() : null});
   const cli = !!proposal.action.cost.cli_invocations, templates = proposal.action.adapter_id === 'nuclei';
   const refreshHistory = async () => setHistory((await api(`/agent/proposals/${plan.id}/executions`)).filter(r => r.proposal_id === proposal.id));
   useEffect(() => {
@@ -28,7 +38,8 @@ export default function ProposalExecution({plan, proposal, onRun}) {
       max_cli_invocations: config.max_cli_invocations, max_hosts: config.max_hosts, max_seconds: config.max_seconds,
       http_routing:config.http_routing||{mode:'direct',proxy_url:'http://127.0.0.1:8080',ca_input_id:null}, input_refs: config.workflow.nodes.find(n => n.id === 'followup-test')?.data.inputRefs || {},
       verification_profile: config.verification?.profile_id || null, finding_id: config.verification?.finding_id || null,
-      object_access: config.verification?.access?.options || null});
+      object_access: config.verification?.profile_id === 'object_access' ? config.verification.access.options : null,
+      access_matrix: config.verification?.profile_id === 'access_matrix' ? config.verification.access.options : null});
   }, [review?.id]);
   useEffect(() => {
     if (review?.status !== 'pending') return;
@@ -36,12 +47,16 @@ export default function ProposalExecution({plan, proposal, onRun}) {
     return () => clearInterval(timer);
   }, [review?.id, review?.status]);
   const binding = review?.snapshot.config.verification;
+  const matrix = binding?.profile_id === 'access_matrix';
+  const selectingMatrix = options.verification_profile === 'access_matrix';
   const selectedProfile = profiles.find(profile => profile.id === options.verification_profile);
   const selectProfile = id => {
     const profile = profiles.find(entry => entry.id === id);
     setOptions(previous => ({...previous, verification_profile: id || null, finding_id: null,
       max_requests: Math.max(profile?.native_operations || 1, previous.max_requests),
-      object_access: id === 'object_access' ? {json_pointer: '/id'} : null}));
+      object_access: id === 'object_access' ? {json_pointer: '/id'} : null,
+      access_matrix: id === 'access_matrix' ? newMatrix() : null,
+      http_routing: id === 'access_matrix' ? {...previous.http_routing, mode: 'direct'} : previous.http_routing}));
   };
   const pending = review?.status === 'pending', expired = pending && clock >= Date.parse(review.expires);
   const update = (key, value) => setOptions(previous => ({...previous, [key]: value}));
@@ -79,7 +94,7 @@ export default function ProposalExecution({plan, proposal, onRun}) {
       <h4>Review and approve one execution</h4>
       <p>Prepare a saved snapshot, inspect its exact scope and limits, then approve it once. Reviews expire after 15 minutes and a runtime restart requires a new review.</p>
       <form onSubmit={prepare}>
-        <fieldset disabled={busy || pending || !plan.current} className="execution-options"><legend>Execution settings</legend><React.Suspense fallback={null}><HTTPRoutingSettings value={options.http_routing} onChange={v=>update('http_routing',v)}/></React.Suspense>
+        <fieldset disabled={busy || pending || !plan.current} className="execution-options"><legend>Execution settings</legend><React.Suspense fallback={null}><HTTPRoutingSettings value={options.http_routing} onChange={v=>update('http_routing',v)} directOnly={selectingMatrix}/></React.Suspense>
           {proposal.action.adapter_id === 'native_http' && <label className="field-label">HTTP check profile<select
             value={options.verification_profile || ''} onChange={e => selectProfile(e.target.value)}>
             <option value="">Single capture</option>{profiles.map(p => <option key={p.id} value={p.id}>{p.title} · {p.native_operations} GETs</option>)}
@@ -87,6 +102,10 @@ export default function ProposalExecution({plan, proposal, onRun}) {
           {options.verification_profile === 'object_access' && <React.Suspense fallback={<p>Loading test identities…</p>}>
             <ObjectAccessOptions target={proposal.action.target} value={options.object_access || {json_pointer: '/id'}}
               onChange={value => update('object_access', value)}/>
+          </React.Suspense>}
+          {selectingMatrix && <React.Suspense fallback={<p>Loading access matrix settings…</p>}>
+            <AccessMatrixOptions target={proposal.action.target} value={options.access_matrix}
+              onChange={value => update('access_matrix', value)}/>
           </React.Suspense>}
           <label className="field-label">Native operation limit<input type="number" min={selectedProfile?.native_operations || 1}
             max={2048} value={options.max_requests} onChange={e => update('max_requests', Number(e.target.value))}/></label>
@@ -109,21 +128,24 @@ export default function ProposalExecution({plan, proposal, onRun}) {
         <strong>Snapshot scope</strong><div className="scope-chips">{review.snapshot.config.targets.map(t => <code key={t}>{t}</code>)}</div>
         <p>{review.snapshot.config.max_requests} native operation(s) maximum · {review.snapshot.config.allow_cli ? review.snapshot.config.max_cli_invocations : 0} CLI launch(es) maximum · {review.snapshot.config.max_hosts} host(s) maximum · {review.snapshot.config.max_seconds}s deadline</p>
         {binding && <div className="verification-pair">
-          <strong>{binding.title} · {binding.access ? 'up to 3 sequential GETs' : 'two sequential GETs'}</strong>
+          <strong>{binding.title} · up to {binding.native_operations} sequential GETs</strong>
           <p>{binding.expected_signal}</p>
-          <table aria-label={binding.access ? 'Approved object access requests' : 'Approved request pair'}>
-            <thead><tr><th>Role</th><th>Method / URL</th><th>{binding.access ? 'Identity' : 'Additional headers'}</th></tr></thead>
+          <table aria-label={matrix ? 'Approved access matrix requests' : binding.access ? 'Approved object access requests' : 'Approved request pair'}>
+            <thead><tr><th>Role</th><th>Method / URL</th><th>{binding.access ? 'Identity' : 'Additional headers'}</th>{matrix && <th>Expected access</th>}</tr></thead>
             <tbody>{binding.requests.map(request => <tr key={request.role}><td>{request.role}</td>
               <td><code>{request.method} {request.url}</code></td>
               <td>{binding.access ? binding.access.identities.find(identity => identity.id === request.identity_id)?.label
                 : <code>{Object.keys(request.headers).length ? JSON.stringify(request.headers) : 'None'}</code>}</td>
+              {matrix && <td>{request.expected}{request === binding.requests[request.object_index] ? ' · owner control' : ''}</td>}
             </tr>)}</tbody>
           </table>
-          {binding.access ? <small>Expected IDs at <code>{binding.access.options.json_pointer}</code>{' '}
+          {matrix ? <small>Expected object IDs at <code>{binding.access.options.json_pointer}</code> are{' '}
+            <code>{binding.access.options.first_object}</code> for object A and <code>{binding.access.options.second_object}</code> for object B.
+            A failed owner control skips other requests for that object.</small> : binding.access ? <small>Expected IDs at <code>{binding.access.options.json_pointer}</code>{' '}
             are <code>{binding.access.options.owner_object}</code> for the owner object and <code>{binding.access.options.control_object}</code> for the control.
             The comparison starts only after both controls succeed. Saved responses contain metadata and fingerprints.</small>
             : <small>Credentials omitted · Redirects not followed · Results do not change finding review status.</small>}
-          {binding.access && <p>Confirm the owner object belongs to the first account and the second account should be denied.</p>}
+          {binding.access && !matrix && <p>Confirm the owner object belongs to the first account and the second account should be denied.</p>}
         </div>}
         {cli && <p>CLI-internal network requests are uncounted. Input scope checks do not constrain traffic inside the external binary.</p>}
         <small>Review {review.id.slice(0, 8)} · Expires {new Date(review.expires).toLocaleString()}</small>

@@ -39,3 +39,33 @@ test('optional fuzzing starter exposes the required wordlist before execution',a
  await expect(w.getByRole('status')).toContainText('registered wordlist');
  expect((await (await request.get('/api/runs')).json()).length).toBe(before);
 });
+
+test('scoped ffuf starter loads enforcement and prompts for a wordlist',async({page,request})=>{
+ await page.goto('/');
+ await page.getByRole('button',{name:'Local workspace',exact:true}).click();
+ const w=page.getByRole('dialog',{name:'Local assessment workspace'});
+ await w.getByRole('button',{name:'Load scoped ffuf',exact:true}).click();
+ await expect(w.getByLabel('CLI scope enforcement')).toHaveValue('enforced');
+ await w.getByLabel('Enable catalog CLI execution').check();
+ await w.getByRole('button',{name:'Check workflow readiness',exact:true}).click();
+ await expect(w.getByRole('status')).toContainText('registered wordlist');
+ expect(await (await request.get('/api/_qa/target-calls')).json()).toEqual([]);
+});
+
+test('scanner profiles report pinned versions, capture coverage, and bundled inputs',async({page,request})=>{
+ await page.goto('/');
+ await page.getByRole('button',{name:'Local workspace',exact:true}).click();
+ const workspace=page.getByRole('dialog',{name:'Local assessment workspace'});
+ await workspace.getByRole('button',{name:'Scanner profiles',exact:true}).click();
+ const readiness=workspace.getByRole('region',{name:'Scanner profiles'});
+ const table=readiness.getByRole('table',{name:'Scanner readiness'});
+ await expect(table.getByRole('row').filter({hasText:'httprobe'})).toContainText('HTTP History');
+ await expect(table.getByRole('row').filter({hasText:'ffuf'})).toContainText('v2.1.0');
+ await request.post('/api/support-data/install/bundled',{data:{}});
+ await readiness.getByRole('button',{name:'Check scanner setup'}).click();
+ await expect(readiness).toContainText('Small directory paths · Registered and verified');
+ await readiness.getByLabel('Profile',{exact:false}).selectOption('web-recon');
+ await expect(table.getByRole('row').filter({hasText:'nuclei'})).toContainText('External proxy history');
+ await expect(readiness).toContainText('Trickest trusted resolvers · Registered and verified');
+ expect(await (await request.get('/api/_qa/target-calls')).json()).toEqual([]);
+});

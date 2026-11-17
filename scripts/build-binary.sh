@@ -66,6 +66,7 @@ DATA=(
   "${ROOT}/support-data/manifest.json${SEP}support-data"
   "${ROOT}/toolchains/web-recon.tsv${SEP}toolchains"
   "${ROOT}/toolchains/trickest-oss.tsv${SEP}toolchains"
+  "${ROOT}/toolchains/enforced-cli.tsv${SEP}toolchains"
   "${ROOT}/support-data/bundled${SEP}support-data/bundled"
   "${ROOT}/third-party/mini-tricky/payloads${SEP}third-party/mini-tricky/payloads"
 )
@@ -80,6 +81,7 @@ say "Building the binary"
   "${ADD_DATA[@]}" \
   --collect-submodules backend \
   --collect-submodules uvicorn \
+  --copy-metadata tree-sitter --copy-metadata tree-sitter-javascript --copy-metadata tree-sitter-typescript \
   scripts/binary_entry.py
 
 if [[ -x dist-bin/ai-tricky ]]; then

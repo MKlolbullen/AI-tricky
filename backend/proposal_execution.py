@@ -15,8 +15,9 @@ from .proposals import StalePlan, action_graph
 from .scope import ScopeError, network_hosts, parse_target
 from .store import now
 from .workflows import validate_workflow
-from . import verification
+from . import access_matrix, verification
 from .access_verification import ObjectAccessInput, PROFILE_ID, TestIdentities
+from .access_matrix import AccessMatrixInput
 from .http_routing import HTTPRouting, routing_binding
 
 SCHEMA = 'ai-tricky.proposal-execution/v1'
@@ -31,8 +32,9 @@ class ExecutionOptions(BaseModel):
     max_hosts: int = Field(default=64, ge=1, le=256)
     max_seconds: int = Field(default=120, ge=1, le=3600)
     input_refs: dict[str, Annotated[str, StringConstraints(pattern=r'^[A-Za-z0-9_-]{1,64}$')]] = Field(default_factory=dict, max_length=1)
-    verification_profile: Literal['repeat_get', 'cors_origin', 'object_access'] | None = None
+    verification_profile: Literal['repeat_get', 'cors_origin', 'object_access', 'access_matrix'] | None = None
     object_access: ObjectAccessInput | None = None
+    access_matrix: AccessMatrixInput | None = None
     finding_id: str | None = Field(default=None, min_length=1, max_length=64, pattern=r'^[A-Za-z0-9_-]+$')
     http_routing: HTTPRouting = Field(default_factory=HTTPRouting)
 
@@ -102,6 +104,17 @@ class ProposalExecutions:
             raise ExecutionError('Every recorded scope entry must still be an entered target. Restore the scope before preparing a new review.')
         return [known[t] for t in scope]
 
+    def _source_cli_scope(self, plan):
+        # Use the plan context bound by context_hash, never a client option.
+        with self.store.connect() as c:
+            row = c.execute('SELECT context FROM agent_plans WHERE id=?', (plan['id'],)).fetchone()
+        if row is None:
+            raise ExecutionError('Evidence-guided plan not found.', 404)
+        mode = json.loads(row['context']).get('run_config', {}).get('cli_scope', 'standard')
+        if mode not in ('standard', 'enforced'):
+            raise ExecutionError('The source run has an unsupported CLI scope mode.', 422)
+        return mode
+
     def _bindings(self, config):
         ready = preflight(config['workflow'], config, self.store)
         if not ready['ready']:
@@ -114,6 +127,7 @@ class ProposalExecutions:
                 path = registered_path(self.store, identifier, kind)
                 pins[identifier] = {'kind': kind, 'sha256': input_fingerprint(path, kind)}
         return {'cli_binaries': ready['cli_binaries'], 'input_snapshots': ready['input_snapshots'],
+                'cli_sandbox': ready['cli_sandbox'],
                 'proposal_input_pins': pins,'http_routing_binding':routing_binding(config.get('http_routing'),self.store)}
 
     def eligible_findings(self, plan_id, proposal_id):
@@ -141,11 +155,14 @@ class ProposalExecutions:
             next(n for n in graph['nodes'] if n['id'] == 'followup-test')['data']['inputRefs'] = refs
         validate_workflow(graph, live=True)
         config = {k: v for k, v in options.items()
-                  if k not in ('input_refs', 'verification_profile', 'finding_id', 'object_access')}
+                  if k not in ('input_refs', 'verification_profile', 'finding_id', 'object_access', 'access_matrix')}
         profile_id, finding_id = options.get('verification_profile'), options.get('finding_id')
         access_options = options.get('object_access')
         if access_options and profile_id != PROFILE_ID:
             raise ExecutionError('Test identities require the authenticated object access profile.', 422)
+        matrix_options = options.get('access_matrix')
+        if matrix_options and profile_id != access_matrix.PROFILE_ID:
+            raise ExecutionError('Access matrix settings require the multi-identity access matrix profile.', 422)
         if profile_id:
             if action['adapter_id'] != 'native_http':
                 raise ExecutionError('Controlled verification is available only for a bound native HTTP proposal.', 422)
@@ -154,13 +171,18 @@ class ProposalExecutions:
                 raise ExecutionError(f'This verification profile requires a budget of at least {required} native operations.', 422)
             self._check_finding(plan_id, proposal_id, finding_id)
             access = None
-            if profile_id == PROFILE_ID:
-                if not access_options:
-                    raise ExecutionError('Select both test identities and the control object.', 422)
+            if profile_id in (PROFILE_ID, access_matrix.PROFILE_ID):
                 if config['http_routing']['mode'] != 'direct':
                     raise ExecutionError('Authenticated object verification requires direct HTTP routing.', 422)
-                access = self.identities.prepare(access_options, action['target'],
-                                                 [parse_target(t) for t in plan['scope']])
+                scopes = [parse_target(t) for t in plan['scope']]
+                if profile_id == PROFILE_ID:
+                    if not access_options:
+                        raise ExecutionError('Select both test identities and the control object.', 422)
+                    access = self.identities.prepare(access_options, action['target'], scopes)
+                else:
+                    if not matrix_options:
+                        raise ExecutionError('Select three identities and the expected access for both objects.', 422)
+                    access = access_matrix.prepare(matrix_options, action['target'], scopes, self.identities)
             config['verification'] = verification.contract(profile_id, action['target'],
                                                            finding_id=finding_id, access=access)
         elif finding_id:
@@ -169,7 +191,7 @@ class ProposalExecutions:
             raise ExecutionError('This native proposal does not require CLI permission.', 422)
         config.update(target_ids=self._scope_ids(plan['scope']), targets=plan['scope'], goal=plan['goal'],
                       engine='workflow', workflow=graph, parallelism=1, ports=[80, 443], allow_http=True,
-                      cli_credential_keys=[])
+                      cli_credential_keys=[], cli_scope=self._source_cli_scope(plan))
         scopes = [parse_target(t) for t in config['targets']]
         for target in scopes:
             if target.kind not in ('url', 'wildcard'):
@@ -219,7 +241,7 @@ class ProposalExecutions:
         if self._scope_ids(plan['scope']) != config['target_ids'] or plan['scope'] != config['targets']:
             raise ExecutionError('The entered scope changed. Prepare a new review.')
         bindings = self._bindings(config)
-        if any(bindings[key] != config[key] for key in bindings):
+        if any(bindings[key] != config.get(key) for key in bindings):
             raise ExecutionError('Executable or registered input contents changed. Prepare a new review.')
 
     def _check_pending(self, c, record):

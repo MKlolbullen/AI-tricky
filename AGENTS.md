@@ -180,3 +180,55 @@ nodes. The pinned `templates.yaml` is hash-checked, so `migrate-catalog.py`
 to the concrete source type at generation/import time rather than editing the
 pinned source. Sinks now render one input handle per accepted type on the
 canvas.
+
+## API Surface and catalog argument inspector
+
+The user selected API Surface, then the local Burp bridge, enforced CLI scope,
+multi-identity access matrix, and delta-first recon in that order. Implement
+one increment at a time. API Surface parses recorded JavaScript/TypeScript and
+embedded source maps without executing code, sends no target requests, retains
+source provenance, and distinguishes inference from matched native/imported
+HTTP exchanges. Keep argument editing in the selected tool's right inspector
+with visible flags, typed controls, defaults, and separate registered input
+bindings. Preserve server validation and adapter-owned flags.
+
+## Local Burp bridge
+
+The next authorized increment transfers selected exchanges through a Montoya
+extension and opens saved requests in Repeater for manual sending. Bind a
+short-lived in-memory pairing to one run. Reuse the HTTP journal,
+preserve Burp-provided message bytes, validate URL and request authority,
+deduplicate explicit imports, and keep imported evidence distinct. Never
+turn a handoff into an automatic target request or reuse authenticated
+metadata-only captures as complete requests.
+
+## Enforced CLI scope
+
+The first enforced CLI profile uses pinned static ffuf with Bubblewrap on
+Linux. Keep the scanner in an isolated network namespace with the minimum
+filesystem mounts. The only relay dispatches exact wordlist-derived GETs
+through the existing scoped HTTP transport, shared budget and journal. Keep
+this mode fail closed across preflight, launches and workflow recovery.
+Use loopback fixtures to verify direct network denial and real ffuf capture.
+Recheck helper hashes at admission after pauses, dispatch each bound path at
+most once per invocation, and bind the source run's enforcement mode into
+proposal reviews. Never downgrade an enforced source run to standard mode.
+
+## Multi-identity access matrix
+
+The first matrix compares three session-only bearer identities against two
+bound, same-origin GET resources. Start from a saved native HTTP observation
+or an evidence-bound proposal. Review the exact requests before dispatch.
+Run both owner controls first. An invalid control leaves only its column
+unmeasured. Require a positive read by the same identity on the same peer
+before interpreting a 403/404 as a denial. Preserve redacted journal evidence
+and the operator's explicit finding review.
+
+## Scanner profile reliability
+
+Check scanner versions and usable bundled inputs locally. Prefer explicit
+PATH entries and recognize tools in the default pinned profile directories.
+Provide a checksum for the Ubuntu 24.04 x86-64 beta package. Scoped httprobe
+uses the same isolated relay as ffuf and sends only approved exact GETs.
+Normalize scoped matches only when a same-run, same-node journal exchange
+matches the endpoint. Keep exchange IDs out of observation comparison hashes.

@@ -32,6 +32,7 @@ from .support_data import SupportData
 from .team_routing import ModelRoute, validate_routes, execute_route
 from .http_routing import HTTPRouting, resolve_routing, routing_binding
 from .http_journal import HTTPJournal, request_message
+from .burp_bridge import BurpBridge, read_batch, web_only
 from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
 from .proposals import ProposalPlanner, ProposalError, StalePlan
@@ -68,6 +69,7 @@ class RunInput(BaseModel):
     max_hosts: int = Field(default=64, ge=1, le=256)
     ports: list[int] = Field(default_factory=lambda:[22,80,443,8080,8443], min_length=1, max_length=16)
     allow_cli: bool = False
+    cli_scope: Literal['standard','enforced'] = 'standard'
     max_cli_invocations: int = Field(default=64, ge=1, le=256)
     max_seconds: int = Field(default=240, ge=1, le=3600)
     cli_credential_keys: list[str] = Field(default_factory=list,max_length=30)
@@ -189,6 +191,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
     support_data = SupportData(store)
     http_journal = HTTPJournal(store)
+    burp_bridge = BurpBridge(store, http_journal)
     agent_presets = AgentPresets(store)
     evidence = EvidenceIndex(store)
     asset_graph = AssetGraph(store)
@@ -436,10 +439,25 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         return {'deleted': True}
 
     @app.get('/api/workflow-starters/web-recon')
-    async def web_recon_starter(fuzz: bool = False, scan: bool = False, review: bool = False):
+    async def web_recon_starter(fuzz: bool = False, scan: bool = False, review: bool = False, surface: bool = False):
         from .web_recon import recon_workflow
-        graph = recon_workflow(fuzz=fuzz, scan=scan, review=review)
+        graph = recon_workflow(fuzz=fuzz, scan=scan, review=review, surface=surface)
         return support_data.bind(graph, bundled_only=True)['graph'] if scan else graph
+
+    @app.get('/api/workflow-starters/enforced-ffuf')
+    def enforced_ffuf_starter():
+        from .web_recon import recon_workflow
+        return support_data.bind(recon_workflow(isolated_ffuf=True), bundled_only=True)['graph']
+
+    @app.get('/api/workflow-starters/enforced-httprobe')
+    def enforced_httprobe_starter():
+        from .web_recon import recon_workflow
+        return recon_workflow(isolated_probe=True)
+
+    @app.get('/api/scanner-profiles')
+    def scanner_profiles():
+        from .scanner_profiles import status
+        return status(support_data)
 
     @app.get('/api/workflow-starters/trickest/{identifier}')
     def trickest_starter(identifier: str):
@@ -468,7 +486,15 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     async def catalog_tool(tid: str):
         tool=TOOLS.get(tid)
         if not tool:raise HTTPException(404,'Catalog tool not found.')
-        return {**tool,'args':[{**a,'blocked_reason':blocked_flag(a)} for a in tool.get('args',[])],'readiness':tool_readiness(tool)}
+        from .support_data import requirements
+        bindings = {name: True for name in requirements(tool)}
+        for name in ('file', 'folder', 'sbom'):
+            if name in tool['inputs']:
+                bindings[name] = name == 'sbom' and any('{sbom_file}' in arg for arg in tool['command'])
+        return {**tool, 'args': [{**arg, 'blocked_reason': blocked_flag(arg)} for arg in tool.get('args', [])],
+                'bindings': [{'name': name, 'kind': 'folder' if name in ('folder', 'templates') else 'file',
+                              'required': required} for name, required in bindings.items()],
+                'readiness': tool_readiness(tool)}
 
     @app.get('/api/inputs')
     async def inputs():
@@ -820,6 +846,39 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     def model_usage(limit: int = 50, offset: int = 0):
         return usage.history(limit=limit, offset=offset)
 
+    @app.get('/api/runs/{rid}/api-surface')
+    def saved_api_surface(rid: str):
+        from .api_surface import analyze_surface
+        from .recovery import checked_reused_content
+        run = get_run(rid)
+        graph = run['config'].get('workflow') or {}
+        collectors = {node['id'] for node in graph.get('nodes', []) if node['data']['kind'] == 'native_web_assets'}
+        manifests = []
+        for node in store.nodes(rid):
+            result = node.get('result') or {}
+            if node['node_id'] not in collectors or node['status'] not in ('completed', 'reused') or not result.get('artifact_id'):
+                continue
+            manifests.extend(checked_reused_content(store, result['artifact_id']))
+        if not manifests:
+            raise HTTPException(404, 'This run has no saved Web source collector output.')
+        return analyze_surface(store, rid, manifests, run['config']['targets'], http_journal.endpoint_exchanges)
+
+    @app.post('/api/runs/{rid}/api-surface/{endpoint_id}/exchanges/{exchange_id}/verification-plan', status_code=201)
+    def api_surface_verification_plan(rid: str, endpoint_id: str, exchange_id: str):
+        surface = saved_api_surface(rid)
+        endpoint = next((row for row in surface['endpoints'] if row['id'] == endpoint_id), None)
+        if not endpoint or endpoint['method'] != 'GET' or not any(
+                row['exchange_id'] == exchange_id and row['source'] == 'native' for row in endpoint['traffic']):
+            raise HTTPException(422, 'Select a native GET capture linked to this endpoint and source run.')
+        try:
+            exchange = http_journal.get(exchange_id)
+        except KeyError:
+            raise HTTPException(404, 'The linked HTTP exchange is unavailable.') from None
+        if (exchange['run_id'] != rid or exchange['state'] != 'completed' or exchange['cancel_requested']
+                or not exchange['artifact_id'] or exchange['source'] != 'native'):
+            raise HTTPException(422, 'This exchange is unavailable for access verification.')
+        return proposal_planner.plan_for_http_capture(rid, exchange['artifact_id'], exchange['url'])
+
     @app.get('/api/runs/{rid}/model-usage')
     def run_model_usage(rid: str, limit: int = 50, offset: int = 0):
         get_run(rid)
@@ -869,6 +928,42 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         get_run(rid)
         return await asyncio.to_thread(http_journal.import_burp_xml,rid,body.xml)
 
+    @app.get('/api/runs/{rid}/burp-bridge')
+    def burp_bridge_status(rid: str):
+        get_run(rid)
+        return burp_bridge.status(rid)
+
+    @app.post('/api/runs/{rid}/burp-bridge/pair')
+    def pair_burp(rid: str, request: Request):
+        web_only(request)
+        return burp_bridge.pair(get_run(rid))
+
+    @app.post('/api/runs/{rid}/burp-bridge/disconnect')
+    def disconnect_burp(rid: str, request: Request):
+        web_only(request)
+        get_run(rid)
+        return burp_bridge.disconnect(rid)
+
+    @app.post('/api/runs/{rid}/burp-bridge/exchanges')
+    async def burp_import_exchanges(rid: str, request: Request):
+        authorization = request.headers.get('authorization', '')
+        burp_bridge.authenticate(rid, authorization)
+        batch = await read_batch(request)
+        return await asyncio.to_thread(burp_bridge.import_items, rid, authorization, batch)
+
+    @app.get('/api/runs/{rid}/burp-bridge/repeater')
+    def burp_repeater_pending(rid: str, request: Request):
+        return burp_bridge.pending(rid, request.headers.get('authorization', ''))
+
+    @app.post('/api/runs/{rid}/burp-bridge/repeater/{exchange_id}/ack')
+    def burp_repeater_ack(rid: str, exchange_id: str, request: Request):
+        return burp_bridge.acknowledge(rid, request.headers.get('authorization', ''), exchange_id)
+
+    @app.post('/api/http-history/{exchange_id}/repeater')
+    def queue_burp_repeater(exchange_id: str, request: Request):
+        web_only(request)
+        return burp_bridge.queue(exchange_id)
+
     async def execute(rid, config, ctl):
         target_scope = [parse_target(t) for t in config['targets']]
         store.status(rid, 'running' if ctl.gate.is_set() else 'paused')
@@ -880,12 +975,11 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             if verification_step is not None:
                 request = verification.request_spec(config, node_id, verification_step, url)
                 if 'identity_id' in request:
-                    options = config['verification']['access']['options']
                     identity = ctl.verification_identities.get(request['identity_id'])
                     if identity is None or ctl.verification_fingerprint_key is None:
                         return {'error': 'The approved test identity is unavailable.'}
-                    expected = options['control_object'] if request['role'] == 'control' else options['owner_object']
-                    authentication = AuthenticatedRequest(identity, options['json_pointer'], expected,
+                    pointer, expected = verification.request_marker(config['verification'], request)
+                    authentication = AuthenticatedRequest(identity, pointer, expected,
                                                           ctl.verification_fingerprint_key)
             while True:
                 await ctl.gate.wait()
@@ -1032,7 +1126,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                                      usage_role=role_override or next((key for key, role in team_leader.ROLES.items() if role['focus']==role_instructions), 'analyst'))
                         if assessor is None:extra['evidence_only']=True
                         return await role_assess(ctl,rid,extra['usage_role'],[],goal,disabled,**extra)
-                    result=await execute_workflow(rid,config,ctl,store,fetch,probe,analyze,asset_graph=asset_graph)
+                    result=await execute_workflow(rid,config,ctl,store,fetch,probe,analyze,asset_graph=asset_graph,http_journal=http_journal)
                 elif config['engine']=='inventory':
                     result=await inventory()
                 elif config['engine']=='team':
@@ -1128,6 +1222,8 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         if any(not 1 <= p <= 65535 for p in body.ports):
             raise HTTPException(422, 'TCP ports must be integers from 1 to 65535.')
         if not body.target_ids and body.engine!='workflow':raise HTTPException(422,'Select at least one entered target.')
+        if body.cli_scope == 'enforced' and body.engine != 'workflow':
+            raise HTTPException(422, 'Enforced CLI scope is available for workflows.')
         if body.engine == 'workflow':
             validate_workflow(body.workflow, live=True)
         if body.engine in ('team','workflow'):
@@ -1166,7 +1262,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             resolve_team_models(config)
         if body.engine!='workflow':return {'ready':True,'issues':[]}
         result=catalog_preflight(body.workflow,config,store,check_binaries=body.allow_http,credentials=configured_secret_keys())
-        return {k:v for k,v in result.items() if k not in ('cli_binaries','input_snapshots')}
+        return {k:v for k,v in result.items() if k not in ('cli_binaries','input_snapshots','cli_sandbox')}
 
     @app.post('/api/runs', status_code=201)
     async def create_run(body: RunInput):
@@ -1177,6 +1273,8 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
                 ready=await asyncio.to_thread(catalog_preflight,body.workflow,config,store,credentials=configured_secret_keys())
                 if not ready['ready']:raise HTTPException(422,{'message':'Catalog preflight failed.','issues':ready['issues']})
                 config.update(cli_binaries=ready['cli_binaries'],input_snapshots=ready['input_snapshots'])
+                if ready['cli_sandbox']:
+                    config['cli_sandbox'] = ready['cli_sandbox']
             # Resolve the selected model for a team run in the request path so the
             # provider gate (409/422) applies before the run is created. The
             # resolved config (with its key) is passed to the control object only.

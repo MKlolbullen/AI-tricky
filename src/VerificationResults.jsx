@@ -1,16 +1,45 @@
 import React, {useEffect, useState} from 'react';
 import {api, downloadJSON} from './api.mjs';
 
+const matrixOutcome = {matched: 'Matches expectation', unexpected: 'Unexpected access result', inconclusive: 'Inconclusive'};
+
+function MatrixResults({report, onCapture}) {
+  const byIdentity = (id, column) => report.cells.find(cell =>
+    cell.request.identity_id === id && cell.request.object_index === column);
+  return <table className="verification-matrix" aria-label="Access matrix results">
+    <thead><tr><th scope="col">Identity</th>{[0, 1].map((column) => <th key={column} scope="col">
+      Object {column ? 'B' : 'A'}<br/><code>{report.cells[column].request.url}</code>
+    </th>)}</tr></thead>
+    <tbody>{report.identities.map(identity => <tr key={identity.id}>
+      <th scope="row">{identity.label}</th>
+      {[0, 1].map(column => {
+        const cell = byIdentity(identity.id, column);
+        return <td key={column} className={'matrix-cell ' + cell.outcome}>
+          <strong>{matrixOutcome[cell.outcome]}</strong>
+          <small>Expected {cell.request.expected} · {cell.observed ? 'Observed ' + cell.observed : 'No access signal'}</small>
+          {cell.owner_control && <small>Owner control</small>}
+          {cell.status && <small>HTTP {cell.status}{cell.owner_body_matched === true && !cell.owner_control ? ' · owner body matched' : ''}</small>}
+          {cell.reason && <small>{cell.reason}</small>}
+          {cell.recorded_outcome && cell.recorded_outcome !== cell.outcome && <small>Recorded result: {matrixOutcome[cell.recorded_outcome]}</small>}
+          {cell.artifact_id && <button className="secondary" onClick={() => onCapture(cell.artifact_id)}
+            aria-label={`Inspect capture for ${identity.label} on object ${column ? 'B' : 'A'}`}>Inspect capture</button>}
+        </td>;
+      })}
+    </tr>)}</tbody>
+  </table>;
+}
+
 function VerificationCard({report, onCapture}) {
+  const matrix = report.profile_id === 'access_matrix';
   const access = report.profile_id === 'object_access';
   const roles = access ? ['owner', 'control', 'other'] : ['baseline', 'variant'];
   const labels = {owner: 'Owner object', control: 'Second identity control', other: 'Second identity on owner object'};
-  return <article className="verification-card" aria-label="Paired verification result">
+  return <article className="verification-card" aria-label={matrix ? 'Access matrix result' : 'Paired verification result'}>
     <div className="section-intro"><h4>{report.title}</h4><span className="tag">{report.outcome.replaceAll('_', ' ').toUpperCase()}</span></div>
     <p>{report.summary}</p><small>Run {report.run_id.slice(0, 8)} · {report.run_status} · Profile version {report.profile_version}</small>
     <p className="proposal-boundary">This result concerns the selected check. Finding severity, confidence and review status remain separate.</p>
     {report.evidence_current === false && <p className="local-error" role="status">Captured evidence no longer matches the saved comparison. Recorded outcome: {report.recorded_outcome}.</p>}
-    <table aria-label={access ? 'Object access evidence' : 'Baseline and variant evidence'}>
+    {matrix ? <MatrixResults report={report} onCapture={onCapture}/> : <table aria-label={access ? 'Object access evidence' : 'Baseline and variant evidence'}>
       <thead><tr><th>Role</th><th>HTTP</th>{access && <th>Resource ID matched</th>}
         <th>Bytes / connected IP</th><th>Capture</th></tr></thead>
       <tbody>{roles.map(role => {
@@ -24,7 +53,7 @@ function VerificationCard({report, onCapture}) {
           <td>{capture?.artifact_id ? <button className="secondary" onClick={() => onCapture(capture.artifact_id)}>Inspect {role}</button> : 'Unavailable'}</td>
         </tr>;
       })}</tbody>
-    </table>
+    </table>}
     {!!report.differences.length && <details open><summary>Captured differences ({report.differences.length})</summary><table><thead><tr><th>Field</th><th>Baseline</th><th>Variant</th></tr></thead><tbody>{report.differences.map(d => <tr key={d.field}><td>{d.field}</td><td><code>{d.baseline ?? 'Absent'}</code></td><td><code>{d.variant ?? 'Absent'}</code></td></tr>)}</tbody></table></details>}
     <details><summary>Request bindings, response headers and fingerprints</summary><pre>{JSON.stringify({facts: report.facts, captures: report.captures, approval: report.approval, profile_hash: report.contract_hash}, null, 2)}</pre></details>
     <details><summary>Coverage and interpretation</summary><ul>{report.coverage_limits.map((reason, i) => <li key={i}>{reason}</li>)}</ul></details>
@@ -40,7 +69,7 @@ export function RunVerification({run, onCapture}) {
     read(); const timer = ['queued', 'running', 'paused'].includes(run.status) ? setInterval(read, 1500) : null;
     return () => {alive = false; if (timer) clearInterval(timer);};
   }, [run.id, run.status]);
-  return <section className="verification-results" aria-label="Controlled verification"><h4>Controlled verification</h4>{error && <p className="local-error" role="alert">{error}</p>}{report ? <VerificationCard report={report} onCapture={onCapture}/> : !error && <p role="status">Loading paired evidence…</p>}</section>;
+  return <section className="verification-results" aria-label="Controlled verification"><h4>Controlled verification</h4>{error && <p className="local-error" role="alert">{error}</p>}{report ? <VerificationCard report={report} onCapture={onCapture}/> : !error && <p role="status">Loading verification evidence…</p>}</section>;
 }
 
 export function FindingVerifications({findingId, onCapture}) {
@@ -50,5 +79,5 @@ export function FindingVerifications({findingId, onCapture}) {
     api(`/findings/${findingId}/verification`).then(r => {if (alive) setReports(r);}).catch(e => {if (alive) setError(e.message);}).finally(() => {if (alive) setLoading(false);});
     return () => {alive = false;};
   }, [findingId, refresh]);
-  return <section className="verification-results" aria-label="Linked verification checks"><div className="section-intro"><h4>Linked verification checks</h4><button className="secondary" onClick={() => setRefresh(value => value + 1)}>Refresh checks</button></div>{error && <p className="local-error" role="alert">{error}</p>}{loading ? <p role="status">Loading linked checks…</p> : !reports.length && <p>No approved paired checks are linked to this finding.</p>}{reports.map(report => <VerificationCard key={report.run_id} report={report} onCapture={onCapture}/>)}</section>;
+  return <section className="verification-results" aria-label="Linked verification checks"><div className="section-intro"><h4>Linked verification checks</h4><button className="secondary" onClick={() => setRefresh(value => value + 1)}>Refresh checks</button></div>{error && <p className="local-error" role="alert">{error}</p>}{loading ? <p role="status">Loading linked checks…</p> : !reports.length && <p>No approved checks are linked to this finding.</p>}{reports.map(report => <VerificationCard key={report.run_id} report={report} onCapture={onCapture}/>)}</section>;
 }

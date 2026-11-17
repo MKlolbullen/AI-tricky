@@ -78,7 +78,7 @@ def action_graph(action, proposal_id=None):
     typ = action['input_type']
     source = {'id': 'followup-input', 'type': 'tool', 'position': {'x': 0, 'y': 130},
               'data': {'kind': 'catalog_source', 'title': 'Evidence-bound input', 'sourceType': typ,
-                       'value': action['target'], 'inputs': [], 'outputs': [typ], 'output': typ,
+                       'value': '\n'.join(action.get('targets', [action['target']])), 'inputs': [], 'outputs': [typ], 'output': typ,
                        'timeout': 120, 'retries': 0}}
     adapter = action['adapter_id']
     if adapter == 'native_http':
@@ -332,12 +332,17 @@ class ProposalPlanner:
                   'coverage_limits': context['coverage_limits'] + result.coverage_limits,
                   'scope': context['scope'], 'max_risk': context['max_risk'], 'context_hash': digest(context),
                   'current': True, 'stale_reason': None}
+        if context.get('delta'):
+            output['delta'] = context['delta']
         with self.store.connect() as c:
             c.execute('INSERT INTO agent_plans VALUES(?,?,?,?,?,?,?)', (plan_id, context['run_id'], output['created'], goal,
                        planner, encoded(context), encoded(output)))
         return output
 
     def check_current(self, context):
+        if context.get('delta'):
+            from .delta_recon import DeltaRecon
+            DeltaRecon(self.store, self.evidence, initialize=False).check_binding(context['delta'])
         if context['parser_version'] != PARSER_VERSION or context['catalog_hash'] != catalog_hash():
             raise StalePlan('Parser or adapter contracts changed. Generate a new evidence-guided plan.')
         if self.store.run(context['run_id'])['config']['targets'] != context['scope']:

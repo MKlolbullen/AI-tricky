@@ -232,3 +232,12 @@ Provide a checksum for the Ubuntu 24.04 x86-64 beta package. Scoped httprobe
 uses the same isolated relay as ffuf and sends only approved exact GETs.
 Normalize scoped matches only when a same-run, same-node journal exchange
 matches the endpoint. Keep exchange IDs out of observation comparison hashes.
+
+## Delta recon
+
+Save immutable baseline revisions per entered scope and executable workflow.
+Exclude layout and labels from identity. Retain coverage notices and explicit
+not-observed semantics. Delta follow-ups use selected current changes and
+reuse proposal approval, scope, accounting and journal contracts. Recheck
+baseline evidence and source coverage before dispatch. New node input receipts
+store hashes and provenance without copying raw inputs or credentials.

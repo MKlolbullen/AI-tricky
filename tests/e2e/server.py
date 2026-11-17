@@ -130,6 +130,34 @@ def seed(store, fixture_url, journal):
     usage.finish(identifier, 'completed')
 
 
+def delta_fixture(store, fixture_url):
+    import hashlib
+    from backend.workflows import REGISTRY, SCHEMA
+    nodes = [{'id': 'd' + str(i), 'type': 'tool', 'position': {'x': i * 230, 'y': 0},
+              'data': {'kind': kind, 'title': REGISTRY[kind]['name'], 'inputs': REGISTRY[kind]['inputs'],
+                       'output': REGISTRY[kind]['output'], 'timeout': 120, 'retries': 0}}
+             for i, kind in enumerate(('native_scope', 'native_http', 'native_web_assets'))]
+    graph = {'schema': SCHEMA, 'nodes': nodes,
+             'edges': [{'id': 'de' + str(i), 'source': 'd' + str(i), 'target': 'd' + str(i + 1)} for i in range(2)]}
+    config = {'engine': 'workflow', 'workflow': graph, 'targets': [fixture_url + '/'], 'allow_http': True,
+              'max_requests': 10, 'max_cli_invocations': 1, 'max_hosts': 1, 'max_seconds': 30, 'ports': [80]}
+    for number, rid in enumerate(('qa-delta-baseline', 'qa-delta-current'), 1):
+        with store.connect() as c:
+            c.execute('INSERT INTO runs VALUES(?,?,?,?,?,?)', (rid, 'completed', now(), now(), json.dumps(config), None))
+        manifest = []
+        for name in ('stable.js', 'changed.js', 'removed.js' if number == 1 else 'new.js'):
+            url = fixture_url + '/delta/' + name
+            body = 'fixture ' + str(number if name == 'changed.js' else 1)
+            aid = store.artifact(rid, 'http-' + name.replace('.', '-') + '.json', {'url': url, 'status': 200, 'body': body,
+                                 'body_sha256': hashlib.sha256(body.encode()).hexdigest(), 'truncated': False}, node_id='d2')
+            manifest.append({'url': url, 'kind': 'js', 'artifact_id': aid})
+        output = store.artifact(rid, 'node-d2.json', [{'manifest': manifest, 'counts': {}}], node_id='d2')
+        store.node_status(rid, 'd0', 'completed', {'records': 1})
+        store.node_status(rid, 'd1', 'completed', {'records': 1})
+        store.node_status(rid, 'd2', 'completed', {'records': len(manifest), 'artifact_id': output})
+    return {'baseline': 'qa-delta-baseline', 'current': 'qa-delta-current'}
+
+
 if __name__ == '__main__':
     class FixtureHandler(BaseHTTPRequestHandler):
         calls = []
@@ -178,6 +206,7 @@ if __name__ == '__main__':
             FixtureHandler.calls.clear()
             return {'reset': True}
         app.router.routes.insert(0, APIRoute('/api/_qa/reset', reset_fixture, methods=['POST']))
+        app.router.routes.insert(0, APIRoute('/api/_qa/delta-fixture', lambda: delta_fixture(store, fixture_url), methods=['POST']))
         app.router.routes.insert(0, APIRoute('/api/_qa/target-calls', lambda: FixtureHandler.calls, methods=['GET']))
         try:
             uvicorn.run(app, host='127.0.0.1', port=8787, access_log=False)

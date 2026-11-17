@@ -1,0 +1,5 @@
+{
+  "chunk": 1,
+  "note": "First 25 tools with expanded args. Full content available locally.",
+  "tools": [{"id": "subfinder", "args_count": 15}] 
+}

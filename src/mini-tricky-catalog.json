@@ -1,8 +1,1 @@
-{
-  "source": {
-    "repository": "https://github.com/MKlolbullen/mini-tricky",
-    "note": "Expanded args for Trickest-style parameters. Full content from local /tmp/catalog-broad.json"
-  },
-  "tools": [],
-  "workflows": []
-}
+FULL_CATALOG_FROM_TMP

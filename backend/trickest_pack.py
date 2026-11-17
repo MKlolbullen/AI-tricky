@@ -94,7 +94,7 @@ def candidate_output(tool, streams, seed, config):
 
 
 def workflow(identifier):
-    from .catalog import TOOLS, TRICKEST_CATALOG
+    from .catalog import TOOLS, TRICKEST_CATALOG, OUTPUT_INPUTS
     from .web_recon import recon_workflow
     from .workflows import SCHEMA, validate_workflow
 
@@ -110,7 +110,7 @@ def workflow(identifier):
     for name, kind, title, inputs, outputs, fields in (
         ('seed', 'catalog_source', 'Selected ' + source, [], [source], {'sourceType': source, 'value': ''}),
         ('generate', 'catalog_tool', spec['name'], spec['inputs'], spec['outputs'], {'toolId': tool}),
-        ('report', 'catalog_output', 'Generated candidates', ['any'], ['report'], {}),
+        ('report', 'catalog_output', 'Generated candidates', list(OUTPUT_INPUTS), ['report'], {}),
     ):
         nodes.append({'id': name, 'type': 'tool', 'position': {'x': len(nodes) * 260, 'y': 100},
                       'data': {'kind': kind, 'title': title, 'inputs': inputs, 'outputs': outputs,
@@ -119,7 +119,7 @@ def workflow(identifier):
         {'id': f'{start}-{end}', 'source': start, 'target': end, 'type': 'smoothstep',
          'sourceHandle': 'out:' + typ, 'targetHandle': 'in:' + port, 'label': typ}
         for start, end, typ, port in (('seed', 'generate', source, source),
-                                      ('generate', 'report', output, 'any'))
+                                      ('generate', 'report', output, output))
     ]
     graph = {'schema': SCHEMA, 'nodes': nodes, 'edges': edges, 'parallelism': 2}
     validate_workflow(graph, live=True)

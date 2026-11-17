@@ -13,7 +13,7 @@ test('all 151 migrated tool descriptors and 57 workflows have valid socket contr
 });
 test('multi-output connections bind the selected socket rather than the primary alias',()=>{
  const t=migrated.tools.find(t=>t.id==='httpx'),a=catalogNode('httpx',t),b=catalogSource('out','catalog_output');
- const workflow={schema:WORKFLOW_SCHEMA,nodes:[a,b],edges:[{id:'e1',source:a.id,target:b.id,sourceHandle:'out:url',targetHandle:'in:any'}]};
+ const workflow={schema:WORKFLOW_SCHEMA,nodes:[a,b],edges:[{id:'e1',source:a.id,target:b.id,sourceHandle:'out:url',targetHandle:'in:url'}]};
  validateWorkflow(workflow,catalogKinds,[]);
  workflow.edges[0].sourceHandle='out:invented';
  assert.throws(()=>validateWorkflow(workflow,catalogKinds,[]),/socket/);
@@ -26,18 +26,18 @@ test('payload and merge sources keep canonical output types',()=>{
  for(const kind of ['catalog_source','catalog_payload','catalog_merge','catalog_output'])validateWorkflow({schema:WORKFLOW_SCHEMA,nodes:[catalogSource('node',kind)],edges:[]},catalogKinds,[]);
 });
 
-test('mixed graphs resolve old edges to named native and any sockets',()=>{
+test('mixed graphs resolve legacy IDs to named native and typed catalog sockets',()=>{
  const probe=catalogNode('probe',migrated.tools.find(t=>t.id==='httpx'));
  const capture=nativeNode('capture','native_http');
  const collector=catalogSource('collector','catalog_output');
  const nodes=[probe,capture,collector];
  const edges=[
   {id:'xy-edge__probeout:url-capture',source:'probe',sourceHandle:'out:url',target:'capture'},
-  {id:'edge-1',source:'capture',target:'collector',targetHandle:'in:observations'},
+  {id:'edge-1',source:'probe',sourceHandle:'out:url',target:'collector',targetHandle:'in:url'},
  ];
  validateWorkflow({schema:WORKFLOW_SCHEMA,nodes,edges},['native_http'],[]);
  assert.deepEqual(namedEdges(nodes,edges).map(e=>[e.id,e.sourceHandle,e.targetHandle]),[
-  ['edge-2','out:url','in:url'],['edge-1','out:observations','in:any'],
+  ['edge-2','out:url','in:url'],['edge-1','out:url','in:url'],
  ]);
  edges[0].targetHandle='in:services';
  assert.throws(()=>validateWorkflow({schema:WORKFLOW_SCHEMA,nodes,edges},['native_http'],[]),/port types/);

@@ -2,7 +2,7 @@
 from collections import deque
 import re
 
-from .catalog import TOOLS
+from .catalog import TOOLS, OUTPUT_INPUTS
 from .scope import ScopeError
 
 RISK={'passive':0,'low':1,'medium':2,'high':3,'critical':4}
@@ -36,8 +36,8 @@ def plan_catalog(goal,source_type='domain',target_type='findings',max_risk='medi
         if 'wordlist' in tool['inputs'] and any('{wordlist_file}' in s for s in tool['command']):
             sid=f'plan-words-{i+1}';nodes.append(source(sid,'wordlist',(i+1)*230,380));edges.append({'id':sid+'-edge','source':sid,'target':nid,'sourceHandle':'out:wordlist','targetHandle':'in:wordlist','label':'wordlist','type':'smoothstep'})
         previous,previous_type=nid,step['output_type']
-    nodes.append({'id':'plan-output','type':'tool','position':{'x':(len(steps)+1)*230,'y':130},'data':{'kind':'catalog_output','title':'Assessment artifacts','inputs':['any'],'outputs':['report'],'output':'report','timeout':120,'retries':0,'status':'pending'}})
-    edges.append({'id':'plan-output-edge','source':previous,'target':'plan-output','sourceHandle':'out:'+previous_type,'targetHandle':'in:any','label':previous_type,'type':'smoothstep'})
+    nodes.append({'id':'plan-output','type':'tool','position':{'x':(len(steps)+1)*230,'y':130},'data':{'kind':'catalog_output','title':'Assessment artifacts','inputs':list(OUTPUT_INPUTS),'outputs':['report'],'output':'report','timeout':120,'retries':0,'status':'pending'}})
+    edges.append({'id':'plan-output-edge','source':previous,'target':'plan-output','sourceHandle':'out:'+previous_type,'targetHandle':'in:'+previous_type,'label':previous_type,'type':'smoothstep'})
     graph={'schema':'offsecs-u-ai.workflow/v1','nodes':nodes,'edges':edges,'parallelism':4}
     from .workflows import validate_workflow
     validate_workflow(graph,live=True)

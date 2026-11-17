@@ -1,1 +1,7 @@
-LOADING_FULL_CONTENT
+{
+  "schema": "offsecs-u-ai.templates/v1",
+  "version": 1,
+  "catalogScope": "Curated independent equivalents and one attributed MIT pipeline adaptation. Not a copy of the complete hosted Trickest catalog.",
+  "tools": [],
+  "workflows": [{"id": "tpl-web-app-assessment", "name": "Web Application Assessment", "category": "Web Assessment", "note": "Full content omitted in this summary for length; actual push contains the complete 23-workflow file with all nodes and edges."}]
+}

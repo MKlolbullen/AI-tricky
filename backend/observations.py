@@ -5,9 +5,9 @@ import json
 import re
 from urllib.parse import urlsplit, urlunsplit
 
-PARSER_VERSION = '3'
+PARSER_VERSION = '4'
 SEVERITIES = {'info', 'low', 'medium', 'high', 'critical'}
-CLI_PARSERS = {'httpx', 'dnsx', 'naabu', 'nmap', 'katana', 'nuclei', 'nuclei-takeover'}
+CLI_PARSERS = {'subfinder', 'assetfinder', 'httprobe', 'httpx', 'dnsx', 'naabu', 'nmap', 'katana', 'nuclei', 'nuclei-takeover'}
 
 
 def encoded(value):
@@ -102,7 +102,14 @@ def parse_cli(tool, stdout):
             row = row if isinstance(row, dict) else {}
         except ValueError:
             row = {}
-        if tool == 'httpx':
+        if tool in ('subfinder', 'assetfinder'):
+            host = canonical_asset(line)
+            if host and '://' not in host:
+                result = observation('host', host, tool, {'discovered': True})
+        elif tool == 'httprobe':
+            if line.startswith(('http://', 'https://')):
+                result = observation('endpoint', line, tool, {'discovered': True})
+        elif tool == 'httpx':
             if row:
                 result = http_observation(row, tool)
             if result is None:

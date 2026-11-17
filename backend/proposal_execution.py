@@ -164,6 +164,8 @@ class ProposalExecutions:
         if matrix_options and profile_id != access_matrix.PROFILE_ID:
             raise ExecutionError('Access matrix settings require the multi-identity access matrix profile.', 422)
         if profile_id:
+            if len(action.get('targets', [action['target']])) > 1:
+                raise ExecutionError('Choose single capture for a delta follow-up with multiple URLs.', 422)
             if action['adapter_id'] != 'native_http':
                 raise ExecutionError('Controlled verification is available only for a bound native HTTP proposal.', 422)
             required = verification.operation_count(profile_id)
@@ -192,6 +194,8 @@ class ProposalExecutions:
         config.update(target_ids=self._scope_ids(plan['scope']), targets=plan['scope'], goal=plan['goal'],
                       engine='workflow', workflow=graph, parallelism=1, ports=[80, 443], allow_http=True,
                       cli_credential_keys=[], cli_scope=self._source_cli_scope(plan))
+        if plan.get('delta'):
+            config['recon_delta'] = plan['delta']
         scopes = [parse_target(t) for t in config['targets']]
         for target in scopes:
             if target.kind not in ('url', 'wildcard'):

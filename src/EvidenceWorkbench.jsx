@@ -61,7 +61,7 @@ export function ObservationBrowser({runs, onExchange}) {
     <div className="section-intro"><div><h3>Structured observations</h3><p>Normalized captures with source, parser version and original evidence. An observation does not establish a vulnerability.</p></div>
       <button className="secondary" onClick={() => setRefresh(v => v + 1)}>Refresh observations</button></div>
     <div className="evidence-filters"><RunFilter runs={runs} value={runId} onChange={filter(setRunId)}/>
-      <label className="field-label">Kind<select value={kind} onChange={e => filter(setKind)(e.target.value)}><option value="">All kinds</option>{['http', 'service', 'dns', 'endpoint', 'detection'].map(k => <option key={k}>{k}</option>)}</select></label>
+      <label className="field-label">Kind<select value={kind} onChange={e => filter(setKind)(e.target.value)}><option value="">All kinds</option>{['http', 'service', 'dns', 'host', 'endpoint', 'detection'].map(k => <option key={k}>{k}</option>)}</select></label>
       <label className="field-label">Search<input value={q} maxLength={200} onChange={e => filter(setQ)(e.target.value)} placeholder="Asset or source"/></label></div>
     {error && <p className="local-error" role="alert">{error}</p>}
     <div className="evidence-columns"><div aria-busy={loading}>

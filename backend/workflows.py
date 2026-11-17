@@ -297,6 +297,7 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
                 return
             states[nid] = 'running'
             ctl.active_nodes.add(nid)
+            input_receipt_id = None
             store.node_status(rid, nid, 'running')
             store.event(rid, 'node.started', {'node_id': nid, 'adapter': by_id[nid]['data']['kind']})
             try:
@@ -308,25 +309,43 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
                         if key not in seen:
                             values.append(row)
                             seen.add(key)
+                from .observations import digest
+                from .delta_recon import PRESENTATION
+                from .catalog_execution import incoming_streams
+                data = by_id[nid]['data']
+                actual_inputs = incoming_streams(routes[nid], outputs) if data['kind'] in CATALOG_KINDS else values
+                receipt = {
+                    'node_id': nid, 'adapter': data.get('toolId', data['kind']),
+                    'node_contract_hash': digest({k: v for k, v in data.items() if k not in PRESENTATION}),
+                    'input_hash': digest(actual_inputs),
+                    'scope_hash': digest(config['targets']),
+                    'input_records': sum(len(v) for v in actual_inputs.values()) if isinstance(actual_inputs, dict) else len(actual_inputs),
+                    'upstream_artifact_ids': sorted({self_result['result']['artifact_id']
+                        for self_result in store.nodes(rid) if self_result['node_id'] in incoming[nid]
+                        and (self_result.get('result') or {}).get('artifact_id')}),
+                    'registered_inputs': {key: config.get('input_snapshots', {}).get(identifier, {'id': identifier})
+                        for key, identifier in {**data.get('inputRefs', {}), **({'source': data['inputId']} if data.get('inputId') else {})}.items()},
+                }
+                input_receipt_id = store.artifact(rid, 'node-inputs-' + nid + '.json', receipt, node_id=nid)
                 async with asyncio.timeout(by_id[nid]['data'].get('timeout', 120)):
                     result = await dispatch(nid, values)
                 outputs[nid] = result
                 aid = store.artifact(rid, f'node-{nid}.json', result, node_id=nid)
                 errors = sum('error' in row or row.get('state') in ('blocked', 'budget_exhausted') for row in result)
                 states[nid] = 'completed'
-                metadata = {'artifact_id': aid, 'records': sum(sum(len(v) for v in row['catalog_streams'].values()) if 'catalog_streams' in row else 1 for row in result), 'errors': errors}
+                metadata = {'artifact_id': aid, 'records': sum(sum(len(v) for v in row['catalog_streams'].values()) if 'catalog_streams' in row else 1 for row in result), 'errors': errors, 'input_receipt_id': input_receipt_id}
                 store.node_status(rid, nid, 'completed', metadata)
                 store.event(rid, 'node.completed', {'node_id': nid, **metadata})
             except asyncio.CancelledError:
                 states[nid] = 'cancelled'
-                store.node_status(rid, nid, 'cancelled')
+                store.node_status(rid, nid, 'cancelled', {'input_receipt_id': input_receipt_id})
                 store.event(rid, 'node.cancelled', {'node_id': nid})
                 raise
             except Exception as exc:
                 states[nid] = 'failed'
                 # Do not persist provider exception messages or untrusted response bodies.
                 error = str(exc)[:500] if isinstance(exc,(ScopeError,RuntimeError)) else type(exc).__name__
-                store.node_status(rid, nid, 'failed', {'error': error})
+                store.node_status(rid, nid, 'failed', {'error': error, 'input_receipt_id': input_receipt_id})
                 store.event(rid, 'node.failed', {'node_id': nid, 'error': error})
             finally:
                 ctl.active_nodes.discard(nid)

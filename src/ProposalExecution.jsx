@@ -13,12 +13,12 @@ const newMatrix = () => ({
   second_url: '', first_object: '', second_object: '', json_pointer: '/id',
 });
 
-export default function ProposalExecution({plan, proposal, onRun, initialProfile = null}) {
-  const [open, setOpen] = useState(Boolean(initialProfile)), [busy, setBusy] = useState(false), [error, setError] = useState('');
+export default function ProposalExecution({plan, proposal, onRun, initialProfile = null, initialOpen = false}) {
+  const [open, setOpen] = useState(Boolean(initialProfile) || initialOpen), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [inputs, setInputs] = useState([]), [history, setHistory] = useState([]), [review, setReview] = useState(null);
   const [profiles, setProfiles] = useState([]), [findings, setFindings] = useState([]);
   const [approved, setApproved] = useState(false), [clock, setClock] = useState(Date.now());
-  const [options, setOptions] = useState({allow_cli: false, max_requests: initialProfile === 'access_matrix' ? 6 : 1, max_cli_invocations: 1, max_hosts: 64, max_seconds: 120, http_routing:{mode:'direct',proxy_url:'http://127.0.0.1:8080',ca_input_id:null}, input_refs: {}, verification_profile: initialProfile, finding_id: null, access_matrix: initialProfile === 'access_matrix' ? newMatrix() : null});
+  const [options, setOptions] = useState({allow_cli: false, max_requests: initialProfile === 'access_matrix' ? 6 : proposal.action.cost.native_operations || 1, max_cli_invocations: 1, max_hosts: 64, max_seconds: 120, http_routing:{mode:'direct',proxy_url:'http://127.0.0.1:8080',ca_input_id:null}, input_refs: {}, verification_profile: initialProfile, finding_id: null, access_matrix: initialProfile === 'access_matrix' ? newMatrix() : null});
   const cli = !!proposal.action.cost.cli_invocations, templates = proposal.action.adapter_id === 'nuclei';
   const refreshHistory = async () => setHistory((await api(`/agent/proposals/${plan.id}/executions`)).filter(r => r.proposal_id === proposal.id));
   useEffect(() => {
@@ -124,6 +124,7 @@ export default function ProposalExecution({plan, proposal, onRun, initialProfile
       {error && <p className="local-error" role="alert">{error}</p>}
       {review && <div className="execution-snapshot" role="region" aria-label="Saved execution snapshot">
         <span className="tag">{expired ? 'EXPIRED · REFRESH STATUS' : review.status.toUpperCase()}</span>
+        {review.snapshot.action.targets && <ul>{review.snapshot.action.targets.map(url => <li key={url}><code>{url}</code></li>)}</ul>}
         <h4>{review.snapshot.action.adapter_id} → {review.snapshot.action.target}</h4>
         <strong>Snapshot scope</strong><div className="scope-chips">{review.snapshot.config.targets.map(t => <code key={t}>{t}</code>)}</div>
         <p>{review.snapshot.config.max_requests} native operation(s) maximum · {review.snapshot.config.allow_cli ? review.snapshot.config.max_cli_invocations : 0} CLI launch(es) maximum · {review.snapshot.config.max_hosts} host(s) maximum · {review.snapshot.config.max_seconds}s deadline</p>

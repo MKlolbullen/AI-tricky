@@ -35,6 +35,7 @@ from .http_journal import HTTPJournal, request_message
 from .burp_bridge import BurpBridge, read_batch, web_only
 from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
+from .delta_recon import DeltaRecon, BaselineInput, DeltaPlanInput
 from .proposals import ProposalPlanner, ProposalError, StalePlan
 from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
 from .recovery import WorkflowRecoveries, RecoveryOptions
@@ -194,6 +195,7 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
     burp_bridge = BurpBridge(store, http_journal)
     agent_presets = AgentPresets(store)
     evidence = EvidenceIndex(store)
+    delta_recon = DeltaRecon(store, evidence)
     asset_graph = AssetGraph(store)
     passive_ingestor = PassiveIngestor(store, asset_graph)
     vault = CredentialVault(store.root)
@@ -813,6 +815,37 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             raise HTTPException(409, str(exc))
         except ValueError as exc:
             raise HTTPException(422, str(exc))
+
+    @app.get('/api/recon/baselines')
+    def recon_baselines(run_id: str):
+        get_run(run_id)
+        return delta_recon.baselines(run_id)
+
+    @app.post('/api/recon/baselines', status_code=201)
+    def save_recon_baseline(body: BaselineInput):
+        get_run(body.run_id)
+        try:
+            return delta_recon.save(body.run_id, body.expected_revision)
+        except ReviewConflict as exc:
+            raise HTTPException(409, str(exc)) from None
+
+    @app.get('/api/runs/{rid}/delta')
+    def recon_delta(rid: str, baseline_id: str):
+        get_run(rid)
+        try:
+            return delta_recon.compare(rid, baseline_id)
+        except KeyError:
+            raise HTTPException(404, 'Baseline evidence is unavailable.') from None
+
+    @app.post('/api/runs/{rid}/delta/proposals', status_code=201)
+    def delta_proposals(rid: str, body: DeltaPlanInput):
+        get_run(rid)
+        try:
+            return delta_recon.plan(rid, body, proposal_planner)
+        except KeyError:
+            raise HTTPException(404, 'Baseline evidence is unavailable.') from None
+        except StalePlan as exc:
+            raise HTTPException(409, str(exc)) from None
 
     @app.get('/api/runs/{rid}/compare')
     def compare_runs(rid: str, baseline: str):

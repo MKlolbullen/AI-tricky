@@ -148,7 +148,7 @@ def delta_fixture(store, fixture_url):
         for name in ('stable.js', 'changed.js', 'removed.js' if number == 1 else 'new.js'):
             url = fixture_url + '/delta/' + name
             body = 'fixture ' + str(number if name == 'changed.js' else 1)
-            aid = store.artifact(rid, 'http-' + name + '.json', {'url': url, 'status': 200, 'body': body,
+            aid = store.artifact(rid, 'http-' + name.replace('.', '-') + '.json', {'url': url, 'status': 200, 'body': body,
                                  'body_sha256': hashlib.sha256(body.encode()).hexdigest(), 'truncated': False}, node_id='d2')
             manifest.append({'url': url, 'kind': 'js', 'artifact_id': aid})
         output = store.artifact(rid, 'node-d2.json', [{'manifest': manifest, 'counts': {}}], node_id='d2')

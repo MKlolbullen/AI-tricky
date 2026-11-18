@@ -28,7 +28,7 @@ test('tool inspector edits flags and values with separate required bindings', as
   await workspace.getByRole('button', {name: 'Add target', exact: true}).click();
   await workspace.getByRole('button', {name: 'Load web recon with path fuzzing', exact: true}).click();
   await workspace.getByRole('button', {name: 'Close local workspace'}).click();
-  await page.locator('.react-flow__node').filter({hasText: 'Optional path fuzzing'}).click();
+  await page.locator('.react-flow__node').filter({hasText: 'Path fuzzing — requires a bound wordlist'}).click();
   const panel = page.getByRole('region', {name: 'Tool arguments'});
   const filter = panel.getByRole('searchbox', {name: 'Filter arguments'});
   await filter.fill('Stop on Flood');

@@ -19,10 +19,10 @@ Authentication, session and access-control testing are **not canvas nodes**. The
 
 ## Usage
 
-1. Open the Template Library and choose the **AI-tricky starters** source (or **All sources**).
-2. Select **Web Application Assessment** and load it onto the canvas.
-3. Select authorized domain targets for the run. `example.com` is an exact host; `*.example.com` covers its subdomains.
-4. Install the bundled support data first (Local workspace → Inputs) so the starter binds the Nuclei HTTP starter templates and a small path wordlist automatically; otherwise bind a templates folder and a wordlist yourself.
+1. Install the bundled support data (Local workspace → Inputs). The starter binds the Nuclei HTTP starter templates and a small path wordlist when it is loaded; installing afterwards does not update a design already on the canvas, so reload the starter or bind a templates folder and a wordlist yourself.
+2. Open the Template Library and choose the **AI-tricky starters** source (or **All sources**).
+3. Select **Web Application Assessment** and load it onto the canvas.
+4. Select authorized domain targets for the run. `example.com` is an exact host; `*.example.com` covers its subdomains.
 5. Run preflight, then execute under your scope, request and CLI budgets.
 6. Review detections and agent proposals in the evidence workbench. Nothing is auto-confirmed.
 

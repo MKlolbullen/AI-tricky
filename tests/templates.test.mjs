@@ -44,7 +44,7 @@ test('curated catalog keeps its legacy designs and marks server-built starters',
   for(const key of ['id','name','category','description','provenance'])assert.equal(typeof w[key],'string');
   assert.ok(Array.isArray(w.targets));
   if(w.starter){assert.equal(w.nodes,undefined);assert.ok(w.steps.length);assert.ok(isExecutableTemplate(w))}
-  else{validateWorkflow({schema:WORKFLOW_SCHEMA,nodes:w.nodes,edges:w.edges},['template'],curated.tools);assert.ok(!isExecutableTemplate(w))}
+  else{assert.ok(w.nodes.length||['inventory','cai'].includes(w.id),w.id);validateWorkflow({schema:WORKFLOW_SCHEMA,nodes:w.nodes,edges:w.edges},['template'],curated.tools);assert.ok(!isExecutableTemplate(w))}
  }
  assert.deepEqual(curated.workflows.filter(w=>w.starter).map(w=>w.starter),['web-app-assessment']);
 });

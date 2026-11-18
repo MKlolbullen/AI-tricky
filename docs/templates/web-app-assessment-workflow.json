@@ -377,7 +377,7 @@
           "findings"
         ],
         "output": "findings",
-        "title": "Optional path fuzzing \u2014 bind a wordlist",
+        "title": "Path fuzzing \u2014 requires a bound wordlist",
         "toolId": "ffuf"
       }
     },

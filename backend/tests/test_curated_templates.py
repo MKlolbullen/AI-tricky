@@ -37,6 +37,8 @@ def test_curated_catalog_keeps_legacy_designs_and_tool_descriptors():
             # The graph is server-owned; a stored copy could drift from the socket contracts.
             assert 'nodes' not in entry and 'edges' not in entry and entry['steps']
         else:
+            # Only the two native presets open a run form instead of a canvas design.
+            assert entry['nodes'] or entry['id'] in ('inventory', 'cai'), entry['id']
             validate_workflow({'schema': SCHEMA, 'nodes': entry['nodes'], 'edges': entry['edges']})
 
 

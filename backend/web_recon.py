@@ -276,7 +276,7 @@ def recon_workflow(*, fuzz=False, scan=False, review=False, surface=False, isola
     if fuzz:
         node('fuzz-urls', 'catalog_merge', 920, 320, inputs=list(MERGE_INPUTS['targets']), outputs=['targets'], output='targets', title='Probed URLs for directory fuzzing')
         edge('probe', 'fuzz-urls', 'url')
-        node('fuzz', 'catalog_tool', 1150, 320, toolId='ffuf', title='Optional path fuzzing — bind a wordlist')
+        node('fuzz', 'catalog_tool', 1150, 320, toolId='ffuf', title='Path fuzzing — requires a bound wordlist')
         edge('fuzz-urls', 'fuzz', 'targets')
         node('fuzz-results', 'catalog_output', 1380, 320, inputs=list(OUTPUT_INPUTS), outputs=['report'], output='report', title='Fuzzing observations')
         edge('fuzz', 'fuzz-results', 'findings'); edge('fuzz-results', 'summary', 'report')

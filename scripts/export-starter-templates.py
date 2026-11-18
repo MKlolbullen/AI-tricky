@@ -35,7 +35,12 @@ if __name__ == '__main__':
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
     stale = []
-    for path, body in exports():
+    expected = dict(exports())
+    retired = sorted(set((ROOT / 'docs/templates').glob('*-workflow.json')) - set(expected))
+    if retired:
+        raise SystemExit('Remove exports that no longer have a curated starter: '
+                         + ', '.join(str(path.relative_to(ROOT)) for path in retired))
+    for path, body in expected.items():
         if args.check:
             if not path.exists() or path.read_text() != body:
                 stale.append(str(path.relative_to(ROOT)))

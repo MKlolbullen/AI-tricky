@@ -29,7 +29,7 @@ Deliberately left out even though the binaries support them: target and list inp
 
 Values still pass the existing server validation: switches are booleans, numbers are bounded, strings cannot start with `-` or contain control characters. Arguments are passed as separate argv entries; no shell is involved.
 
-Enforced CLI scope is unchanged: scoped ffuf accepts only `-mc`, `-fc` and `-fs`, and scoped httprobe accepts no overrides.
+Enforced CLI scope keeps its own narrower allowlist: scoped ffuf accepts only `-mc`, `-fc` and `-fs`; scoped Katana only `-d` (1–5) and `-jc`; scoped Nuclei only `-severity`, `-tags` and `-etags`; scoped httprobe accepts no overrides.
 
 ## Verification
 

@@ -32,7 +32,7 @@ executable from another installation.
 
 | Profile | Install flag | Bundled workflow inputs |
 |---|---|---|
-| Enforced Linux scanners | `--enforced-cli` | Small directory paths for ffuf |
+| Enforced Linux scanners | `--enforced-cli` | Small directory paths for ffuf. HTTP starter templates for Nuclei. |
 | Web reconnaissance | `--web-recon` | HTTP starter templates for Nuclei. Trusted resolvers are available for DNS workflows. |
 | Trickest generators | `--trickest-oss` | Small DNS labels and directory paths |
 
@@ -50,9 +50,14 @@ the installer when passing `--skip-toolchains`.
   to HTTPS and HTTP on the standard ports. Enter custom ports as exact URLs.
   The number of expanded URLs is capped by the run's host limit. Each URL
   also consumes one CLI invocation and at most one native GET.
-- Use **Direct** routing. Both scanners run with a private Linux network
-  namespace and use the application gateway. HTTPS uses the application's
-  certificate verification. Redirects are saved without following them.
+- **Load scoped web recon** chains scoped httprobe, Katana and Nuclei from
+  the selected hosts and URLs. Katana crawls and Nuclei runs the bound HTTP
+  templates; every request they choose is checked against the entered scope
+  before it is sent. See [Enforced CLI scope](CLI-SCOPE.md).
+- Use **Direct** routing. Every scoped scanner runs with a private Linux
+  network namespace and uses the application gateway. HTTPS uses the
+  application's certificate verification. Redirects are saved without
+  following them.
 - **Observations** indexes scoped scanner matches as endpoints. **Open HTTP
   exchange** opens the saved request and response. Existing scoped ffuf
   captures are indexed on demand. Parser upgrades can require preparing a

@@ -456,6 +456,11 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         from .web_recon import recon_workflow
         return support_data.bind(recon_workflow(isolated_ffuf=True), bundled_only=True)['graph']
 
+    @app.get('/api/workflow-starters/enforced-web-recon')
+    def enforced_web_recon_starter():
+        from .web_recon import recon_workflow
+        return support_data.bind(recon_workflow(isolated_recon=True), bundled_only=True)['graph']
+
     @app.get('/api/workflow-starters/enforced-httprobe')
     def enforced_httprobe_starter():
         from .web_recon import recon_workflow

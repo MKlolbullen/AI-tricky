@@ -68,6 +68,12 @@ Design a typed workflow. Execute bounded checks. Preserve the request/response t
 
 </div>
 
+On the canvas, **blue** means idle or queued. A **purple pulse** marks a
+running node and stops when the run is paused. **Green** marks successful
+completion or a reused checkpoint. **Red** marks failure, cancellation or
+interruption. Status labels distinguish skipped and planned nodes, and the
+purple pulse respects your system’s reduced-motion setting.
+
 | Run inspection | Findings and evidence |
 |:--:|:--:|
 | <img src="docs/assets/screenshots/06-runs-view.png" alt="Runs view"> | <img src="docs/assets/screenshots/17-local-findings.png" alt="Findings workbench"> |

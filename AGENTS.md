@@ -11,6 +11,10 @@ Build app UI in `src/`. Keep `.openai/hosting.json`, `worker/index.js`, `scripts
 ## Selected design
 The user approved a combination of Workflow Studio and Engagement Desk, inspired by Trickest's node workflow interaction. Use the combined source image `exec-82208d21-49b8-46b8-93e7-8fbc1da7945c.png` as the visual target. Keep a central typed DAG, left node library, right node/evidence inspector and bottom console/artifact dock. Preserve local execution preferences and distinguish fixture simulation from actual backend integrations.
 
+Use blue for idle canvas nodes, a purple pulse for running nodes, green for
+successful completion or reuse, and red for failed, cancelled or interrupted
+nodes. Keep selection distinct from execution state and respect reduced motion.
+
 ## Hosting and targets — clarified 2026-10-31
 Local means locally hosted UI/API/workers/storage, not loopback-only assessment targets. Support domains, IPv4/IPv6, CIDRs and URLs. Remote model providers are independently configurable; do not confuse inference location with platform hosting. Never publish this platform without an explicit user request. Keep real local-native/CAI assessments distinct from canvas fixture simulations.
 

@@ -283,3 +283,11 @@ def recon_workflow(*, fuzz=False, scan=False, review=False, surface=False, isola
     graph = {'schema': SCHEMA, 'nodes': nodes, 'edges': edges, 'parallelism': 3}
     validate_workflow(graph, live=True)
     return graph
+
+
+def web_app_assessment_workflow():
+    """Curated methodology starter: discovery, probing, crawling, saved HTTP
+    evidence, source/API-surface analysis, Nuclei, bounded fuzzing and the
+    evidence-only specialist review. Built from the same contracts as the web
+    recon starter so it cannot drift from the tool and native socket types."""
+    return recon_workflow(fuzz=True, scan=True, review=True, surface=True)

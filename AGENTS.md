@@ -245,3 +245,17 @@ not-observed semantics. Delta follow-ups use selected current changes and
 reuse proposal approval, scope, accounting and journal contracts. Recheck
 baseline evidence and source coverage before dispatch. New node input receipts
 store hashes and provenance without copying raw inputs or credentials.
+
+## Curated catalog guard and server-built starters — 2026-11-18
+
+`src/templates.json` was emptied by a whole-file rewrite and restored with its
+53 tool descriptors and 22 legacy designs. Curated entries that name a
+`starter` carry description and steps only; the server builds and validates
+the graph (`/api/workflow-starters/<starter>`), so it cannot drift from socket
+contracts. The Web Application Assessment starter is the full web recon graph
+(fuzz, Nuclei, API Surface, evidence-only specialist review). Web
+authentication and access-control testing stay in the reviewed access matrix
+and object verification flows; they are not canvas nodes. Regenerate
+`docs/templates/*.json` with `scripts/export-starter-templates.py`. Never
+hand-edit large catalog JSON wholesale; guard tests pin counts, legacy IDs,
+starter endpoints and exported files.

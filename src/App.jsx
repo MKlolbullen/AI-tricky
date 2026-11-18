@@ -100,9 +100,9 @@ function AppContent(){
  const exportWorkflow=()=>{const blob=new Blob([JSON.stringify({schema:WORKFLOW_SCHEMA,nodes,edges,parallelism:parallel},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ai-tricky-workflow.json';a.click();URL.revokeObjectURL(a.href);notify('Workflow exported')};
  const importWorkflow=async e=>{try{let v=JSON.parse(await e.target.files[0].text());if(!v.schema&&(v.graph||v.nodes?.some(n=>n.kind)))v=await api('/catalog/import',{workflow:v});validateWorkflow(v,[...Object.keys(specs),'template'],templates.tools);stop();setLiveId(null);setNodes(v.nodes);setEdges(namedEdges(v.nodes,v.edges));setParallel(v.parallelism||4);setSelected(v.nodes[0]?.id);idRef.current=Math.max(0,...v.nodes.map(n=>Number(n.id)||0))+1;setTimeout(()=>flow.fitView({padding:.13}),50);setMode('Design');notify('Workflow imported')}catch{notify('Unable to import: choose a valid AI-tricky or legacy ReconForge workflow JSON.')}e.target.value=''};
  const loadTemplate=async t=>{
-  if(t.sourceCatalog==='trickest-oss'){
+  if(t.sourceCatalog==='trickest-oss'||t.starter){
     try{
-      const graph=await api('/workflow-starters/trickest/'+encodeURIComponent(t.id));
+      const graph=await api('/workflow-starters/'+(t.starter?encodeURIComponent(t.starter):'trickest/'+encodeURIComponent(t.id)));
       loadGraph(graph);
       setTemplatesOpen(false);
       notify(`${t.name} loaded · preflight required`);

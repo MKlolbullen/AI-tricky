@@ -259,3 +259,15 @@ and object verification flows; they are not canvas nodes. Regenerate
 `docs/templates/*.json` with `scripts/export-starter-templates.py`. Never
 hand-edit large catalog JSON wholesale; guard tests pin counts, legacy IDs,
 starter endpoints and exported files.
+
+## Tool argument overlay — 2026-11-18
+
+Expanded tool arguments live in `src/tool-argument-overlay.json`, merged into
+`TOOLS` at load; the pinned migrated catalog stays byte-identical. Cover only
+tools whose exact version is pinned in `toolchains/*.tsv`, and verify every
+flag, alias and value kind against the pinned binary's help output in the CI
+jobs that install it. Never add flags for targets, file reads, output paths,
+proxies, headers, HTTP method or body, TLS verification, redirects, remote
+templates, code/fuzzing templates, cloud uploads or output-format changes.
+Corrections may fix catalog arguments that are wrong for the pinned version.
+Enforced CLI scope keeps its own narrower allowlist. See docs/TOOL-ARGUMENTS.md.

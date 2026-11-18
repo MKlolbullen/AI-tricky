@@ -242,6 +242,7 @@
 .tool-arg-filters button[aria-pressed=true]{border-color:var(--cyan);color:var(--cyan)}
 .tool-arg-row{margin:6px 0;padding:8px 9px;background:#0c192b;border:1px solid var(--line);border-radius:6px}
 .tool-arg-row.is-set{border-left:2px solid var(--cyan)}
+.tool-arg-verified{margin-left:6px;color:var(--muted);font-size:10px;white-space:nowrap}
 .tool-arg-title{display:flex;gap:8px;align-items:center;justify-content:space-between}
 .catalog-inspector .tool-arg-title label{display:block;margin:0;font-size:12px;line-height:1.4}
 .catalog-inspector .tool-arg-title code{display:inline-block;margin-left:4px;overflow-wrap:anywhere}

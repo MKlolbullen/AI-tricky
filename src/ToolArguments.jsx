@@ -22,7 +22,7 @@ function ArgumentRow({arg, params, change}) {
   const hasDefault = arg.default !== undefined && arg.default !== null && arg.default !== '';
   return <div className={`tool-arg-row${active ? ' is-set' : ''}${restricted ? ' is-restricted' : ''}`}>
     <div className="tool-arg-title">
-      <label htmlFor={id}>{arg.label} <code>{arg.flag}</code></label>
+      <label htmlFor={id}>{arg.label} <code>{arg.flag}</code>{arg.verified_version && <span className="tool-arg-verified" title={`Checked against the pinned ${arg.verified_version} help output`}>verified {arg.verified_version}</span>}</label>
       {isFlag && <input id={id} type="checkbox" aria-describedby={description ? `${id}-help` : undefined}
         disabled={restricted} checked={active} onChange={e => change(arg.flag, e.target.checked ? true : undefined)}/>}
       {!isFlag && active && !restricted && <button type="button" className="tool-arg-reset" aria-label={`Clear ${arg.flag}`} onClick={() => change(arg.flag)}>Reset</button>}

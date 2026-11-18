@@ -114,6 +114,30 @@ def test_typed_multi_output_edges_use_requested_socket():
     assert incoming_streams(incoming_routes(g)['n0'], values) == {'url': ['https://example.test/']}
 
 
+def test_empty_output_skips_downstream_cli_without_a_process(tmp_path, monkeypatch):
+    binary = tmp_path / 'uro'
+    binary.write_text(f'#!{sys.executable}\nimport sys\nsys.stdin.read()\n')
+    binary.chmod(0o755)
+    monkeypatch.setenv('PATH', str(tmp_path) + os.pathsep + os.environ.get('PATH', ''))
+    graph = native_graph('native_scope')
+    parent = 'n0'
+    for node_id in ('producer', 'consumer'):
+        graph['nodes'].append({'id': node_id, 'type': 'tool', 'position': {'x': 230, 'y': 0},
+                               'data': data_for(TOOLS['uro'])})
+        graph['edges'].append({'id': 'to-' + node_id, 'source': parent, 'target': node_id})
+        parent = node_id
+    with TestClient(create_app(tmp_path / 'state')) as client:
+        response = launch(client, 'example.test', graph, allow_cli=True)
+        assert response.status_code == 201, response.text
+        run_id = response.json()['id']
+        run = wait_done(client, run_id)
+        assert run['result']['cli_invocation_count'] == 1
+        nodes = {node['node_id']: node for node in client.get(f'/api/runs/{run_id}/nodes').json()}
+        assert nodes['producer']['status'] == 'completed'
+        assert nodes['consumer']['status'] == 'skipped'
+        assert 'No records' in nodes['consumer']['result']['reason']
+
+
 def test_catalog_url_socket_routes_only_urls_to_native_http(tmp_path, target_server, monkeypatch):
     base, handler = target_server
     binary = tmp_path / 'httpx'

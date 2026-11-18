@@ -36,8 +36,9 @@ export default function WebReconStarter({disabled, onLoad}) {
     <button className="secondary" disabled={disabled || busy} onClick={() => load({fuzz: true})}>Load web recon with path fuzzing</button>{' '}
     <button className="secondary" disabled={disabled || busy} onClick={() => load({scan: true})}>Load web recon with Nuclei</button>{' '}
     <button className="secondary" disabled={disabled || busy} onClick={() => load({}, 'ffuf')}>Load scoped ffuf</button>{' '}
-    <button className="secondary" disabled={disabled || busy} onClick={() => load({}, 'httprobe')}>Load scoped httprobe</button>
-    <small>Scoped ffuf uses selected HTTP(S) URLs and requires a path wordlist. Nuclei uses the bundled starter templates.</small>
+    <button className="secondary" disabled={disabled || busy} onClick={() => load({}, 'httprobe')}>Load scoped httprobe</button>{' '}
+    <button className="secondary" disabled={disabled || busy} onClick={() => load({}, 'web-recon')}>Load scoped web recon</button>
+    <small>Scoped ffuf uses selected HTTP(S) URLs and requires a path wordlist. Nuclei uses the bundled starter templates. Scoped web recon probes, crawls and scans the selected hosts and URLs inside the Linux sandbox; it has no passive subdomain discovery.</small>
     {error && <p role="alert">{error}</p>}
   </section>;
 }

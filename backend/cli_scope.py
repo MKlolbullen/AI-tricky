@@ -1,4 +1,4 @@
-"""Linux network isolation and an exact-route HTTP relay for pinned scanners."""
+"""Linux network isolation and a scoped HTTP relay for pinned scanners."""
 
 import asyncio
 import base64
@@ -19,12 +19,33 @@ from .recon_tools import resolve_tool, tool_check
 from .scope import ScopeError, authorize, parse_target
 
 MODE = 'enforced'
-SCANNERS = {'ffuf': '-V', 'httprobe': '-h'}
+SCANNERS = {'ffuf': '-V', 'httprobe': '-h', 'katana': '-version', 'nuclei': '-version'}
+# ffuf and httprobe get exact routes bound before launch. A crawler or template
+# scanner chooses its own request URLs, so each of its requests is authorized
+# against the entered scope when it reaches the gateway.
+DYNAMIC = frozenset({'katana', 'nuclei'})
 PROBE_STDIN = b'127.0.0.1\n'
 PROXY = 'http://127.0.0.1:28080'
 RELAY_TARGET = 'http://127.0.0.1:28080/FUZZ'
 EXIT_HEADERS = {'content-length', 'transfer-encoding', 'connection', 'keep-alive', 'proxy-connection', 'upgrade', 'trailer', 'te'}
 FILTER_FLAGS = {'-mc', '-fc', '-fs'}
+OVERRIDES = {'ffuf': FILTER_FLAGS, 'httprobe': frozenset(), 'katana': frozenset({'-d', '-jc'}),
+             'nuclei': frozenset({'-severity', '-tags', '-etags'})}
+INPUT_REFS = {'ffuf': {'wordlist'}, 'httprobe': set(), 'katana': set(), 'nuclei': {'templates'}}
+REFUSALS = {
+    'ffuf': ('Enforced ffuf accepts only a registered or connected path wordlist.',
+             'Enforced ffuf accepts only match/filter overrides.'),
+    'httprobe': ('Enforced httprobe uses typed target inputs.',
+                 'Enforced httprobe uses fixed GET settings. Remove argument overrides.'),
+    'katana': ('Enforced katana uses typed URL inputs.',
+               'Enforced katana accepts only crawl depth (1–5) and JavaScript crawling overrides.'),
+    'nuclei': ('Enforced nuclei accepts only a registered templates folder.',
+               'Enforced nuclei accepts only severity and tag overrides.'),
+}
+# Katana checks its proxy with this fixed request; it is refused without noise.
+PROXY_PROBES = frozenset({'http://burpsuite/'})
+MAX_URL = 4096
+MAX_SEEDS = 64
 SAFE_WORD = re.compile(r'[A-Za-z0-9._~-]+(?:/[A-Za-z0-9._~-]+)*')
 MAX_WORDS = 2048
 MAX_HEADER = 8192
@@ -38,22 +59,24 @@ def enforced(config):
 def validate_node(data, config):
     tool_id = data.get('toolId')
     if tool_id not in SCANNERS:
-        raise ScopeError('Enforced CLI scope supports only ffuf and httprobe.')
+        raise ScopeError('Enforced CLI scope supports only ffuf, httprobe, katana and nuclei.')
     if (config.get('http_routing') or {}).get('mode') == 'proxy':
         raise ScopeError('Enforced CLI scope uses AI-tricky’s direct scoped transport. Select Direct HTTP routing.')
     if not config.get('targets'):
         raise ScopeError('Select entered targets for the scoped CLI gateway.')
-    if tool_id == 'ffuf':
-        if data.get('inputRefs', {}).keys() - {'wordlist'}:
-            raise ScopeError('Enforced ffuf accepts only a registered or connected path wordlist.')
-        flags = FILTER_FLAGS
-    else:
-        if data.get('inputRefs'):
-            raise ScopeError('Enforced httprobe uses typed target inputs.')
-        flags = set()
-    if any(name not in flags for name, value in data.get('params', {}).items() if value is not False and value != ''):
-        raise ScopeError('Enforced ffuf accepts only match/filter overrides.' if tool_id == 'ffuf' else
-                         'Enforced httprobe uses fixed GET settings. Remove argument overrides.')
+    bindings, overrides = REFUSALS[tool_id]
+    if data.get('inputRefs', {}).keys() - INPUT_REFS[tool_id]:
+        raise ScopeError(bindings)
+    params = {name: value for name, value in data.get('params', {}).items() if value is not False and value != ''}
+    if params.keys() - OVERRIDES[tool_id]:
+        raise ScopeError(overrides)
+    if tool_id == 'katana' and '-d' in params:
+        try:
+            depth = int(params['-d'])
+        except (TypeError, ValueError):
+            raise ScopeError(overrides) from None
+        if isinstance(params['-d'], bool) or not 1 <= depth <= 5 or str(params['-d']).strip() != str(depth):
+            raise ScopeError(overrides)
 
 
 def executable_pin(path):
@@ -85,7 +108,7 @@ def probe_sandbox(pins, scanner, check_flag):
         result = subprocess.run([*sandbox_prefix(pins), '--ro-bind', scanner, '/scanner',
                                  '--', '/relay', '/scanner', check_flag],
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-                                env={}, timeout=5, check=False)
+                                env={}, timeout=20, check=False)
     except (OSError, subprocess.TimeoutExpired):
         raise ScopeError('The Linux CLI sandbox could not start. Check bubblewrap and user namespace support.') from None
     if result.returncode:
@@ -147,7 +170,7 @@ def target_urls(seed, wordlist, config):
     return result
 
 
-def probe_urls(values, config):
+def probe_urls(values, config, tool_id='httprobe'):
     scope = [parse_target(value) for value in config['targets']]
     urls = {}
     for value in values:
@@ -156,7 +179,7 @@ def probe_urls(values, config):
             continue
         host = parse_target(value)
         if host.kind not in ('ip', 'domain'):
-            raise ScopeError('Enforced httprobe accepts concrete hosts or explicit HTTP(S) URLs.')
+            raise ScopeError(f'Enforced {tool_id} accepts concrete hosts or explicit HTTP(S) URLs.')
         authority = f'[{host.host}]' if ':' in host.host else host.host
         for scheme in ('https', 'http'):
             urls[authorize(f'{scheme}://{authority}/', scope).url] = None
@@ -164,10 +187,14 @@ def probe_urls(values, config):
 
 
 class ScopedGateway:
-    def __init__(self, rid, nid, config, ctl, store, fetch, allowed_urls, *, tool_id='ffuf'):
+    def __init__(self, rid, nid, config, ctl, store, fetch, allowed_urls, *, tool_id='ffuf', scope=None):
         self.rid, self.nid, self.config, self.ctl = rid, nid, config, ctl
         self.store, self.fetch, self.allowed_urls = store, fetch, allowed_urls
         self.tool_id = tool_id
+        # Parsed entered targets: set only for scanners that choose their own URLs.
+        self.scope = scope
+        self.captures = {}
+        self.pending = {}
         self.tasks = set()
         self.denied = 0
         self.requests = 0
@@ -213,7 +240,7 @@ class ScopedGateway:
             method, path, version = start.split(' ')
             if method != 'GET' or version not in ('HTTP/1.0', 'HTTP/1.1'):
                 raise ValueError()
-            if path.startswith(PROXY + '/'):
+            if self.scope is None and path.startswith(PROXY + '/'):
                 path = path.removeprefix(PROXY)
             # Scanner-supplied headers are never forwarded to targets.
             for line in lines:
@@ -223,6 +250,8 @@ class ScopedGateway:
         except (ValueError, TimeoutError, asyncio.IncompleteReadError, asyncio.LimitOverrunError):
             self.denied_request('Unsupported relay request.')
             return 403, [], b''
+        if self.scope is not None:
+            return await self.scoped_request(path)
         url = self.allowed_urls.get(path)
         if url is None:
             self.denied_request('Route was outside the approved invocation.')
@@ -246,7 +275,67 @@ class ScopedGateway:
         capture = self.store.content(result['artifact_id'])['http_exchange']['response']
         return capture['status'], capture['headers'], base64.b64decode(capture['body_base64'])
 
+    def saved(self, url):
+        capture = self.store.content(self.captures[url])['http_exchange']['response']
+        return capture['status'], capture['headers'], base64.b64decode(capture['body_base64'])
+
+    async def scoped_request(self, target):
+        """Authorize one scanner-chosen URL against the entered scope, then fetch it once."""
+        if target in PROXY_PROBES:
+            return 403, [], b''
+        if len(target) > MAX_URL or '#' in target or not target.startswith(('http://', 'https://')):
+            self.denied_request('Unsupported relay request.')
+            return 403, [], b''
+        try:
+            url = authorize(target, self.scope).url
+        except ScopeError:
+            self.denied_request('Request was outside the entered scope.')
+            return 403, [], b''
+        if self.ctl.cancelled:
+            return 503, [], b''
+        # A repeated URL is answered from its saved exchange: no second target request.
+        while url in self.pending:
+            await self.pending[url]
+        if url in self.captures:
+            return self.saved(url)
+        done = self.pending[url] = asyncio.get_running_loop().create_future()
+        try:
+            self.requests += 1
+            result = await self.fetch(url, node_id=self.nid)
+            if exchange_id := result.get('http_exchange_id'):
+                self.exchange_ids.add(exchange_id)
+            if result.get('error'):
+                self.denied_request('The scoped HTTP transport declined or failed the request.')
+                return 503, [], b''
+            self.exchanges[url] = result['http_exchange_id']
+            self.captures[url] = result['artifact_id']
+        finally:
+            del self.pending[url]
+            done.set_result(None)
+        return self.saved(url)
+
+    def in_scope(self, value):
+        try:
+            return authorize(value, self.scope).url if isinstance(value, str) and value.startswith(('http://', 'https://')) else None
+        except ScopeError:
+            return None
+
     def remap_stdout(self, text):
+        if self.tool_id == 'katana':
+            # Discovered URLs are reported only when they are inside the entered scope.
+            return '\n'.join(dict.fromkeys(url for line in text.splitlines() if (url := self.in_scope(line.strip()))))
+        if self.tool_id == 'nuclei':
+            # A refused or failed request reaches the scanner as a local 403/503. Keep
+            # a detection only when its URL has a saved target response in this invocation.
+            kept = []
+            for line in text.splitlines():
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(row, dict) and row.get('type') == 'http' and self.in_scope(row.get('matched-at')) in self.captures:
+                    kept.append(json.dumps(row, separators=(',', ':')))
+            return '\n'.join(kept)
         # httprobe prints the private listener when it receives an HTTP response.
         # A local 503 can look reachable to httprobe, so require a saved response.
         if self.tool_id == 'httprobe':
@@ -277,12 +366,40 @@ async def sandbox(rid, nid, data, config, ctl, store, fetch, work, argv, targets
         return
     validate_node(data, config)
     tool_id = data['toolId']
-    if fetch is None or len(targets) != 1:
+    dynamic = tool_id in DYNAMIC
+    if fetch is None or (not dynamic and len(targets) != 1):
         raise ScopeError('Enforced scanners require one scoped URL per invocation.')
     pins = config.get('cli_sandbox')
     verify_pins(pins)
     mounts = []
-    if tool_id == 'ffuf':
+    params = data.get('params', {})
+    scope = [parse_target(value) for value in config['targets']]
+    if dynamic:
+        seeds = probe_urls(targets, config, tool_id)
+        if not 1 <= len(seeds) <= MAX_SEEDS:
+            raise ScopeError(f'Enforced {tool_id} accepts 1–{MAX_SEEDS} authorized seed URLs per invocation.')
+        listing = work / 'scoped-targets.txt'
+        listing.write_text(''.join(url + '\n' for url in seeds), encoding='ascii')
+        mounts = ['--ro-bind', str(listing), '/targets']
+        allowed = None
+    if tool_id == 'katana':
+        mounts += ['--ro-bind', context['crawl_scope_file'], '/scope']
+        args = ['-silent', '-list', '/targets', '-duc', '-dr', '-fs', 'fqdn', '-cs', '/scope', '-proxy', PROXY,
+                '-c', '4', '-p', '2', '-rl', '20', '-timeout', '12', '-retry', '0', '-d', str(int(params.get('-d') or 2))]
+        if params.get('-jc') in (True, '__flag__'):
+            args.append('-jc')
+    elif tool_id == 'nuclei':
+        if not context.get('templates'):
+            raise ScopeError('Bind a reviewed Nuclei templates folder.')
+        mounts += ['--ro-bind', context['templates'], '/templates']
+        # HTTP templates only: nothing else can leave the namespace, and the gateway
+        # forwards GET requests without scanner-supplied headers or bodies.
+        args = ['-silent', '-l', '/targets', '-jsonl', '-dr', '-ni', '-duc', '-t', '/templates', '-proxy', PROXY,
+                '-pt', 'http', '-nh', '-c', '4', '-bs', '4', '-rl', '20', '-timeout', '12', '-retries', '0']
+        for name in ('-severity', '-tags', '-etags'):
+            if value := params.get(name):
+                args.extend([name, value])
+    elif tool_id == 'ffuf':
         allowed = target_urls(targets[0], context['wordlist_file'], config)
         bounded = work / 'scoped-paths.txt'
         bounded.write_text(''.join(path[1:] + '\n' for path in allowed), encoding='ascii')
@@ -293,9 +410,10 @@ async def sandbox(rid, nid, data, config, ctl, store, fetch, work, argv, targets
             if value := data.get('params', {}).get(name):
                 args.extend([name, value])
     else:
-        allowed = {'/': authorize(targets[0], [parse_target(value) for value in config['targets']]).url}
+        allowed = {'/': authorize(targets[0], scope).url}
         args = ['-s', '-p', 'http:' + str(urlsplit(PROXY).port), '-c', '2', '-t', '12000']
-    gateway = ScopedGateway(rid, nid, config, ctl, store, fetch, allowed, tool_id=tool_id)
+    gateway = ScopedGateway(rid, nid, config, ctl, store, fetch, allowed, tool_id=tool_id,
+                            scope=scope if dynamic else None)
     with tempfile.TemporaryDirectory(prefix='aits-') as directory:
         socket_path = str(Path(directory) / 'relay.sock')
         try:
@@ -303,8 +421,8 @@ async def sandbox(rid, nid, data, config, ctl, store, fetch, work, argv, targets
         except OSError:
             raise ScopeError('Unable to create the private CLI gateway socket. No scanner was started.') from None
         try:
-            # Mount only the static scanner, relay, immutable wordlist and the
-            # gateway socket. No host filesystem, host network or host /proc.
+            # Mount only the static scanner, relay, immutable invocation inputs and
+            # the gateway socket. No host filesystem, host network or host /proc.
             command = [*sandbox_prefix(pins), '--ro-bind', argv[0], '/scanner', *mounts,
                        '--ro-bind', socket_path, '/gateway', '--', '/relay', '/scanner', *args]
             yield command, gateway

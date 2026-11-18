@@ -48,7 +48,7 @@ Design a typed workflow. Execute bounded checks. Preserve the request/response t
 | 🔍 **Authenticated object access** | Compare two test identities under one reviewed GET profile, with an ownership control and redacted evidence. [Setup](docs/CONTROLLED-VERIFICATION.md#authenticated-object-access) |
 | **Delta recon** | Save baselines per scope and workflow, inspect new or changed records and prepare a reviewed HTTP follow-up for selected changes. [Usage](docs/DELTA-RECON.md) |
 | **Multi-identity access matrix** | Compare expected access for three test identities across two saved GET resources, with approval and redacted per-cell evidence. [Usage](docs/CONTROLLED-VERIFICATION.md#multi-identity-access-matrix) |
-| **Enforced CLI scope** | Run ffuf and httprobe in Linux network isolation with the native request budget and HTTP history. [Setup](docs/CLI-SCOPE.md) |
+| **Enforced CLI scope** | Run ffuf, httprobe, Katana and Nuclei in Linux network isolation with the native request budget and HTTP history. [Setup](docs/CLI-SCOPE.md) |
 | **API Surface** | Search endpoints inferred from saved JS, TypeScript and source maps, with source locations and matching HTTP history. [Usage](docs/API-SURFACE.md) |
 | 🟠 **Burp-compatible routing** | Route supported HTTP traffic through a local proxy, import selected Burp exchanges and open saved requests in Repeater. [Bridge setup](docs/BURP-BRIDGE.md) |
 | 🕸️ **Asset graph** | Explore typed hosts, services, technologies, files and other entities with provenance and run-to-run diffs. |

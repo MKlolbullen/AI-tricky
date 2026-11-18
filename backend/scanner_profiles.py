@@ -12,7 +12,7 @@ TITLES = {'web-recon': 'Web reconnaissance', 'trickest-oss': 'Trickest generator
 BUNDLED = {
     'web-recon': ('nuclei-starter', 'resolvers-trusted'),
     'trickest-oss': ('wordlist-subdomains', 'wordlist-paths'),
-    'enforced-cli': ('wordlist-paths',),
+    'enforced-cli': ('wordlist-paths', 'nuclei-starter'),
 }
 
 

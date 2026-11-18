@@ -190,7 +190,8 @@ async def collect_assets(values, config, data, fetch, store, node_id):
              'evidence_status': 'OBSERVATION'}]
 
 
-def recon_workflow(*, fuzz=False, scan=False, review=False, surface=False, isolated_ffuf=False, isolated_probe=False):
+def recon_workflow(*, fuzz=False, scan=False, review=False, surface=False, isolated_ffuf=False, isolated_probe=False,
+                   isolated_recon=False):
     """Independent curated starter; leaves the pinned migration catalog intact."""
     from .catalog import TOOLS, OUTPUT_INPUTS, MERGE_INPUTS
     from .workflows import REGISTRY, SCHEMA, validate_workflow
@@ -219,6 +220,28 @@ def recon_workflow(*, fuzz=False, scan=False, review=False, surface=False, isola
              title='Reachable URLs')
         edge('targets', 'probe', 'targets')
         edge('probe', 'results', 'url')
+        graph = {'schema': SCHEMA, 'nodes': nodes, 'edges': edges, 'parallelism': 1}
+        validate_workflow(graph, live=True)
+        return graph
+
+    if isolated_recon:
+        # Entered hosts and URLs only: passive discovery tools query third parties and
+        # cannot run inside the scoped namespace, so this chain starts from the scope.
+        node('targets', 'catalog_source', 0, 100, sourceType='targets', inputs=[], outputs=['targets'],
+             output='targets', title='Selected hosts and URLs', value='')
+        node('probe', 'catalog_tool', 220, 100, toolId='httprobe', title='Scoped httprobe', require_cli_scope=True)
+        node('crawl', 'catalog_tool', 440, 0, toolId='katana', title='Scoped katana crawl', require_cli_scope=True)
+        node('crawl-results', 'catalog_output', 660, 0, inputs=list(OUTPUT_INPUTS), outputs=['report'], output='report',
+             title='In-scope URLs')
+        node('scan', 'catalog_tool', 440, 200, toolId='nuclei', title='Scoped Nuclei — reviewed HTTP templates',
+             require_cli_scope=True)
+        node('scan-results', 'catalog_output', 660, 200, inputs=list(OUTPUT_INPUTS), outputs=['report'], output='report',
+             title='Nuclei detections')
+        edge('targets', 'probe', 'targets')
+        edge('probe', 'crawl', 'url')
+        edge('crawl', 'crawl-results', 'url')
+        edge('probe', 'scan', 'url')
+        edge('scan', 'scan-results', 'findings')
         graph = {'schema': SCHEMA, 'nodes': nodes, 'edges': edges, 'parallelism': 1}
         validate_workflow(graph, live=True)
         return graph

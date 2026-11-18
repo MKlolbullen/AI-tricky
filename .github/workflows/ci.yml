@@ -92,7 +92,7 @@ jobs:
 
   enforced-cli:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -127,11 +127,11 @@ jobs:
           export AI_TRICKY_FFUF_BIN="$AI_TRICKY_SCOPE_BIN/ffuf"
           CGO_ENABLED=0 go build -trimpath -o "$AI_TRICKY_SCOPE_BIN/isolation-probe" backend/tests/fixtures/cli-scope-probe.go
           python -m pytest backend/tests/test_cli_scope.py -q
-          AI_TRICKY_ARG_HELP_REQUIRED=ffuf python -m pytest backend/tests/test_tool_argument_overlay.py -q
+          AI_TRICKY_ARG_HELP_REQUIRED=ffuf,katana,nuclei python -m pytest backend/tests/test_tool_argument_overlay.py -q
 
   linux-scanner-beta:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -169,7 +169,7 @@ jobs:
           from pathlib import Path
           profiles = json.loads(Path('profiles.json').read_text())['profiles']
           tools = next(profile['tools'] for profile in profiles if profile['id'] == 'enforced-cli')
-          assert {tool['tool_id'] for tool in tools} == {'ffuf', 'httprobe'}
+          assert {tool['tool_id'] for tool in tools} == {'ffuf', 'httprobe', 'katana', 'nuclei'}
           for tool in tools:
               assert tool['status'] == 'tested_version', tool
               assert Path(tool['path']).parent == Path(tool['default_bin']), tool

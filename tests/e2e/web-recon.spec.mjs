@@ -52,6 +52,19 @@ test('scoped ffuf starter loads enforcement and prompts for a wordlist',async({p
  expect(await (await request.get('/api/_qa/target-calls')).json()).toEqual([]);
 });
 
+test('scoped web recon starter loads the enforced probe, crawl and scan chain without dispatch',async({page,request})=>{
+ await page.goto('/');
+ await page.getByRole('button',{name:'Local workspace',exact:true}).click();
+ const w=page.getByRole('dialog',{name:'Local assessment workspace'});
+ await w.getByRole('button',{name:'Load scoped web recon',exact:true}).click();
+ await expect(w.getByLabel('CLI scope enforcement')).toHaveValue('enforced');
+ const graph=await (await request.get('/api/workflow-starters/enforced-web-recon')).json();
+ expect(graph.nodes.filter(n=>n.data.toolId).map(n=>[n.data.toolId,n.data.require_cli_scope])).toEqual([['httprobe',true],['katana',true],['nuclei',true]]);
+ await w.getByLabel('Enable catalog CLI execution').check();
+ await w.getByRole('button',{name:'Check workflow readiness',exact:true}).click();
+ await expect(w.getByRole('status')).toContainText(/templates|Bubblewrap|install-tools|static/i);
+ expect(await (await request.get('/api/_qa/target-calls')).json()).toEqual([]);
+});
 test('scanner profiles report pinned versions, capture coverage, and bundled inputs',async({page,request})=>{
  await page.goto('/');
  await page.getByRole('button',{name:'Local workspace',exact:true}).click();

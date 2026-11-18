@@ -195,23 +195,19 @@ def enforced_plan(app, client, scope, url, adapter):
 
 
 def test_proposal_reviews_keep_enforced_source_scope(tmp_path, monkeypatch):
-    executable = tmp_path / 'nuclei'
+    # httpx has no enforced profile, so its proposal must fail review rather than run in standard mode.
+    executable = tmp_path / 'httpx'
     executable.write_text(f'#!{sys.executable}\nprint("fixture output")\n')
     executable.chmod(0o700)
     monkeypatch.setenv('PATH', str(tmp_path) + os.pathsep + os.environ.get('PATH', ''))
-    folder = tmp_path / 'templates'
-    folder.mkdir()
-    (folder / 'reviewed.yaml').write_text('id: fixture-review\n')
     app = create_app(tmp_path / 'data')
     with TestClient(app) as client:
-        templates = client.post('/api/inputs', json={'name': 'Reviewed fixtures', 'path': str(folder)}).json()['id']
-        plan = enforced_plan(app, client, '127.0.0.1', 'http://127.0.0.1:8000/api', 'nuclei')
+        plan = enforced_plan(app, client, '127.0.0.1', 'http://127.0.0.1:8000/api', 'httpx')
         proposal = plan['proposals'][0]
         assert any('supports only ffuf' in reason for reason in proposal['requirements'])
-        response = prepare(client, plan, proposal, allow_cli=True, input_refs={'templates': templates})
+        response = prepare(client, plan, proposal, allow_cli=True)
         assert response.status_code == 422 and 'supports only ffuf' in response.text
-        assert prepare(client, plan, proposal, allow_cli=True, input_refs={'templates': templates},
-                       cli_scope='standard').status_code == 422
+        assert prepare(client, plan, proposal, allow_cli=True, cli_scope='standard').status_code == 422
         native = enforced_plan(app, client, 'https://example.com/api', 'https://example.com/api', 'native_http')
         response = prepare(client, native, native['proposals'][0])
         assert response.status_code == 201, response.text
@@ -396,3 +392,275 @@ def test_real_httprobe_uses_scoped_get_and_journal(tmp_path, monkeypatch):
         server.shutdown()
         server.server_close()
         thread.join()
+
+
+# ---- scanners that choose their own URLs (katana, nuclei) ------------------------------------
+
+@pytest.fixture
+def scoped():
+    """A gateway that authorizes each request against one entered URL scope."""
+    store = Mock()
+    store.content.side_effect = lambda artifact: {'http_exchange': {'response': {
+        'status': 200, 'headers': [['Content-Type', 'text/html']],
+        'body_base64': base64.b64encode(artifact.encode()).decode(),
+    }}}
+    calls, failing = [], set()
+
+    async def fetch(url, *, node_id):
+        calls.append(url)
+        if url in failing:
+            return {'error': 'budget_exhausted'}
+        return {'http_exchange_id': 'exchange-' + str(len(calls)), 'artifact_id': 'capture:' + url}
+
+    relay = cli_scope.ScopedGateway('run', 'crawl', {}, SimpleNamespace(cancelled=False), store, fetch, None,
+                                    tool_id='katana', scope=[cli_scope.parse_target('https://example.test/app')])
+    return relay, calls, failing
+
+
+def ask(relay, head):
+    async def run():
+        reader = asyncio.StreamReader()
+        reader.feed_data(head + b'\r\n\r\n')
+        reader.feed_eof()
+        return await relay.response(reader)
+    return asyncio.run(run())
+
+
+def test_scoped_gateway_authorizes_each_request_and_fetches_every_url_once(scoped):
+    relay, calls, failing = scoped
+    for refused in (
+        b'CONNECT example.test:443 HTTP/1.1',
+        b'POST https://example.test/app/login HTTP/1.1',
+        b'GET /app/relative HTTP/1.1',
+        b'GET https://example.test/outside HTTP/1.1',
+        b'GET https://other.test/app/x HTTP/1.1',
+        b'GET http://example.test/app/x HTTP/1.1',
+        b'GET https://example.test/app/x#fragment HTTP/1.1',
+        b'GET https://example.test/app/' + b'a' * cli_scope.MAX_URL + b' HTTP/1.1',
+        b'GET https://example.test/app/x HTTP/1.1\r\nTransfer-Encoding: chunked',
+    ):
+        assert ask(relay, refused)[0] == 403, refused
+    assert not calls and relay.denied == 9
+    # Katana's proxy self-check is refused without being recorded as a scope denial.
+    assert ask(relay, b'GET http://burpsuite/ HTTP/1.1')[0] == 403 and relay.denied == 9
+    first = ask(relay, b'GET https://example.test/app/page?id=1 HTTP/1.1\r\nCookie: scanner=1\r\nX-Injected: yes')
+    assert first == (200, [['Content-Type', 'text/html']], b'capture:https://example.test/app/page?id=1')
+    # A repeat is answered from the saved exchange without a second target request.
+    assert ask(relay, b'GET https://example.test/app/page?id=1 HTTP/1.1') == first
+    assert calls == ['https://example.test/app/page?id=1'] and relay.requests == 1
+    failing.add('https://example.test/app/over-budget')
+    assert ask(relay, b'GET https://example.test/app/over-budget HTTP/1.1')[0] == 503
+    assert 'https://example.test/app/over-budget' not in relay.captures and relay.denied == 10
+    relay.ctl.cancelled = True
+    assert ask(relay, b'GET https://example.test/app/later HTTP/1.1')[0] == 503
+    assert len(calls) == 2
+
+
+def test_scoped_gateway_serves_concurrent_duplicates_from_one_fetch(scoped):
+    relay, calls, _ = scoped
+
+    async def run():
+        async def request():
+            reader = asyncio.StreamReader()
+            reader.feed_data(b'GET https://example.test/app/same HTTP/1.1\r\n\r\n')
+            reader.feed_eof()
+            return await relay.response(reader)
+        return await asyncio.gather(*(request() for _ in range(5)))
+
+    assert {status for status, _, _ in asyncio.run(run())} == {200}
+    assert calls == ['https://example.test/app/same']
+
+
+def test_scoped_output_keeps_only_in_scope_urls_and_detections_with_saved_responses(scoped):
+    relay, _, _ = scoped
+    listed = relay.remap_stdout('https://example.test/app/a\nhttps://other.test/app/a\nnot a url\n'
+                                'https://example.test/outside\nhttps://example.test/app/a\n')
+    assert listed == 'https://example.test/app/a'
+    ask(relay, b'GET https://example.test/app/.git/config HTTP/1.1')
+    relay.tool_id = 'nuclei'
+    rows = [
+        {'template-id': 'git-config', 'type': 'http', 'matched-at': 'https://example.test/app/.git/config'},
+        {'template-id': 'never-fetched', 'type': 'http', 'matched-at': 'https://example.test/app/other'},
+        {'template-id': 'outside', 'type': 'http', 'matched-at': 'https://other.test/app/.git/config'},
+        {'template-id': 'dns', 'type': 'dns', 'matched-at': 'https://example.test/app/.git/config'},
+    ]
+    kept = relay.remap_stdout('\n'.join(json.dumps(row) for row in rows) + '\nhoneypot-detected hosts: 0\n')
+    assert [json.loads(line)['template-id'] for line in kept.splitlines()] == ['git-config']
+
+
+@pytest.mark.parametrize('tool,data,accepted', [
+    ('katana', {'params': {'-d': 3, '-jc': True}}, True),
+    ('katana', {'params': {'-d': '5'}}, True),
+    ('katana', {'params': {'-d': 6}}, False),
+    ('katana', {'params': {'-d': 0}}, False),
+    ('katana', {'params': {'-d': True}}, False),
+    ('katana', {'params': {'-d': '2 -ns'}}, False),
+    ('katana', {'params': {'-kf': 'all'}}, False),
+    ('katana', {'params': {'-e': 'cdn'}}, False),
+    ('katana', {'inputRefs': {'wordlist': 'input'}}, False),
+    ('nuclei', {'params': {'-severity': 'high,critical', '-tags': 'exposure'}, 'inputRefs': {'templates': 'input'}}, True),
+    ('nuclei', {'params': {'-rl': 500}}, False),
+    ('nuclei', {'params': {'-eh': '10.0.0.1'}}, False),
+    ('nuclei', {'inputRefs': {'templates': 'input', 'file': 'other'}}, False),
+    ('httpx', {}, False),
+])
+def test_enforced_profile_owns_crawler_and_scanner_arguments(tool, data, accepted):
+    config = {'targets': ['https://example.test/app'], 'http_routing': {'mode': 'direct'}}
+    node = {'toolId': tool, **data}
+    if accepted:
+        cli_scope.validate_node(node, config)
+    else:
+        with pytest.raises(ScopeError):
+            cli_scope.validate_node(node, config)
+
+
+@pytest.mark.skipif(not BIN_DIR, reason='Requires pinned Linux isolation binaries')
+def test_real_katana_reaches_https_targets_only_through_the_relay(tmp_path, monkeypatch):
+    """The scanner has no network: an https crawl is terminated in the relay and authorized at the gateway."""
+    monkeypatch.setenv('PATH', os.pathsep.join((BIN_DIR, os.environ['PATH'])))
+    pins = cli_scope.preflight_sandbox({'path': str(Path(BIN_DIR) / 'katana')}, 'katana')
+    pages = {
+        'https://app.example.test/': '<a href="/docs/a.html">a</a> <a href="https://app.example.test/docs/b.html">b</a>'
+                                     ' <a href="https://outside.example.test/x">x</a>',
+        'https://app.example.test/docs/a.html': '<a href="c.html">c</a>',
+        'https://app.example.test/docs/b.html': 'leaf b',
+        'https://app.example.test/docs/c.html': 'leaf c',
+    }
+    store = Mock()
+    store.content.side_effect = lambda url: {'http_exchange': {'response': {
+        'status': 200 if url in pages else 404, 'headers': [['Content-Type', 'text/html']],
+        'body_base64': base64.b64encode(pages.get(url, 'missing').encode()).decode()}}}
+    calls = []
+
+    async def fetch(url, *, node_id):
+        calls.append(url)
+        return {'http_exchange_id': 'exchange-' + str(len(calls)), 'artifact_id': url}
+
+    relay = cli_scope.ScopedGateway('run', 'crawl', {}, SimpleNamespace(cancelled=False), store, fetch, None,
+                                    tool_id='katana', scope=[cli_scope.parse_target('app.example.test')])
+    seeds = tmp_path / 'targets.txt'
+    seeds.write_text('https://app.example.test/\n')
+
+    async def run():
+        path = str(tmp_path / 'gateway.sock')
+        server = await asyncio.start_unix_server(relay.accept, path=path, limit=cli_scope.MAX_HEADER)
+        async with server:
+            proc = await asyncio.create_subprocess_exec(
+                *cli_scope.sandbox_prefix(pins), '--ro-bind', str(Path(BIN_DIR) / 'katana'), '/scanner',
+                '--ro-bind', str(seeds), '/targets', '--ro-bind', path, '/gateway', '--', '/relay', '/scanner',
+                '-silent', '-list', '/targets', '-duc', '-dr', '-fs', 'fqdn', '-proxy', cli_scope.PROXY,
+                '-c', '2', '-timeout', '8', '-retry', '0', '-d', '3',
+                stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env={})
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), 60)
+            finally:
+                if proc.returncode is None:
+                    proc.kill()
+                    await proc.wait()
+            assert proc.returncode == 0, stderr
+            return stdout.decode()
+
+    found = set(relay.remap_stdout(asyncio.run(run())).splitlines())
+    expected = {'https://app.example.test/', 'https://app.example.test/docs/a.html',
+                'https://app.example.test/docs/b.html', 'https://app.example.test/docs/c.html'}
+    assert expected <= found and all(url.startswith('https://app.example.test/') for url in found)
+    assert expected <= set(calls) and len(calls) == len(set(calls))
+    assert all(url.startswith('https://app.example.test/') for url in calls)
+
+
+def scoped_recon(client, base, templates):
+    target = client.post('/api/targets', json={'value': base}).json()['id']
+    graph = client.get('/api/workflow-starters/enforced-web-recon').json()
+    folder = client.post('/api/inputs', json={'name': 'Fixture templates', 'path': str(templates)}).json()['id']
+    next(node['data'] for node in graph['nodes'] if node['id'] == 'scan')['inputRefs'] = {'templates': folder}
+    return {'engine': 'workflow', 'workflow': graph, 'target_ids': [target], 'max_requests': 40, 'max_seconds': 240,
+            'allow_cli': True, 'allow_http': True, 'cli_scope': 'enforced'}
+
+
+@pytest.mark.skipif(not BIN_DIR, reason='Requires pinned Linux isolation binaries')
+def test_real_scoped_recon_crawls_and_scans_only_inside_the_entered_scope(tmp_path, monkeypatch):
+    monkeypatch.setenv('PATH', os.pathsep.join((BIN_DIR, os.environ['PATH'])))
+    requests, outside = [], []
+
+    def fixture(log, pages):
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                log.append(self.path)
+                body = pages.get(self.path)
+                self.send_response(200 if body is not None else 404)
+                self.send_header('Content-Type', 'text/html')
+                self.end_headers()
+                self.wfile.write((body or 'missing').encode())
+
+            def log_message(self, *_):
+                pass
+        server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        return server, thread
+
+    other, other_thread = fixture(outside, {'/': 'outside'})
+    pages = {
+        '/app': f'<a href="/app/docs/a.html">a</a> <a href="/admin">admin</a>'
+                f' <a href="http://127.0.0.1:{other.server_port}/">elsewhere</a>',
+        '/app/docs/a.html': '<a href="b.html">b</a>',
+        '/app/docs/b.html': 'leaf',
+        '/app/.git/config': '[core]\n\trepositoryformatversion = 0\n',
+        '/admin': 'outside the entered path',
+    }
+    server, thread = fixture(requests, pages)
+    templates = tmp_path / 'templates'
+    templates.mkdir()
+    (templates / 'git-config.yaml').write_text(
+        'id: fixture-git-config\ninfo:\n  name: Fixture git config\n  author: fixture\n  severity: medium\n'
+        'http:\n  - method: GET\n    path:\n      - "{{BaseURL}}/.git/config"\n    matchers:\n'
+        '      - type: word\n        words:\n          - "repositoryformatversion"\n')
+    # This template asks for a path above the entered prefix; only the gateway can stop it.
+    (templates / 'escape.yaml').write_text(
+        'id: fixture-escape\ninfo:\n  name: Fixture scope escape\n  author: fixture\n  severity: high\n'
+        'http:\n  - method: GET\n    path:\n      - "{{RootURL}}/admin"\n    matchers:\n'
+        '      - type: word\n        words:\n          - "outside the entered path"\n')
+    try:
+        with TestClient(create_app(tmp_path / 'state')) as client:
+            base = f'http://127.0.0.1:{server.server_port}/app'
+            options = scoped_recon(client, base, templates)
+            check = client.post('/api/runs/preflight', json=options).json()
+            assert check['ready'] and check['cli_scope']['sandbox_verified'], check
+            assert {row['http_capture'] for row in check['capture_coverage']} == {'scoped_gateway'}
+            response = client.post('/api/runs', json=options)
+            assert response.status_code == 201, response.text
+            rid = response.json()['id']
+            for _ in range(1500):
+                run = client.get('/api/runs/' + rid).json()
+                if run['status'] in ('completed', 'failed', 'cancelled'):
+                    break
+                time.sleep(.1)
+            nodes = client.get(f'/api/runs/{rid}/nodes').json()
+            artifacts = client.get(f'/api/runs/{rid}/artifacts').json()
+            records = {item['name'].split('-', 2)[2].removesuffix('.json'): client.get('/api/artifacts/' + item['id']).json()
+                       for item in artifacts if item['name'].startswith('cli-')}
+            assert run['status'] == 'completed' and all(n['status'] == 'completed' for n in nodes), (nodes, records)
+            assert set(records) == {'httprobe', 'katana', 'nuclei'}
+            # Nothing left the entered path prefix, and the other origin saw no traffic at all.
+            assert not outside and '/admin' not in requests
+            assert all(path == '/app' or path.startswith('/app/') for path in requests), requests
+            history = client.get('/api/http-history', params={'run_id': rid}).json()['items']
+            assert history and all(row['url'] == base or row['url'].startswith(base + '/') for row in history)
+            assert {row['id'] for row in history} == set().union(*(r['cli_scope']['exchange_ids'] for r in records.values()))
+            assert all(r['http_capture'] == 'scoped_gateway' and r['native_requests_counted'] for r in records.values())
+            crawled = set(records['katana']['stdout'].splitlines())
+            assert {base + '/docs/a.html', base + '/docs/b.html'} <= crawled
+            assert all(url == base or url.startswith(base + '/') for url in crawled)
+            detections = [json.loads(line) for line in records['nuclei']['stdout'].splitlines()]
+            assert [row['template-id'] for row in detections] == ['fixture-git-config']
+            assert detections[0]['matched-at'] == base + '/.git/config'
+            assert records['nuclei']['cli_scope']['denied'] >= 1
+            denials = [event for event in client.get(f'/api/runs/{rid}/events').json()
+                       if event['kind'] == 'cli.scope_denied' and event['data']['tool_id'] == 'nuclei']
+            assert any(event['data']['reason'] == 'Request was outside the entered scope.' for event in denials)
+            assert run['result']['request_count'] == len(history) <= 40
+    finally:
+        for instance, worker in ((server, thread), (other, other_thread)):
+            instance.shutdown()
+            instance.server_close()
+            worker.join()

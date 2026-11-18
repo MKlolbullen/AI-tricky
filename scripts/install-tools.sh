@@ -10,7 +10,7 @@
 #
 # Usage:
 #   scripts/install-tools.sh --web-recon     # pinned starter binaries
-#   scripts/install-tools.sh --enforced-cli # pinned ffuf, httprobe and private relay
+#   scripts/install-tools.sh --enforced-cli # pinned ffuf, httprobe, katana, nuclei and private relay
 #   scripts/install-tools.sh --trickest-oss  # pinned mksub and mkpath
 #   scripts/install-tools.sh                 # install everything it can
 #   scripts/install-tools.sh --list          # print the tool/method table, exit

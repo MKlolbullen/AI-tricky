@@ -271,3 +271,18 @@ proxies, headers, HTTP method or body, TLS verification, redirects, remote
 templates, code/fuzzing templates, cloud uploads or output-format changes.
 Corrections may fix catalog arguments that are wrong for the pinned version.
 Enforced CLI scope keeps its own narrower allowlist. See docs/TOOL-ARGUMENTS.md.
+
+## Enforced Katana and Nuclei — 2026-11-18
+
+The enforced CLI profile now also runs pinned static Katana and Nuclei. ffuf
+and httprobe keep exact pre-bound routes. A crawler or template scanner
+chooses its own URLs, so the gateway authorizes each request against the
+entered scope on arrival, GET only, forwarding no scanner headers or bodies,
+fetching each URL once per invocation through the shared budget and journal.
+The relay terminates HTTPS inside the namespace with a throwaway in-memory
+certificate and never dials a network address; real TLS verification stays in
+the scoped transport. Keep Katana output to in-scope URLs and keep a Nuclei
+detection only when its matched URL has a saved target response. The profile
+owns scanner arguments (Katana depth 1–5 and JS crawl; Nuclei severity and
+tags). Passive discovery tools stay rejected in enforced runs. See
+docs/CLI-SCOPE.md.

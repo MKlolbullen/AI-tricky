@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .scope import ScopeError, network_hosts, parse_target, parse_url
 from .catalog import CATALOG_KINDS, contract
+from .cli_runner import EmptyCLIInput
 from .workflow_sockets import incoming_routes, resolve_sockets, routed_rows
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -272,10 +273,12 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
     async def run_node(nid):
         for parent in incoming[nid]:
             await tasks[parent]
-        if any(states[p] not in ('completed', 'reused', 'planned') for p in incoming[nid]):
+        blocked = [p for p in incoming[nid] if states[p] not in ('completed', 'reused', 'planned')]
+        if blocked:
+            reason = 'Upstream output unavailable: ' + ', '.join(f'{p} ({states[p]})' for p in blocked) + '.'
             states[nid] = 'skipped'
-            store.node_status(rid, nid, 'skipped', {'reason': 'Upstream node failed.'})
-            store.event(rid, 'node.skipped', {'node_id': nid, 'reason': 'Upstream node failed.'})
+            store.node_status(rid, nid, 'skipped', {'reason': reason})
+            store.event(rid, 'node.skipped', {'node_id': nid, 'reason': reason})
             return
         async with slots:
             await ctl.gate.wait()
@@ -336,6 +339,11 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
                 metadata = {'artifact_id': aid, 'records': sum(sum(len(v) for v in row['catalog_streams'].values()) if 'catalog_streams' in row else 1 for row in result), 'errors': errors, 'input_receipt_id': input_receipt_id}
                 store.node_status(rid, nid, 'completed', metadata)
                 store.event(rid, 'node.completed', {'node_id': nid, **metadata})
+            except EmptyCLIInput as exc:
+                states[nid] = 'skipped'
+                metadata = {'reason': str(exc), 'input_receipt_id': input_receipt_id}
+                store.node_status(rid, nid, 'skipped', metadata)
+                store.event(rid, 'node.skipped', {'node_id': nid, **metadata})
             except asyncio.CancelledError:
                 states[nid] = 'cancelled'
                 store.node_status(rid, nid, 'cancelled', {'input_receipt_id': input_receipt_id})
@@ -351,7 +359,9 @@ async def execute_workflow(rid, config, ctl, store, fetch, probe, analyze, asset
                 ctl.active_nodes.discard(nid)
 
     for nid in order:
-        store.node_status(rid, nid, 'queued')
+        parents = list(dict.fromkeys(incoming[nid]))
+        metadata = {'reason': 'Waiting for upstream nodes: ' + ', '.join(parents) + '.'} if parents else None
+        store.node_status(rid, nid, 'queued', metadata)
     try:
         async with asyncio.TaskGroup() as group:
             for nid in order:

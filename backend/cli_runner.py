@@ -32,6 +32,10 @@ class CLIError(RuntimeError):
     pass
 
 
+class EmptyCLIInput(ScopeError):
+    """The adapter has no data to process."""
+
+
 def digest(path):
     h=hashlib.sha256()
     with open(path,'rb') as f:
@@ -102,8 +106,13 @@ def prepare_context(streams,data,work,store,config,tool,run_id=None):
     context={'artifact_dir':str(work),'artifact_file':str(work/'output.txt')}
     streams={k:list(dict.fromkeys(v)) for k,v in streams.items()}
     for typ,identifier in data.get('inputRefs',{}).items():streams[typ]=['input:'+identifier]
-    for typ,values in list(streams.items()):
+    for typ, values in streams.items():
         if any(not isinstance(v,str) or len(v)>(MAX_INPUT if typ=='sbom' else 16000) or '\x00' in v for v in values):raise ScopeError('Invalid typed input value.')
+        streams[typ] = [value for value in values if value.strip()]
+    accepted = tool['inputs']
+    if accepted and not any(streams.get(typ) for typ in accepted):
+        raise EmptyCLIInput('No records on a required input. Expected one of: ' + ', '.join(accepted) + '.')
+    for typ,values in list(streams.items()):
         if typ in ('folder','file') and values and all(v.startswith('artifact:') for v in values):
             if typ=='file' and len(values)!=1:raise ScopeError('File port accepts one artifact.')
             destination=work/'imported';destination.mkdir(exist_ok=True)
@@ -116,6 +125,8 @@ def prepare_context(streams,data,work,store,config,tool,run_id=None):
                 if meta['run_id']!=run_id or not isinstance(body,dict) or body.get('encoding')!='base64':raise ScopeError('File artifact must belong to this run.')
                 try:raw=base64.b64decode(body['bytes'],validate=True)
                 except (KeyError,ValueError):raise ScopeError('Invalid upstream file encoding.') from None
+                if typ == 'file' and not raw:
+                    raise EmptyCLIInput('The upstream file artifact is empty.')
                 total+=len(raw)
                 if total>MAX_INPUT:raise ScopeError('Upstream file input exceeds 10 MB.')
                 path=destination/f'{index}-{Path(meta["name"]).name}';path.write_bytes(raw);paths.append(path)
@@ -132,6 +143,8 @@ def prepare_context(streams,data,work,store,config,tool,run_id=None):
                 if expected and input_fingerprint(path,'folder')!=expected:raise ScopeError('Pinned support folder changed during copying.')
             else:
                 path=work/(typ+'.input');shutil.copyfile(source,path)
+                if not path.stat().st_size:
+                    raise EmptyCLIInput(f'The registered {typ} input is empty.')
             if config.get('proposal_execution') or config.get('workflow_recovery'):
                 pins='recovery_input_pins' if config.get('workflow_recovery') else 'proposal_input_pins'
                 pin=config.get(pins,{}).get(values[0][6:])
@@ -141,11 +154,15 @@ def prepare_context(streams,data,work,store,config,tool,run_id=None):
             context[typ if typ in ('folder','templates') else 'sbom_file' if typ=='sbom' else 'wordlist_file' if typ=='wordlist' else typ if typ.endswith('_file') else typ+'_file']=str(path)
             streams[typ]=[str(path)]
         elif typ in ('wordlist','sbom','targets','url','domain','query','paths_file','resolvers'):
-            body='\n'.join(values)+'\n' if values else ''
+            if not values:
+                continue
+            body='\n'.join(values)+'\n'
             if len(body.encode())>MAX_INPUT:raise ScopeError('Typed input exceeds the 10 MB limit.')
             path=work/(typ+'.txt');path.write_text(body)
             context['sbom_file' if typ=='sbom' else 'wordlist_file' if typ=='wordlist' else typ if typ.endswith('_file') else typ+'_file']=str(path)
     target_values=streams.get('targets') or streams.get('url') or streams.get('domain') or streams.get('file') or streams.get('folder') or []
+    if tool['adapter']['stdin'] and not target_values:
+        raise EmptyCLIInput('No records are available for this tool’s standard input.')
     if tool['adapter']['traffic']!='offline':
         typ='url' if streams.get('url') and not streams.get('targets') else 'targets'
         if streams.get('domain') and not streams.get('targets') and not streams.get('url'):typ='domain'

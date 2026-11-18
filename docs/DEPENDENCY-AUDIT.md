@@ -23,7 +23,7 @@ The CAI SDK runs in its own interpreter (`.venv-cai`), installed only when you c
 
 ### Why it cannot be upgraded
 
-`cai-framework` 0.5.10 is the newest release. It requires `litellm[proxy]`, `openai==1.75.0` and `rich>=13.9.4`. Together those leave LiteLLM 1.68.0 as the only release that resolves:
+`cai-framework` 0.5.10 is the newest release. It requires `litellm[proxy]>=1.63.7`, `openai==1.75.0` and `rich>=13.9.4`. Together those make LiteLLM 1.68.0 the newest release that resolves (older ones back to 1.63.7 also do, and fix nothing):
 
 - LiteLLM 1.68.1 to 1.75.3 still accept that OpenAI client, but their proxy extra pins `rich==13.7.1`, which CAI's own `rich>=13.9.4` rules out.
 - LiteLLM 1.75.4 and later require `openai>=1.99.5`, which CAI's `openai==1.75.0` rules out.

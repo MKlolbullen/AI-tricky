@@ -446,6 +446,11 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
         graph = recon_workflow(fuzz=fuzz, scan=scan, review=review, surface=surface)
         return support_data.bind(graph, bundled_only=True)['graph'] if scan else graph
 
+    @app.get('/api/workflow-starters/web-app-assessment')
+    def web_app_assessment_starter():
+        from .web_recon import web_app_assessment_workflow
+        return support_data.bind(web_app_assessment_workflow(), bundled_only=True)['graph']
+
     @app.get('/api/workflow-starters/enforced-ffuf')
     def enforced_ffuf_starter():
         from .web_recon import recon_workflow

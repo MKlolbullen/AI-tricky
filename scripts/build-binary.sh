@@ -59,6 +59,7 @@ DATA=(
   "${ROOT}/dist/client${SEP}dist/client"
   "${ROOT}/src/mini-tricky-catalog.json${SEP}src"
   "${ROOT}/src/trickest-catalog.json${SEP}src"
+  "${ROOT}/src/tool-argument-overlay.json${SEP}src"
   "${ROOT}/src/native-registry.json${SEP}src"
   "${ROOT}/src/identity-tools.json${SEP}src"
   "${ROOT}/src/templates.json${SEP}src"

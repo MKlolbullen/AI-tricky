@@ -1,0 +1,526 @@
+{
+  "schema": "ai-tricky.tool-argument-overlay/v1",
+  "scope": "Additional arguments, and corrections to mistyped ones, for catalog tools whose exact version is pinned in toolchains/*.tsv. Authored for AI-tricky and checked against each pinned binary's help output. Not part of the pinned mini-tricky migration.",
+  "tools": {
+    "subfinder": {
+      "package": "github.com/projectdiscovery/subfinder/v2/cmd/subfinder",
+      "version": "v2.17.0",
+      "args": [
+        {
+          "flag": "-s",
+          "label": "Sources",
+          "description": "Comma-separated passive sources to use, for example crtsh,github.",
+          "type": "string"
+        },
+        {
+          "flag": "-es",
+          "label": "Exclude Sources",
+          "description": "Comma-separated passive sources to skip.",
+          "type": "string"
+        },
+        {
+          "flag": "-rl",
+          "label": "Rate Limit",
+          "description": "Maximum HTTP requests per second across all sources.",
+          "type": "int"
+        },
+        {
+          "flag": "-rls",
+          "label": "Per-Source Rate Limits",
+          "description": "Per-source request limits in key=value form, for example hackertarget=10/m.",
+          "type": "string"
+        },
+        {
+          "flag": "-ei",
+          "label": "Exclude IPs",
+          "description": "Drop IP addresses from the discovered names.",
+          "type": "flag"
+        },
+        {
+          "flag": "-mr",
+          "label": "Max Results per Source",
+          "description": "Limit results per source; 0 means unlimited.",
+          "type": "int"
+        },
+        {
+          "flag": "-max-time",
+          "label": "Max Enumeration Time",
+          "description": "Minutes to wait for enumeration results.",
+          "type": "int",
+          "default": "10"
+        },
+        {
+          "flag": "-rsr",
+          "label": "Response Size Limit",
+          "description": "Maximum response body bytes read from a source; 0 means unlimited.",
+          "type": "int"
+        }
+      ]
+    },
+    "httprobe": {
+      "package": "github.com/tomnomnom/httprobe",
+      "version": "v0.1.3-0.20220609162043-7e8abdb4096a",
+      "args": [
+        {
+          "flag": "-c",
+          "label": "Concurrency",
+          "description": "Concurrent probes, split between HTTPS and HTTP.",
+          "type": "int",
+          "default": "20"
+        },
+        {
+          "flag": "-t",
+          "label": "Timeout",
+          "description": "Probe timeout in milliseconds.",
+          "type": "int",
+          "default": "10000"
+        },
+        {
+          "flag": "-prefer-https",
+          "label": "Prefer HTTPS",
+          "description": "Try plain HTTP only when HTTPS fails.",
+          "type": "flag"
+        },
+        {
+          "flag": "-s",
+          "label": "Skip Default Probes",
+          "description": "Skip the default http:80 and https:443 probes; use with extra ports.",
+          "type": "flag"
+        }
+      ]
+    },
+    "ffuf": {
+      "package": "github.com/ffuf/ffuf/v2",
+      "version": "v2.1.0",
+      "args": [
+        {
+          "flag": "-ml",
+          "label": "Match Lines",
+          "description": "Match responses by line count.",
+          "type": "string"
+        },
+        {
+          "flag": "-mw",
+          "label": "Match Words",
+          "description": "Match responses by word count.",
+          "type": "string"
+        },
+        {
+          "flag": "-ms",
+          "label": "Match Size",
+          "description": "Match responses by size in bytes.",
+          "type": "string"
+        },
+        {
+          "flag": "-mr",
+          "label": "Match Regexp",
+          "description": "Match responses whose content matches this regular expression.",
+          "type": "string"
+        },
+        {
+          "flag": "-mt",
+          "label": "Match Time",
+          "description": "Match by milliseconds to the first response byte, for example >100 or <100.",
+          "type": "string"
+        },
+        {
+          "flag": "-mmode",
+          "label": "Matcher Mode",
+          "description": "How matchers combine: and, or.",
+          "type": "string",
+          "default": "or"
+        },
+        {
+          "flag": "-fl",
+          "label": "Filter Lines",
+          "description": "Filter out responses by line count; comma-separated counts and ranges.",
+          "type": "string"
+        },
+        {
+          "flag": "-fw",
+          "label": "Filter Words",
+          "description": "Filter out responses by word count; comma-separated counts and ranges.",
+          "type": "string"
+        },
+        {
+          "flag": "-ft",
+          "label": "Filter Time",
+          "description": "Filter by milliseconds to the first response byte, for example >100 or <100.",
+          "type": "string"
+        },
+        {
+          "flag": "-fmode",
+          "label": "Filter Mode",
+          "description": "How filters combine: and, or.",
+          "type": "string",
+          "default": "or"
+        },
+        {
+          "flag": "-timeout",
+          "label": "Request Timeout",
+          "description": "HTTP request timeout in seconds.",
+          "type": "int",
+          "default": "10"
+        },
+        {
+          "flag": "-maxtime",
+          "label": "Max Run Time",
+          "description": "Maximum running time in seconds for the whole process; 0 means no limit.",
+          "type": "int",
+          "default": "0"
+        },
+        {
+          "flag": "-maxtime-job",
+          "label": "Max Job Time",
+          "description": "Maximum running time in seconds per job; 0 means no limit.",
+          "type": "int",
+          "default": "0"
+        },
+        {
+          "flag": "-p",
+          "label": "Request Delay",
+          "description": "Seconds between requests, or a random range such as 0.1-2.0.",
+          "type": "string"
+        },
+        {
+          "flag": "-sa",
+          "label": "Stop on All Errors",
+          "description": "Stop on every error case; implies stop on flood and stop on errors.",
+          "type": "flag"
+        },
+        {
+          "flag": "-ach",
+          "label": "Per-Host Calibration",
+          "description": "Calibrate automatic filtering separately for each host.",
+          "type": "flag"
+        },
+        {
+          "flag": "-recursion-strategy",
+          "label": "Recursion Strategy",
+          "description": "Which matches start a recursive job: default or greedy (every match).",
+          "type": "string",
+          "default": "default"
+        },
+        {
+          "flag": "-e",
+          "label": "Extensions",
+          "description": "Comma-separated extensions appended to each candidate, for example .php,.bak.",
+          "type": "string"
+        },
+        {
+          "flag": "-ic",
+          "label": "Ignore Comments",
+          "description": "Ignore comment lines in the bound list.",
+          "type": "flag"
+        },
+        {
+          "flag": "-D",
+          "label": "DirSearch Mode",
+          "description": "DirSearch compatibility mode; use together with extensions.",
+          "type": "flag"
+        },
+        {
+          "flag": "-ignore-body",
+          "label": "Ignore Body",
+          "description": "Do not fetch response content.",
+          "type": "flag"
+        },
+        {
+          "flag": "-http2",
+          "label": "HTTP/2",
+          "description": "Use the HTTP/2 protocol.",
+          "type": "flag"
+        }
+      ]
+    },
+    "katana": {
+      "package": "github.com/projectdiscovery/katana/cmd/katana",
+      "version": "v1.8.0",
+      "corrections": [
+        {
+          "flag": "-kf",
+          "type": "string",
+          "description": "Also crawl robots.txt and sitemap.xml entries: all, robotstxt or sitemapxml. Needs a depth of at least 3.",
+          "label": "Robots and Sitemap"
+        },
+        {
+          "flag": "-ef",
+          "type": "string",
+          "description": "Comma-separated extensions to drop from the output, for example png,css."
+        }
+      ],
+      "args": [
+        {
+          "flag": "-jsl",
+          "label": "jsluice Parsing",
+          "description": "Parse JavaScript with jsluice for more endpoints; memory intensive.",
+          "type": "flag"
+        },
+        {
+          "flag": "-ct",
+          "label": "Crawl Duration",
+          "description": "Maximum time to crawl each target, for example 90s, 10m or 1h.",
+          "type": "string"
+        },
+        {
+          "flag": "-retry",
+          "label": "Retries",
+          "description": "Times to retry a failed request.",
+          "type": "int",
+          "default": "1"
+        },
+        {
+          "flag": "-s",
+          "label": "Visit Strategy",
+          "description": "Crawl order: depth-first or breadth-first.",
+          "type": "string",
+          "default": "depth-first"
+        },
+        {
+          "flag": "-iqp",
+          "label": "Ignore Query Params",
+          "description": "Do not re-crawl the same location with different query values.",
+          "type": "flag"
+        },
+        {
+          "flag": "-fsu",
+          "label": "Filter Similar URLs",
+          "description": "Skip URLs that look alike, such as /users/123 and /users/456.",
+          "type": "flag"
+        },
+        {
+          "flag": "-fst",
+          "label": "Similar URL Threshold",
+          "description": "Distinct values before a URL position is treated as a parameter.",
+          "type": "int",
+          "default": "10"
+        },
+        {
+          "flag": "-pc",
+          "label": "Climb Parent Locations",
+          "description": "Also crawl the parent of each discovered URL; the crawl scope still applies.",
+          "type": "flag"
+        },
+        {
+          "flag": "-mdp",
+          "label": "Max Pages per Domain",
+          "description": "Maximum pages to crawl per domain.",
+          "type": "int"
+        },
+        {
+          "flag": "-e",
+          "label": "Exclude Hosts",
+          "description": "Skip hosts matching a filter: cdn, private-ips, a CIDR, an IP or a regex.",
+          "type": "string"
+        },
+        {
+          "flag": "-em",
+          "label": "Extension Match",
+          "description": "Only output URLs with these extensions, for example php,html,js.",
+          "type": "string"
+        },
+        {
+          "flag": "-ndef",
+          "label": "No Default Extension Filter",
+          "description": "Keep extensions that are filtered out by default.",
+          "type": "flag"
+        },
+        {
+          "flag": "-duf",
+          "label": "Disable Unique Filter",
+          "description": "Keep pages with duplicate content.",
+          "type": "flag"
+        },
+        {
+          "flag": "-pcs",
+          "label": "Similar Page Filter",
+          "description": "Filter pages whose content is similar after exact de-duplication.",
+          "type": "flag"
+        },
+        {
+          "flag": "-p",
+          "label": "Parallelism",
+          "description": "Concurrent inputs to process.",
+          "type": "int",
+          "default": "10"
+        },
+        {
+          "flag": "-rd",
+          "label": "Request Delay",
+          "description": "Seconds to wait between requests.",
+          "type": "int"
+        },
+        {
+          "flag": "-rlm",
+          "label": "Rate Limit per Minute",
+          "description": "Maximum requests per minute.",
+          "type": "int"
+        },
+        {
+          "flag": "-hrl",
+          "label": "Host Rate Limit",
+          "description": "Maximum requests per second for each host.",
+          "type": "int"
+        },
+        {
+          "flag": "-hrlm",
+          "label": "Host Rate Limit per Minute",
+          "description": "Maximum requests per minute for each host.",
+          "type": "int"
+        }
+      ]
+    },
+    "nuclei": {
+      "package": "github.com/projectdiscovery/nuclei/v3/cmd/nuclei",
+      "version": "v3.11.1",
+      "args": [
+        {
+          "flag": "-es",
+          "label": "Exclude Severity",
+          "description": "Skip templates of these severities: info, low, medium, high, critical, unknown.",
+          "type": "string"
+        },
+        {
+          "flag": "-pt",
+          "label": "Protocol Types",
+          "description": "Run only templates of these protocol types, for example http,dns,ssl.",
+          "type": "string"
+        },
+        {
+          "flag": "-ept",
+          "label": "Exclude Protocol Types",
+          "description": "Skip templates of these protocol types, for example dns,tcp.",
+          "type": "string"
+        },
+        {
+          "flag": "-id",
+          "label": "Template IDs",
+          "description": "Run only these template IDs (comma-separated; wildcards allowed).",
+          "type": "string"
+        },
+        {
+          "flag": "-eid",
+          "label": "Exclude Template IDs",
+          "description": "Skip these template IDs (comma-separated).",
+          "type": "string"
+        },
+        {
+          "flag": "-a",
+          "label": "Authors",
+          "description": "Run only templates by these authors (comma-separated).",
+          "type": "string"
+        },
+        {
+          "flag": "-eh",
+          "label": "Exclude Hosts",
+          "description": "Hosts to skip from the input: IP, CIDR or hostname.",
+          "type": "string"
+        },
+        {
+          "flag": "-iv",
+          "label": "IP Version",
+          "description": "IP versions to scan for a hostname: 4, 6 or 4,6.",
+          "type": "string",
+          "default": "4"
+        },
+        {
+          "flag": "-rld",
+          "label": "Rate Limit Window",
+          "description": "Time window the rate limit applies to, for example 1s or 1m.",
+          "type": "string",
+          "default": "1s"
+        },
+        {
+          "flag": "-pc",
+          "label": "Template Request Concurrency",
+          "description": "Maximum concurrent request variations for each template.",
+          "type": "int",
+          "default": "25"
+        },
+        {
+          "flag": "-prc",
+          "label": "Probe Concurrency",
+          "description": "Concurrency of the HTTP probe used for non-URL input.",
+          "type": "int",
+          "default": "50"
+        },
+        {
+          "flag": "-timeout",
+          "label": "Timeout",
+          "description": "Seconds to wait before a request times out.",
+          "type": "int",
+          "default": "10"
+        },
+        {
+          "flag": "-retries",
+          "label": "Retries",
+          "description": "Times to retry a failed request.",
+          "type": "int",
+          "default": "1"
+        },
+        {
+          "flag": "-mhe",
+          "label": "Max Host Errors",
+          "description": "Errors for one host before it is skipped.",
+          "type": "int",
+          "default": "30"
+        },
+        {
+          "flag": "-nmhe",
+          "label": "Keep Failing Hosts",
+          "description": "Do not skip hosts because of repeated errors.",
+          "type": "flag"
+        },
+        {
+          "flag": "-spm",
+          "label": "Stop at First Match",
+          "description": "Stop HTTP requests for a template after its first match; may break multi-step templates.",
+          "type": "flag"
+        },
+        {
+          "flag": "-ss",
+          "label": "Scan Strategy",
+          "description": "Scan order: auto, host-spray or template-spray.",
+          "type": "string",
+          "default": "auto"
+        },
+        {
+          "flag": "-ldp",
+          "label": "Leave Default Ports",
+          "description": "Keep default ports in targets, for example host:80 and host:443.",
+          "type": "flag"
+        },
+        {
+          "flag": "-nh",
+          "label": "No HTTP Probe",
+          "description": "Do not probe non-URL input before scanning.",
+          "type": "flag"
+        },
+        {
+          "flag": "-dc",
+          "label": "Disable Clustering",
+          "description": "Send each template request separately instead of clustering identical ones.",
+          "type": "flag"
+        },
+        {
+          "flag": "-lna",
+          "label": "Block Local Network",
+          "description": "Block connections to local and private network addresses.",
+          "type": "flag"
+        },
+        {
+          "flag": "-rsr",
+          "label": "Response Size Limit",
+          "description": "Maximum response size to read, in bytes.",
+          "type": "int"
+        },
+        {
+          "flag": "-fh2",
+          "label": "Force HTTP/2",
+          "description": "Force HTTP/2 connections.",
+          "type": "flag"
+        }
+      ]
+    }
+  }
+}

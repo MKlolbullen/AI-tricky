@@ -43,6 +43,52 @@ def blocked_flag(arg):
     return None
 
 
+# AI-tricky-authored argument additions for tools whose exact version is pinned
+# in toolchains/*.tsv. The pinned migration catalog (CATALOG) is never edited:
+# the overlay is merged into the executable contracts (TOOLS) at load, and every
+# flag is checked against the pinned binary's real help output in CI.
+ARGUMENT_OVERLAY=json.loads((ROOT/'src/tool-argument-overlay.json').read_text())
+# Flags the adapters append themselves (cli_runner.build_command, http_routing).
+# An overlay may never offer them, nor any token of a tool's fixed command.
+ADAPTER_FLAGS={
+    'subfinder':{'-duc'},'httpx':{'-duc','-http-proxy'},'ffuf':{'-x'},
+    'katana':{'-dr','-fs','-duc','-cs','-proxy'},
+    'nuclei':{'-dr','-ni','-duc','-t','-proxy'},'nuclei-takeover':{'-dr','-ni','-duc','-t','-proxy'},
+}
+OVERLAY_ORIGIN='ai-tricky-overlay'
+
+
+def merge_argument_overlay(tools,overlay):
+    """Return {tool id: contract with overlay args appended}; fail closed on any unsafe entry."""
+    merged={}
+    for tid,entry in overlay['tools'].items():
+        tool=tools.get(tid)
+        if tool is None or tool.get('sourceCatalog')!='mini-tricky':raise RuntimeError(f'Argument overlay names an unknown catalog tool: {tid}.')
+        if not isinstance(entry.get('version'),str) or not isinstance(entry.get('package'),str):raise RuntimeError(f'Argument overlay for {tid} needs a pinned package and version.')
+        taken={a['flag'] for a in tool.get('args',[])}|set(tool['command'])|ADAPTER_FLAGS.get(tid,set())
+        added=[]
+        for arg in entry['args']:
+            if set(arg)-{'flag','label','description','type','default'} or not {'flag','label','description','type'}<=set(arg):raise RuntimeError(f'Invalid overlay argument for {tid}.')
+            flag=arg['flag']
+            if not isinstance(flag,str) or not re.fullmatch(r'--?[A-Za-z][A-Za-z0-9-]{0,40}',flag) or arg['type'] not in ('flag','int','float','string'):
+                raise RuntimeError(f'Invalid overlay flag for {tid}: {flag!r}.')
+            if 'default' in arg and not isinstance(arg['default'],str):raise RuntimeError(f'Overlay default for {tid} {flag} must be a string.')
+            if flag in taken:raise RuntimeError(f'Overlay flag {flag} for {tid} is already defined or adapter-owned.')
+            if blocked_flag(arg):raise RuntimeError(f'Overlay flag {flag} for {tid} needs a dedicated context binding.')
+            taken.add(flag);added.append({**arg,'origin':OVERLAY_ORIGIN,'verified_version':entry['version']})
+        fixes={}
+        for fix in entry.get('corrections',[]):
+            if set(fix)-{'flag','label','description','type','default'} or fix.get('flag') not in {a['flag'] for a in tool.get('args',[])} or fix['flag'] in fixes:
+                raise RuntimeError(f'Invalid overlay correction for {tid}.')
+            if fix.get('type','flag') not in ('flag','int','float','string'):raise RuntimeError(f'Invalid corrected type for {tid} {fix["flag"]}.')
+            fixes[fix['flag']]={**fix,'origin':OVERLAY_ORIGIN,'verified_version':entry['version']}
+        merged[tid]={**tool,'args':[*({**a,**fixes.get(a['flag'],{})} for a in tool.get('args',[])),*added]}
+    return merged
+
+
+TOOLS.update(merge_argument_overlay(TOOLS,ARGUMENT_OVERLAY))
+
+
 def validate_params(tool,data):
     params=data.get('params',{})
     if not isinstance(params,dict) or len(params)>80:raise ScopeError('Invalid catalog parameters.')

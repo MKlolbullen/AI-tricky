@@ -2,229 +2,614 @@
   "id": "tpl-web-app-assessment",
   "name": "Web Application Assessment",
   "category": "Web Assessment",
-  "tags": ["web", "owasp", "recon", "api", "authz", "methodology"],
-  "schema": "offsecs-u-ai.workflow/v1",
-  "targets": ["domain", "url", "targets"],
-  "description": "Structured web application assessment covering automated recon, endpoint/API discovery, vulnerability scanning, authentication & access control, and specialist agent review. Inspired by 0xlolbullen.com Web Application Penetration Testing methodology (OWASP Top 10, business logic, modern technologies).",
+  "targets": [
+    "domain"
+  ],
+  "description": "Structured web application assessment: subdomain discovery, live-host probing, crawling, saved HTTP evidence, web source and API Surface analysis, Nuclei detections, bounded path fuzzing and an evidence-only specialist review. Follows the 0xlolbullen.com Web Application Penetration Testing methodology. Outputs are observations and candidates, never confirmed findings.",
   "availability": "adapter-required",
-  "engine": null,
-  "source": "https://0xlolbullen.com/pentest-methodology",
-  "provenance": "Derived from Victor Åhgren / 0xlolbullen.com Web Application Penetration Testing methodology. Uses mini-tricky catalog tools + native AI-tricky capabilities.",
   "sourceCatalog": "curated",
+  "starter": "web-app-assessment",
+  "steps": [
+    "Selected enumeration domains",
+    "subfinder + assetfinder",
+    "httprobe",
+    "Katana",
+    "HTTP evidence capture",
+    "Web source collector",
+    "API Surface",
+    "Nuclei (bundled starter templates)",
+    "ffuf (bind a wordlist)",
+    "CAI specialist team review (evidence only)",
+    "Evidence summary"
+  ],
+  "source": "https://0xlolbullen.com/pentest-methodology",
+  "provenance": "Derived from the Victor \u00c5hgren / 0xlolbullen.com Web Application Penetration Testing methodology. Built by the server from catalog tool contracts and native AI-tricky nodes.",
+  "license": "MIT",
+  "schema": "offsecs-u-ai.workflow/v1",
   "nodes": [
     {
-      "id": "input-scope",
+      "id": "domains",
       "type": "tool",
-      "position": {"x": 60, "y": 200},
+      "position": {
+        "x": 0,
+        "y": 100
+      },
       "data": {
         "kind": "catalog_source",
+        "timeout": 120,
+        "retries": 0,
         "sourceType": "domain",
         "inputs": [],
-        "outputs": ["domain"],
+        "outputs": [
+          "domain"
+        ],
         "output": "domain",
-        "title": "Authorized Scope (Domain / URL)",
-        "description": "Exact host, *.example.com, or scoped URL origin",
+        "title": "Selected enumeration domains",
+        "value": ""
+      }
+    },
+    {
+      "id": "subfinder",
+      "type": "tool",
+      "position": {
+        "x": 230,
+        "y": 0
+      },
+      "data": {
+        "kind": "catalog_tool",
         "timeout": 120,
         "retries": 0,
-        "status": "pending",
-        "result": "Not run"
-      }
-    },
-    {
-      "id": "tool-subfinder",
-      "type": "tool",
-      "position": {"x": 340, "y": 120},
-      "data": {
-        "kind": "catalog_tool",
-        "toolId": "subfinder",
-        "inputs": ["domain"],
-        "outputs": ["targets"],
+        "inputs": [
+          "domain"
+        ],
+        "outputs": [
+          "targets"
+        ],
         "output": "targets",
-        "params": {},
-        "title": "Subdomain Discovery",
-        "description": "Passive + active subdomain enumeration",
-        "timeout": 300,
-        "retries": 0,
-        "status": "pending",
-        "result": "Not run"
+        "title": "subfinder",
+        "toolId": "subfinder"
       }
     },
     {
-      "id": "tool-httpx",
+      "id": "assetfinder",
       "type": "tool",
-      "position": {"x": 620, "y": 120},
+      "position": {
+        "x": 230,
+        "y": 200
+      },
       "data": {
         "kind": "catalog_tool",
-        "toolId": "httpx",
-        "inputs": ["targets"],
-        "outputs": ["targets", "url"],
+        "timeout": 120,
+        "retries": 0,
+        "inputs": [
+          "domain"
+        ],
+        "outputs": [
+          "targets"
+        ],
         "output": "targets",
-        "params": {},
-        "title": "Live Host Probing",
-        "description": "HTTP probing, tech detection, status codes",
-        "timeout": 300,
-        "retries": 0,
-        "status": "pending",
-        "result": "Not run"
+        "title": "assetfinder",
+        "toolId": "assetfinder"
       }
     },
     {
-      "id": "tool-katana",
+      "id": "hosts",
       "type": "tool",
-      "position": {"x": 900, "y": 60},
+      "position": {
+        "x": 460,
+        "y": 100
+      },
+      "data": {
+        "kind": "catalog_merge",
+        "timeout": 120,
+        "retries": 0,
+        "inputs": [
+          "domain",
+          "targets",
+          "url"
+        ],
+        "outputs": [
+          "targets"
+        ],
+        "output": "targets",
+        "title": "Unique discovered hosts"
+      }
+    },
+    {
+      "id": "probe",
+      "type": "tool",
+      "position": {
+        "x": 690,
+        "y": 100
+      },
       "data": {
         "kind": "catalog_tool",
+        "timeout": 120,
+        "retries": 0,
+        "inputs": [
+          "targets"
+        ],
+        "outputs": [
+          "targets",
+          "url"
+        ],
+        "output": "targets",
+        "title": "httprobe",
+        "toolId": "httprobe"
+      }
+    },
+    {
+      "id": "crawl",
+      "type": "tool",
+      "position": {
+        "x": 920,
+        "y": 0
+      },
+      "data": {
+        "kind": "catalog_tool",
+        "timeout": 120,
+        "retries": 0,
+        "inputs": [
+          "targets",
+          "url"
+        ],
+        "outputs": [
+          "targets",
+          "url"
+        ],
+        "output": "targets",
+        "title": "katana",
         "toolId": "katana",
-        "inputs": ["targets", "url"],
-        "outputs": ["url", "targets"],
-        "output": "url",
-        "params": {},
-        "title": "Crawling & Endpoint Discovery",
-        "description": "Katana crawl for links, forms, parameters",
-        "timeout": 300,
-        "retries": 0,
-        "status": "pending",
-        "result": "Not run"
+        "params": {
+          "-jc": true
+        }
       }
     },
     {
-      "id": "tool-js-analysis",
+      "id": "urls",
       "type": "tool",
-      "position": {"x": 900, "y": 200},
+      "position": {
+        "x": 1150,
+        "y": 100
+      },
       "data": {
-        "kind": "catalog_tool",
-        "toolId": "getjs",
-        "inputs": ["url", "targets"],
-        "outputs": ["url"],
+        "kind": "catalog_merge",
+        "timeout": 120,
+        "retries": 0,
+        "inputs": [
+          "targets",
+          "url"
+        ],
+        "outputs": [
+          "url"
+        ],
         "output": "url",
-        "params": {},
-        "title": "JS / Source Map Collection",
-        "description": "Extract JS endpoints, secrets, source maps (feeds API Surface)",
-        "timeout": 180,
-        "retries": 0,
-        "status": "pending",
-        "result": "Not run"
+        "title": "Unique probe and crawl URLs"
       }
     },
     {
-      "id": "tool-nuclei",
+      "id": "sources",
       "type": "tool",
-      "position": {"x": 1180, "y": 120},
+      "position": {
+        "x": 1610,
+        "y": 100
+      },
       "data": {
-        "kind": "catalog_tool",
-        "toolId": "nuclei",
-        "inputs": ["targets", "url"],
-        "outputs": ["findings"],
-        "output": "findings",
-        "params": {},
-        "title": "Vulnerability Scanning",
-        "description": "Nuclei templates for OWASP-aligned checks",
-        "timeout": 600,
+        "kind": "native_web_assets",
+        "timeout": 120,
         "retries": 0,
-        "status": "pending",
-        "result": "Not run"
+        "inputs": [
+          "url",
+          "observations"
+        ],
+        "output": "report",
+        "title": "Web source collector"
       }
     },
     {
-      "id": "tool-ffuf",
+      "id": "summary",
       "type": "tool",
-      "position": {"x": 1180, "y": 280},
+      "position": {
+        "x": 1840,
+        "y": 100
+      },
       "data": {
-        "kind": "catalog_tool",
-        "toolId": "ffuf",
-        "inputs": ["url", "wordlist"],
-        "outputs": ["url", "targets"],
-        "output": "url",
-        "params": {},
-        "title": "Directory / Parameter Fuzzing",
-        "description": "Bounded FFUF for hidden paths (requires registered wordlist)",
-        "timeout": 300,
+        "kind": "native_summary",
+        "timeout": 120,
         "retries": 0,
-        "status": "pending",
-        "result": "Not run"
+        "inputs": [
+          "services",
+          "observations",
+          "report"
+        ],
+        "output": "report",
+        "title": "Evidence summary"
       }
     },
     {
-      "id": "native-api-surface",
+      "id": "api-surface",
       "type": "tool",
-      "position": {"x": 1460, "y": 80},
+      "position": {
+        "x": 1840,
+        "y": 310
+      },
       "data": {
         "kind": "native_api_surface",
-        "inputs": ["url"],
-        "outputs": ["observations"],
-        "output": "observations",
-        "title": "API Surface from JS/TS",
-        "description": "Infer endpoints from collected JS, TypeScript, source maps + HTTP history",
         "timeout": 120,
         "retries": 0,
-        "status": "pending",
-        "result": "Not run"
+        "inputs": [
+          "report"
+        ],
+        "output": "endpoints",
+        "title": "API Surface"
       }
     },
     {
-      "id": "native-identity",
+      "id": "capture",
       "type": "tool",
-      "position": {"x": 1460, "y": 240},
+      "position": {
+        "x": 1380,
+        "y": 100
+      },
       "data": {
-        "kind": "native_identity",
-        "inputs": ["url"],
-        "outputs": ["observations"],
-        "output": "observations",
-        "title": "Auth & Access Control Review",
-        "description": "Multi-identity access matrix or authenticated object access",
+        "kind": "native_http",
         "timeout": 120,
         "retries": 0,
-        "status": "pending",
-        "result": "Not run"
+        "inputs": [
+          "targets",
+          "services",
+          "url"
+        ],
+        "output": "observations",
+        "title": "HTTP evidence"
       }
     },
     {
-      "id": "native-team",
+      "id": "review",
       "type": "tool",
-      "position": {"x": 1740, "y": 160},
+      "position": {
+        "x": 1610,
+        "y": -120
+      },
       "data": {
         "kind": "native_team",
-        "inputs": ["observations", "findings"],
-        "outputs": ["report"],
-        "output": "report",
-        "title": "Specialist Agent Team Review",
-        "description": "Evidence-only multi-role CAI team. Candidates only.",
-        "timeout": 300,
+        "timeout": 120,
         "retries": 0,
-        "status": "pending",
-        "result": "Not run"
+        "inputs": [
+          "observations"
+        ],
+        "output": "report",
+        "title": "CAI team analyst",
+        "team_profile": "specialist"
       }
     },
     {
-      "id": "output-artifacts",
+      "id": "scan",
       "type": "tool",
-      "position": {"x": 2020, "y": 160},
+      "position": {
+        "x": 920,
+        "y": 560
+      },
       "data": {
-        "kind": "catalog_output",
-        "inputs": ["any"],
-        "outputs": ["report"],
-        "output": "report",
-        "title": "Findings & Evidence Workbench",
-        "description": "Durable observations, candidate findings, asset graph updates",
+        "kind": "catalog_tool",
         "timeout": 120,
         "retries": 0,
-        "status": "pending",
-        "result": "Not run"
+        "inputs": [
+          "targets",
+          "url"
+        ],
+        "outputs": [
+          "findings"
+        ],
+        "output": "findings",
+        "title": "Nuclei \u2014 reviewed HTTP templates",
+        "toolId": "nuclei"
+      }
+    },
+    {
+      "id": "scan-results",
+      "type": "tool",
+      "position": {
+        "x": 1380,
+        "y": 560
+      },
+      "data": {
+        "kind": "catalog_output",
+        "timeout": 120,
+        "retries": 0,
+        "inputs": [
+          "domain",
+          "targets",
+          "url",
+          "findings",
+          "file",
+          "folder",
+          "sbom",
+          "query",
+          "wordlist"
+        ],
+        "outputs": [
+          "report"
+        ],
+        "output": "report",
+        "title": "Nuclei detections"
+      }
+    },
+    {
+      "id": "fuzz-urls",
+      "type": "tool",
+      "position": {
+        "x": 920,
+        "y": 320
+      },
+      "data": {
+        "kind": "catalog_merge",
+        "timeout": 120,
+        "retries": 0,
+        "inputs": [
+          "domain",
+          "targets",
+          "url"
+        ],
+        "outputs": [
+          "targets"
+        ],
+        "output": "targets",
+        "title": "Probed URLs for directory fuzzing"
+      }
+    },
+    {
+      "id": "fuzz",
+      "type": "tool",
+      "position": {
+        "x": 1150,
+        "y": 320
+      },
+      "data": {
+        "kind": "catalog_tool",
+        "timeout": 120,
+        "retries": 0,
+        "inputs": [
+          "targets",
+          "wordlist"
+        ],
+        "outputs": [
+          "findings"
+        ],
+        "output": "findings",
+        "title": "Path fuzzing \u2014 requires a bound wordlist",
+        "toolId": "ffuf"
+      }
+    },
+    {
+      "id": "fuzz-results",
+      "type": "tool",
+      "position": {
+        "x": 1380,
+        "y": 320
+      },
+      "data": {
+        "kind": "catalog_output",
+        "timeout": 120,
+        "retries": 0,
+        "inputs": [
+          "domain",
+          "targets",
+          "url",
+          "findings",
+          "file",
+          "folder",
+          "sbom",
+          "query",
+          "wordlist"
+        ],
+        "outputs": [
+          "report"
+        ],
+        "output": "report",
+        "title": "Fuzzing observations"
       }
     }
   ],
   "edges": [
-    {"id": "e1", "source": "input-scope", "target": "tool-subfinder"},
-    {"id": "e2", "source": "tool-subfinder", "target": "tool-httpx"},
-    {"id": "e3", "source": "tool-httpx", "target": "tool-katana"},
-    {"id": "e4", "source": "tool-httpx", "target": "tool-js-analysis"},
-    {"id": "e5", "source": "tool-katana", "target": "tool-nuclei"},
-    {"id": "e6", "source": "tool-httpx", "target": "tool-ffuf"},
-    {"id": "e7", "source": "tool-js-analysis", "target": "native-api-surface"},
-    {"id": "e8", "source": "tool-katana", "target": "native-identity"},
-    {"id": "e9", "source": "tool-nuclei", "target": "native-team"},
-    {"id": "e10", "source": "native-api-surface", "target": "native-team"},
-    {"id": "e11", "source": "native-identity", "target": "native-team"},
-    {"id": "e12", "source": "native-team", "target": "output-artifacts"}
-  ]
+    {
+      "id": "domains-subfinder",
+      "source": "domains",
+      "target": "subfinder",
+      "type": "smoothstep",
+      "sourceHandle": "out:domain",
+      "targetHandle": "in:domain",
+      "label": "domain"
+    },
+    {
+      "id": "domains-assetfinder",
+      "source": "domains",
+      "target": "assetfinder",
+      "type": "smoothstep",
+      "sourceHandle": "out:domain",
+      "targetHandle": "in:domain",
+      "label": "domain"
+    },
+    {
+      "id": "domains-hosts",
+      "source": "domains",
+      "target": "hosts",
+      "type": "smoothstep",
+      "sourceHandle": "out:domain",
+      "targetHandle": "in:domain",
+      "label": "domain"
+    },
+    {
+      "id": "subfinder-hosts",
+      "source": "subfinder",
+      "target": "hosts",
+      "type": "smoothstep",
+      "sourceHandle": "out:targets",
+      "targetHandle": "in:targets",
+      "label": "targets"
+    },
+    {
+      "id": "assetfinder-hosts",
+      "source": "assetfinder",
+      "target": "hosts",
+      "type": "smoothstep",
+      "sourceHandle": "out:targets",
+      "targetHandle": "in:targets",
+      "label": "targets"
+    },
+    {
+      "id": "hosts-probe",
+      "source": "hosts",
+      "target": "probe",
+      "type": "smoothstep",
+      "sourceHandle": "out:targets",
+      "targetHandle": "in:targets",
+      "label": "targets"
+    },
+    {
+      "id": "probe-crawl",
+      "source": "probe",
+      "target": "crawl",
+      "type": "smoothstep",
+      "sourceHandle": "out:url",
+      "targetHandle": "in:url",
+      "label": "url"
+    },
+    {
+      "id": "probe-urls",
+      "source": "probe",
+      "target": "urls",
+      "type": "smoothstep",
+      "sourceHandle": "out:url",
+      "targetHandle": "in:url",
+      "label": "url"
+    },
+    {
+      "id": "crawl-urls",
+      "source": "crawl",
+      "target": "urls",
+      "type": "smoothstep",
+      "sourceHandle": "out:url",
+      "targetHandle": "in:url",
+      "label": "url"
+    },
+    {
+      "id": "sources-summary",
+      "source": "sources",
+      "target": "summary",
+      "type": "smoothstep",
+      "sourceHandle": "out:report",
+      "targetHandle": "in:report",
+      "label": "report"
+    },
+    {
+      "id": "sources-api-surface",
+      "source": "sources",
+      "target": "api-surface",
+      "type": "smoothstep",
+      "sourceHandle": "out:report",
+      "targetHandle": "in:report",
+      "label": "report"
+    },
+    {
+      "id": "urls-capture",
+      "source": "urls",
+      "target": "capture",
+      "type": "smoothstep",
+      "sourceHandle": "out:url",
+      "targetHandle": "in:url",
+      "label": "url"
+    },
+    {
+      "id": "capture-sources",
+      "source": "capture",
+      "target": "sources",
+      "type": "smoothstep",
+      "sourceHandle": "out:observations",
+      "targetHandle": "in:observations",
+      "label": "observations"
+    },
+    {
+      "id": "capture-review",
+      "source": "capture",
+      "target": "review",
+      "type": "smoothstep",
+      "sourceHandle": "out:observations",
+      "targetHandle": "in:observations",
+      "label": "observations"
+    },
+    {
+      "id": "review-summary",
+      "source": "review",
+      "target": "summary",
+      "type": "smoothstep",
+      "sourceHandle": "out:report",
+      "targetHandle": "in:report",
+      "label": "report"
+    },
+    {
+      "id": "probe-scan",
+      "source": "probe",
+      "target": "scan",
+      "type": "smoothstep",
+      "sourceHandle": "out:url",
+      "targetHandle": "in:url",
+      "label": "url"
+    },
+    {
+      "id": "scan-scan-results",
+      "source": "scan",
+      "target": "scan-results",
+      "type": "smoothstep",
+      "sourceHandle": "out:findings",
+      "targetHandle": "in:findings",
+      "label": "findings"
+    },
+    {
+      "id": "scan-results-summary",
+      "source": "scan-results",
+      "target": "summary",
+      "type": "smoothstep",
+      "sourceHandle": "out:report",
+      "targetHandle": "in:report",
+      "label": "report"
+    },
+    {
+      "id": "probe-fuzz-urls",
+      "source": "probe",
+      "target": "fuzz-urls",
+      "type": "smoothstep",
+      "sourceHandle": "out:url",
+      "targetHandle": "in:url",
+      "label": "url"
+    },
+    {
+      "id": "fuzz-urls-fuzz",
+      "source": "fuzz-urls",
+      "target": "fuzz",
+      "type": "smoothstep",
+      "sourceHandle": "out:targets",
+      "targetHandle": "in:targets",
+      "label": "targets"
+    },
+    {
+      "id": "fuzz-fuzz-results",
+      "source": "fuzz",
+      "target": "fuzz-results",
+      "type": "smoothstep",
+      "sourceHandle": "out:findings",
+      "targetHandle": "in:findings",
+      "label": "findings"
+    },
+    {
+      "id": "fuzz-results-summary",
+      "source": "fuzz-results",
+      "target": "summary",
+      "type": "smoothstep",
+      "sourceHandle": "out:report",
+      "targetHandle": "in:report",
+      "label": "report"
+    }
+  ],
+  "parallelism": 3
 }

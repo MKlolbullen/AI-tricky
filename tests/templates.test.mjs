@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {validateWorkflow,WORKFLOW_SCHEMA} from '../src/workflow-validation.mjs';
-import {migrated,catalogKinds} from '../src/catalog-contracts.mjs';
+import {migrated,catalogKinds,isExecutableTemplate} from '../src/catalog-contracts.mjs';
+import curated from '../src/templates.json' with {type:'json'};
 const graph=()=>structuredClone({schema:WORKFLOW_SCHEMA,...migrated.workflows.find(t=>t.id==='tpl-full-recon')});
 test('every template graph has known tools, compatible ports, unique IDs and no cycles',()=>{
  assert.equal(new Set(migrated.tools.map(t=>t.id)).size,migrated.tools.length);
@@ -33,4 +34,17 @@ test('native starter imports with canonical typed adapter contracts',()=>{
  // HTTP supports targets directly, but summary does not.
  mismatch.edges[2].source=mismatch.nodes[0].id;
  assert.throws(()=>validateWorkflow(mismatch,Object.keys(registry),[]),/port/);
+});
+
+test('curated catalog keeps its legacy designs and marks server-built starters',()=>{
+ assert.ok(curated.tools.length>=53);assert.ok(curated.workflows.length>=23);
+ assert.equal(new Set(curated.tools.map(t=>t.id)).size,curated.tools.length);
+ assert.equal(new Set(curated.workflows.map(t=>t.id)).size,curated.workflows.length);
+ for(const w of curated.workflows){
+  for(const key of ['id','name','category','description','provenance'])assert.equal(typeof w[key],'string');
+  assert.ok(Array.isArray(w.targets));
+  if(w.starter){assert.equal(w.nodes,undefined);assert.ok(w.steps.length);assert.ok(isExecutableTemplate(w))}
+  else{assert.ok(w.nodes.length||['inventory','cai'].includes(w.id),w.id);validateWorkflow({schema:WORKFLOW_SCHEMA,nodes:w.nodes,edges:w.edges},['template'],curated.tools);assert.ok(!isExecutableTemplate(w))}
+ }
+ assert.deepEqual(curated.workflows.filter(w=>w.starter).map(w=>w.starter),['web-app-assessment']);
 });

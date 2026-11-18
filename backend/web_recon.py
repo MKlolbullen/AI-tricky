@@ -276,10 +276,18 @@ def recon_workflow(*, fuzz=False, scan=False, review=False, surface=False, isola
     if fuzz:
         node('fuzz-urls', 'catalog_merge', 920, 320, inputs=list(MERGE_INPUTS['targets']), outputs=['targets'], output='targets', title='Probed URLs for directory fuzzing')
         edge('probe', 'fuzz-urls', 'url')
-        node('fuzz', 'catalog_tool', 1150, 320, toolId='ffuf', title='Optional path fuzzing — bind a wordlist')
+        node('fuzz', 'catalog_tool', 1150, 320, toolId='ffuf', title='Path fuzzing — requires a bound wordlist')
         edge('fuzz-urls', 'fuzz', 'targets')
         node('fuzz-results', 'catalog_output', 1380, 320, inputs=list(OUTPUT_INPUTS), outputs=['report'], output='report', title='Fuzzing observations')
         edge('fuzz', 'fuzz-results', 'findings'); edge('fuzz-results', 'summary', 'report')
     graph = {'schema': SCHEMA, 'nodes': nodes, 'edges': edges, 'parallelism': 3}
     validate_workflow(graph, live=True)
     return graph
+
+
+def web_app_assessment_workflow():
+    """Curated methodology starter: discovery, probing, crawling, saved HTTP
+    evidence, source/API-surface analysis, Nuclei, bounded fuzzing and the
+    evidence-only specialist review. Built from the same contracts as the web
+    recon starter so it cannot drift from the tool and native socket types."""
+    return recon_workflow(fuzz=True, scan=True, review=True, surface=True)

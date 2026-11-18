@@ -1,7 +1,8 @@
 import migrated from './mini-tricky-catalog.json' with {type:'json'};
 import trickest from './trickest-catalog.json' with {type:'json'};
 export {migrated, trickest};
-export const isExecutableTemplate = entry => ['mini-tricky', 'trickest-oss'].includes(entry.sourceCatalog);
+// Curated entries that name a `starter` are built and type-validated by the server.
+export const isExecutableTemplate = entry => ['mini-tricky', 'trickest-oss'].includes(entry.sourceCatalog) || !!entry.starter;
 export const catalogKinds=['catalog_tool','catalog_source','catalog_merge','catalog_output','catalog_payload'];
 // Real accepted input types for the terminal sink nodes (mirrors backend/catalog.py
 // OUTPUT_INPUTS/MERGE_INPUTS exactly — order is part of the socket contract).

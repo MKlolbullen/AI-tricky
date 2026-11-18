@@ -189,3 +189,5 @@ These are recorded restrictions, not missing-binary errors. Imported custom scri
 | `uncover` | query | targets | passive CLI |
 | `syft` | folder | sbom | offline CLI |
 | `grype` | sbom | findings | offline CLI |
+
+Arguments beyond the pinned source, and corrections for the pinned tool versions, live in a separate overlay; see [Tool argument overlay](TOOL-ARGUMENTS.md).

@@ -245,3 +245,29 @@ not-observed semantics. Delta follow-ups use selected current changes and
 reuse proposal approval, scope, accounting and journal contracts. Recheck
 baseline evidence and source coverage before dispatch. New node input receipts
 store hashes and provenance without copying raw inputs or credentials.
+
+## Curated catalog guard and server-built starters — 2026-11-18
+
+`src/templates.json` was emptied by a whole-file rewrite and restored with its
+53 tool descriptors and 22 legacy designs. Curated entries that name a
+`starter` carry description and steps only; the server builds and validates
+the graph (`/api/workflow-starters/<starter>`), so it cannot drift from socket
+contracts. The Web Application Assessment starter is the full web recon graph
+(fuzz, Nuclei, API Surface, evidence-only specialist review). Web
+authentication and access-control testing stay in the reviewed access matrix
+and object verification flows; they are not canvas nodes. Regenerate
+`docs/templates/*.json` with `scripts/export-starter-templates.py`. Never
+hand-edit large catalog JSON wholesale; guard tests pin counts, legacy IDs,
+starter endpoints and exported files.
+
+## Tool argument overlay — 2026-11-18
+
+Expanded tool arguments live in `src/tool-argument-overlay.json`, merged into
+`TOOLS` at load; the pinned migrated catalog stays byte-identical. Cover only
+tools whose exact version is pinned in `toolchains/*.tsv`, and verify every
+flag, alias and value kind against the pinned binary's help output in the CI
+jobs that install it. Never add flags for targets, file reads, output paths,
+proxies, headers, HTTP method or body, TLS verification, redirects, remote
+templates, code/fuzzing templates, cloud uploads or output-format changes.
+Corrections may fix catalog arguments that are wrong for the pinned version.
+Enforced CLI scope keeps its own narrower allowlist. See docs/TOOL-ARGUMENTS.md.

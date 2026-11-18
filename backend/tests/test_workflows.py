@@ -113,7 +113,9 @@ def test_live_validation_rejects_invalid_or_unimplemented_graphs(change):
 
 def test_all_existing_catalog_graphs_can_be_saved():
     from backend.workflows import ROOT
-    for w in json.loads((ROOT/'src/templates.json').read_text())['workflows']:
+    designs=[w for w in json.loads((ROOT/'src/templates.json').read_text())['workflows'] if not w.get('starter')]
+    assert len(designs)>=22
+    for w in designs:
         validate_workflow({'schema':SCHEMA,'nodes':w['nodes'],'edges':w['edges']})
 
 

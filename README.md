@@ -120,6 +120,7 @@ For CLI dependencies:
 scripts/install-tools.sh --list
 scripts/install-tools.sh --web-recon   # pinned recon starter and Nuclei
 scripts/install-tools.sh --trickest-oss # pinned mksub and mkpath
+scripts/install-tools.sh --recon-extras # pinned httpx, dnsx, urlfinder and gau
 scripts/install-tools.sh --tools=recon,dns
 scripts/install-tools.sh --tools=httpx,ffuf
 ```

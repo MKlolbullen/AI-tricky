@@ -35,6 +35,7 @@ executable from another installation.
 | Enforced Linux scanners | `--enforced-cli` | Small directory paths for ffuf. HTTP starter templates for Nuclei. |
 | Web reconnaissance | `--web-recon` | HTTP starter templates for Nuclei. Trusted resolvers are available for DNS workflows. |
 | Trickest generators | `--trickest-oss` | Small DNS labels and directory paths |
+| Additional recon tools | `--recon-extras` | None. Pins httpx, dnsx, urlfinder and gau so their versions can be checked. |
 
 Install the bundled files under **Inputs** and bind the corresponding node
 inputs. Run setup preflight checks the bindings on the actual canvas.

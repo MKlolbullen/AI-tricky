@@ -8,11 +8,12 @@ from .recon_tools import PROFILES_BY_GROUP, tool_check
 from .scope import ScopeError
 
 TITLES = {'web-recon': 'Web reconnaissance', 'trickest-oss': 'Trickest generators',
-          'enforced-cli': 'Enforced Linux scanners'}
+          'enforced-cli': 'Enforced Linux scanners', 'recon-extras': 'Additional recon tools'}
 BUNDLED = {
     'web-recon': ('nuclei-starter', 'resolvers-trusted'),
     'trickest-oss': ('wordlist-subdomains', 'wordlist-paths'),
     'enforced-cli': ('wordlist-paths', 'nuclei-starter'),
+    'recon-extras': (),
 }
 
 

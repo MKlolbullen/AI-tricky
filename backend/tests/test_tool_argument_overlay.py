@@ -45,7 +45,7 @@ def node(tool_id, params):
 def test_overlay_leaves_the_pinned_catalog_untouched_and_marks_its_additions():
     assert CATALOG == json.loads((ROOT / 'src/mini-tricky-catalog.json').read_text())
     assert not any('origin' in arg for tool in CATALOG['tools'] for arg in tool.get('args', []))
-    assert set(OVERLAY) == {'subfinder', 'httprobe', 'ffuf', 'katana', 'nuclei'}
+    assert set(OVERLAY) == {'subfinder', 'httprobe', 'ffuf', 'katana', 'nuclei', 'httpx', 'dnsx', 'urlfinder', 'gau'}
     for tool_id, entry in OVERLAY.items():
         before, after = PINNED[tool_id].get('args', []), TOOLS[tool_id]['args']
         assert [arg['flag'] for arg in after[:len(before)]] == [arg['flag'] for arg in before]
@@ -54,6 +54,8 @@ def test_overlay_leaves_the_pinned_catalog_untouched_and_marks_its_additions():
         assert all(arg['origin'] == OVERLAY_ORIGIN and arg['verified_version'] == entry['version'] for arg in added)
         corrected = {fix['flag'] for fix in entry.get('corrections', [])}
         assert {arg['flag'] for arg in after[:len(before)] if arg.get('origin')} == corrected
+    # httpx -fpt downloads a classifier model from a third-party host on first use.
+    assert '-fpt' not in {arg['flag'] for arg in TOOLS['httpx']['args']}
     untouched = set(TOOLS) - set(OVERLAY)
     assert all(TOOLS[tool_id] is PINNED[tool_id] for tool_id in untouched if tool_id in PINNED)
 

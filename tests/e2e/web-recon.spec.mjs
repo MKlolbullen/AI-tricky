@@ -80,5 +80,9 @@ test('scanner profiles report pinned versions, capture coverage, and bundled inp
  await readiness.getByLabel('Profile',{exact:false}).selectOption('web-recon');
  await expect(table.getByRole('row').filter({hasText:'nuclei'})).toContainText('External proxy history');
  await expect(readiness).toContainText('Trickest trusted resolvers · Registered and verified');
+ await readiness.getByLabel('Profile',{exact:false}).selectOption('recon-extras');
+ await expect(table.getByRole('row').filter({hasText:'httpx'})).toContainText('Tested v1.12.0');
+ await expect(table.getByRole('row').filter({hasText:'gau'})).toContainText('install-tools.sh --recon-extras --tools=gau');
+ await expect(readiness.getByRole('heading',{name:'Bundled inputs'})).toHaveCount(0);
  expect(await (await request.get('/api/_qa/target-calls')).json()).toEqual([]);
 });

@@ -1,0 +1,5 @@
+# Tool ID, Go package, Go module version (tab-separated)
+httpx	github.com/projectdiscovery/httpx/cmd/httpx	v1.12.0
+dnsx	github.com/projectdiscovery/dnsx/cmd/dnsx	v1.3.1
+urlfinder	github.com/projectdiscovery/urlfinder/cmd/urlfinder	v0.0.3
+gau	github.com/lc/gau/v2/cmd/gau	v2.2.4

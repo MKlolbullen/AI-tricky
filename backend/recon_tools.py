@@ -20,7 +20,7 @@ def read_profiles(group):
     }
 
 
-PROFILES_BY_GROUP = {group: read_profiles(group) for group in ('web-recon', 'trickest-oss', 'enforced-cli')}
+PROFILES_BY_GROUP = {group: read_profiles(group) for group in ('web-recon', 'trickest-oss', 'enforced-cli', 'recon-extras')}
 PROFILES = PROFILES_BY_GROUP['web-recon']
 TOOL_GROUPS = {}
 for group, profiles in PROFILES_BY_GROUP.items():

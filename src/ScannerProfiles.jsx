@@ -54,10 +54,12 @@ export default function ScannerProfiles() {
                   (tool.capture === 'scoped_gateway' ? 'Install the pinned scanner to check isolation.' : 'Check workflow readiness for bound inputs.')}</td>
           </tr>)}</tbody>
         </table></div>
-        <h4>Bundled inputs</h4>
-        <ul>{profile.inputs.map(input => <li key={input.id}>{input.name} · {input.state === 'installed' ? 'Registered and verified' :
-          input.state === 'invalid' ? 'Changed or unreadable' : 'Available to install'}</li>)}</ul>
-        <p>Install bundled support files in <strong>Inputs</strong>, then bind them to the workflow.</p>
+        {profile.inputs.length > 0 && <>
+          <h4>Bundled inputs</h4>
+          <ul>{profile.inputs.map(input => <li key={input.id}>{input.name} · {input.state === 'installed' ? 'Registered and verified' :
+            input.state === 'invalid' ? 'Changed or unreadable' : 'Available to install'}</li>)}</ul>
+          <p>Install bundled support files in <strong>Inputs</strong>, then bind them to the workflow.</p>
+        </>}
       </section>}
     </>}
   </section>;

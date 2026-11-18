@@ -65,7 +65,7 @@ jobs:
 
   web-recon-cli:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       GOTOOLCHAIN: local
     steps:
@@ -89,6 +89,11 @@ jobs:
       - run: |
           scripts/install-tools.sh --trickest-oss --yes --skip-toolchains --prefix="$RUNNER_TEMP/trickest-oss"
           AI_TRICKY_TRICKEST_BIN="$RUNNER_TEMP/trickest-oss/bin" python -m pytest backend/tests/test_trickest_pack.py -q
+      - name: Verify the argument overlay against pinned httpx, dnsx, urlfinder and gau
+        run: |
+          scripts/install-tools.sh --recon-extras --yes --skip-toolchains --prefix="$RUNNER_TEMP/recon-extras"
+          PATH="$RUNNER_TEMP/recon-extras/bin:$PATH" python scripts/check-recon-tools.py --profile recon-extras
+          AI_TRICKY_ARG_HELP_BIN="$RUNNER_TEMP/recon-extras/bin" AI_TRICKY_ARG_HELP_REQUIRED=httpx,dnsx,urlfinder,gau python -m pytest backend/tests/test_tool_argument_overlay.py -q
 
   enforced-cli:
     runs-on: ubuntu-24.04

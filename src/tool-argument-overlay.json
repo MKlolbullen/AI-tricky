@@ -521,6 +521,470 @@
           "type": "flag"
         }
       ]
+    },
+    "httpx": {
+      "package": "github.com/projectdiscovery/httpx/cmd/httpx",
+      "version": "v1.12.0",
+      "corrections": [
+        {
+          "flag": "-location",
+          "label": "Location Value",
+          "description": "Display the Location value returned by the response."
+        }
+      ],
+      "args": [
+        {
+          "flag": "-ct",
+          "label": "Content Type",
+          "description": "Display the response content type.",
+          "type": "flag"
+        },
+        {
+          "flag": "-lc",
+          "label": "Line Count",
+          "description": "Display the response body line count.",
+          "type": "flag"
+        },
+        {
+          "flag": "-wc",
+          "label": "Word Count",
+          "description": "Display the response body word count.",
+          "type": "flag"
+        },
+        {
+          "flag": "-web-server",
+          "label": "Web Server",
+          "description": "Display the server name.",
+          "type": "flag"
+        },
+        {
+          "flag": "-cpe",
+          "label": "CPE",
+          "description": "Display CPE product and version identifiers.",
+          "type": "flag"
+        },
+        {
+          "flag": "-wp",
+          "label": "WordPress",
+          "description": "Display detected WordPress plugins and themes.",
+          "type": "flag"
+        },
+        {
+          "flag": "-method",
+          "label": "Request Method",
+          "description": "Display the HTTP request method.",
+          "type": "flag"
+        },
+        {
+          "flag": "-ws",
+          "label": "WebSocket",
+          "description": "Display servers that use WebSocket.",
+          "type": "flag"
+        },
+        {
+          "flag": "-cname",
+          "label": "CNAME",
+          "description": "Display the host CNAME.",
+          "type": "flag"
+        },
+        {
+          "flag": "-http2",
+          "label": "HTTP/2 Probe",
+          "description": "Probe and display HTTP/2 support.",
+          "type": "flag"
+        },
+        {
+          "flag": "-hash",
+          "label": "Body Hash",
+          "description": "Display a response body hash: md5, mmh3, simhash, sha1, sha256 or sha512.",
+          "type": "string"
+        },
+        {
+          "flag": "-ml",
+          "label": "Match Length",
+          "description": "Keep responses with these content lengths, for example 100,102.",
+          "type": "string"
+        },
+        {
+          "flag": "-mlc",
+          "label": "Match Line Count",
+          "description": "Keep responses with these body line counts.",
+          "type": "string"
+        },
+        {
+          "flag": "-mwc",
+          "label": "Match Word Count",
+          "description": "Keep responses with these body word counts.",
+          "type": "string"
+        },
+        {
+          "flag": "-mfc",
+          "label": "Match Favicon",
+          "description": "Keep responses with these favicon hashes.",
+          "type": "string"
+        },
+        {
+          "flag": "-ms",
+          "label": "Match String",
+          "description": "Keep responses containing this string.",
+          "type": "string"
+        },
+        {
+          "flag": "-mr",
+          "label": "Match Regex",
+          "description": "Keep responses matching this regular expression.",
+          "type": "string"
+        },
+        {
+          "flag": "-mcdn",
+          "label": "Match CDN",
+          "description": "Keep hosts served by these CDN providers.",
+          "type": "string"
+        },
+        {
+          "flag": "-mrt",
+          "label": "Match Response Time",
+          "description": "Keep responses by response time in seconds, for example < 1.",
+          "type": "string"
+        },
+        {
+          "flag": "-mdc",
+          "label": "Match Condition",
+          "description": "Keep responses matching a DSL expression.",
+          "type": "string"
+        },
+        {
+          "flag": "-fc",
+          "label": "Filter Codes",
+          "description": "Drop responses with these status codes, for example 403,401.",
+          "type": "string"
+        },
+        {
+          "flag": "-fd",
+          "label": "Filter Duplicates",
+          "description": "Drop near-duplicate responses; only the first is kept.",
+          "type": "flag"
+        },
+        {
+          "flag": "-fl",
+          "label": "Filter Length",
+          "description": "Drop responses with these content lengths.",
+          "type": "string"
+        },
+        {
+          "flag": "-flc",
+          "label": "Filter Line Count",
+          "description": "Drop responses with these body line counts.",
+          "type": "string"
+        },
+        {
+          "flag": "-fwc",
+          "label": "Filter Word Count",
+          "description": "Drop responses with these body word counts.",
+          "type": "string"
+        },
+        {
+          "flag": "-ffc",
+          "label": "Filter Favicon",
+          "description": "Drop responses with these favicon hashes.",
+          "type": "string"
+        },
+        {
+          "flag": "-fs",
+          "label": "Filter String",
+          "description": "Drop responses containing this string.",
+          "type": "string"
+        },
+        {
+          "flag": "-fe",
+          "label": "Filter Regex",
+          "description": "Drop responses matching this regular expression.",
+          "type": "string"
+        },
+        {
+          "flag": "-fcdn",
+          "label": "Filter CDN",
+          "description": "Drop hosts served by these CDN providers.",
+          "type": "string"
+        },
+        {
+          "flag": "-frt",
+          "label": "Filter Response Time",
+          "description": "Drop responses by response time in seconds, for example > 1.",
+          "type": "string"
+        },
+        {
+          "flag": "-fdc",
+          "label": "Filter Condition",
+          "description": "Drop responses matching a DSL expression.",
+          "type": "string"
+        },
+        {
+          "flag": "-er",
+          "label": "Extract Regex",
+          "description": "Display response content matching this regular expression.",
+          "type": "string"
+        },
+        {
+          "flag": "-ep",
+          "label": "Extract Preset",
+          "description": "Display content matched by a built-in pattern: ipv4, mail or url.",
+          "type": "string"
+        },
+        {
+          "flag": "-rlm",
+          "label": "Rate Limit per Minute",
+          "description": "Maximum requests per minute.",
+          "type": "int"
+        },
+        {
+          "flag": "-nf",
+          "label": "No Fallback",
+          "description": "Display both probed protocols, HTTPS and HTTP.",
+          "type": "flag"
+        },
+        {
+          "flag": "-nfs",
+          "label": "No Fallback Scheme",
+          "description": "Probe only with the scheme given in the input.",
+          "type": "flag"
+        },
+        {
+          "flag": "-maxhr",
+          "label": "Max Host Errors",
+          "description": "Errors for one host before its remaining probes are skipped.",
+          "type": "int",
+          "default": "30"
+        },
+        {
+          "flag": "-e",
+          "label": "Exclude Hosts",
+          "description": "Skip hosts matching a filter: cdn, private-ips, a CIDR, an IP or a regex.",
+          "type": "string"
+        },
+        {
+          "flag": "-retries",
+          "label": "Retries",
+          "description": "Number of retries.",
+          "type": "int"
+        },
+        {
+          "flag": "-delay",
+          "label": "Request Delay",
+          "description": "Time between requests, for example 200ms or 1s.",
+          "type": "string"
+        },
+        {
+          "flag": "-ldp",
+          "label": "Leave Default Ports",
+          "description": "Keep default ports in the host value, for example host:80 and host:443.",
+          "type": "flag"
+        }
+      ]
+    },
+    "dnsx": {
+      "package": "github.com/projectdiscovery/dnsx/cmd/dnsx",
+      "version": "v1.3.1",
+      "corrections": [
+        {
+          "flag": "-rc",
+          "type": "string",
+          "description": "Keep results with these DNS status codes, for example noerror,servfail,refused."
+        }
+      ],
+      "args": [
+        {
+          "flag": "-txt",
+          "label": "TXT Record",
+          "description": "Query TXT records.",
+          "type": "flag"
+        },
+        {
+          "flag": "-srv",
+          "label": "SRV Record",
+          "description": "Query SRV records.",
+          "type": "flag"
+        },
+        {
+          "flag": "-ptr",
+          "label": "PTR Record",
+          "description": "Query PTR records.",
+          "type": "flag"
+        },
+        {
+          "flag": "-soa",
+          "label": "SOA Record",
+          "description": "Query SOA records.",
+          "type": "flag"
+        },
+        {
+          "flag": "-caa",
+          "label": "CAA Record",
+          "description": "Query CAA records.",
+          "type": "flag"
+        },
+        {
+          "flag": "-any",
+          "label": "ANY Record",
+          "description": "Query ANY records.",
+          "type": "flag"
+        },
+        {
+          "flag": "-e",
+          "label": "Exclude Types",
+          "description": "Query types to leave out, for example a,aaaa,cname.",
+          "type": "string"
+        },
+        {
+          "flag": "-rtf",
+          "label": "Empty Type Filter",
+          "description": "Return entries that have no records for these query types, for example a,cname.",
+          "type": "string"
+        },
+        {
+          "flag": "-cdn",
+          "label": "CDN Name",
+          "description": "Display the CDN name.",
+          "type": "flag"
+        },
+        {
+          "flag": "-rl",
+          "label": "Rate Limit",
+          "description": "DNS requests per second.",
+          "type": "int"
+        },
+        {
+          "flag": "-wt",
+          "label": "Wildcard Threshold",
+          "description": "Wildcard filter threshold.",
+          "type": "int",
+          "default": "5"
+        },
+        {
+          "flag": "-auto-wildcard",
+          "label": "Auto Wildcard",
+          "description": "Detect wildcard domains automatically and filter them.",
+          "type": "flag"
+        },
+        {
+          "flag": "-timeout",
+          "label": "Query Timeout",
+          "description": "Maximum time to wait for one DNS query, for example 3s.",
+          "type": "string",
+          "default": "3s"
+        }
+      ]
+    },
+    "urlfinder": {
+      "package": "github.com/projectdiscovery/urlfinder/cmd/urlfinder",
+      "version": "v0.0.3",
+      "args": [
+        {
+          "flag": "-s",
+          "label": "Sources",
+          "description": "Comma-separated passive sources to use, for example alienvault,commoncrawl.",
+          "type": "string"
+        },
+        {
+          "flag": "-es",
+          "label": "Exclude Sources",
+          "description": "Comma-separated passive sources to skip.",
+          "type": "string"
+        },
+        {
+          "flag": "-all",
+          "label": "All Sources",
+          "description": "Use every source; slower.",
+          "type": "flag"
+        },
+        {
+          "flag": "-rl",
+          "label": "Rate Limit",
+          "description": "Maximum HTTP requests per second across all sources.",
+          "type": "int"
+        },
+        {
+          "flag": "-rls",
+          "label": "Per-Source Rate Limits",
+          "description": "Per-source request limits in key=value form, for example hackertarget=10/m.",
+          "type": "string"
+        },
+        {
+          "flag": "-timeout",
+          "label": "Timeout",
+          "description": "Seconds to wait before timing out.",
+          "type": "int",
+          "default": "30"
+        },
+        {
+          "flag": "-max-time",
+          "label": "Max Enumeration Time",
+          "description": "Minutes to wait for enumeration results.",
+          "type": "int",
+          "default": "10"
+        }
+      ]
+    },
+    "gau": {
+      "package": "github.com/lc/gau/v2/cmd/gau",
+      "version": "v2.2.4",
+      "args": [
+        {
+          "flag": "--blacklist",
+          "label": "Skip Extensions",
+          "description": "Comma-separated extensions to skip, for example png,jpg,css.",
+          "type": "string"
+        },
+        {
+          "flag": "--fp",
+          "label": "Unique Endpoints",
+          "description": "Remove different parameter sets of the same endpoint.",
+          "type": "flag"
+        },
+        {
+          "flag": "--from",
+          "label": "From Date",
+          "description": "Fetch URLs from this month, format YYYYMM.",
+          "type": "string"
+        },
+        {
+          "flag": "--to",
+          "label": "To Date",
+          "description": "Fetch URLs up to this month, format YYYYMM.",
+          "type": "string"
+        },
+        {
+          "flag": "--ft",
+          "label": "Filter MIME Types",
+          "description": "Comma-separated MIME types to drop.",
+          "type": "string"
+        },
+        {
+          "flag": "--mt",
+          "label": "Match MIME Types",
+          "description": "Comma-separated MIME types to keep.",
+          "type": "string"
+        },
+        {
+          "flag": "--providers",
+          "label": "Providers",
+          "description": "Comma-separated providers: wayback, commoncrawl, otx, urlscan.",
+          "type": "string"
+        },
+        {
+          "flag": "--retries",
+          "label": "Retries",
+          "description": "Retries for the HTTP client.",
+          "type": "int"
+        },
+        {
+          "flag": "--timeout",
+          "label": "Timeout",
+          "description": "HTTP client timeout in seconds.",
+          "type": "int",
+          "default": "45"
+        }
+      ]
     }
   }
 }

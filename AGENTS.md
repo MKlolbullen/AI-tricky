@@ -272,6 +272,17 @@ templates, code/fuzzing templates, cloud uploads or output-format changes.
 Corrections may fix catalog arguments that are wrong for the pinned version.
 Enforced CLI scope keeps its own narrower allowlist. See docs/TOOL-ARGUMENTS.md.
 
+## Argument overlay: recon extras — 2026-11-18
+
+The overlay also covers httpx, dnsx, urlfinder and gau, pinned in
+`toolchains/recon-extras.tsv` (`scripts/install-tools.sh --recon-extras`).
+Pinning a tool also adds its version check to preflight and Scanner profiles.
+A new toolchain table must be added to `PROFILES_BY_GROUP`, the installer's
+profile flags and `scripts/build-binary.sh`. Help output is not enough to
+accept a flag: run each one against a loopback fixture first and drop any
+that downloads data, adds output lines or empties the output (httpx `-fpt`
+fetches a classifier model from a third-party host).
+
 ## Enforced Katana and Nuclei — 2026-11-18
 
 The enforced CLI profile now also runs pinned static Katana and Nuclei. ffuf

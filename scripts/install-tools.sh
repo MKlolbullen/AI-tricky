@@ -12,6 +12,7 @@
 #   scripts/install-tools.sh --web-recon     # pinned starter binaries
 #   scripts/install-tools.sh --enforced-cli # pinned ffuf, httprobe, katana, nuclei and private relay
 #   scripts/install-tools.sh --trickest-oss  # pinned mksub and mkpath
+#   scripts/install-tools.sh --recon-extras  # pinned httpx, dnsx, urlfinder and gau
 #   scripts/install-tools.sh                 # install everything it can
 #   scripts/install-tools.sh --list          # print the tool/method table, exit
 #   scripts/install-tools.sh --tools=recon   # only a category (see --list)
@@ -50,7 +51,7 @@ GO_VERSION="1.26.4"
 for arg in "$@"; do
   case "$arg" in
     --list)            LIST_ONLY=1 ;;
-    --web-recon|--trickest-oss|--enforced-cli) INSTALL_PROFILE="${arg#--}" ;;
+    --web-recon|--trickest-oss|--enforced-cli|--recon-extras) INSTALL_PROFILE="${arg#--}" ;;
     --yes|-y)          ASSUME_YES=1 ;;
     --skip-toolchains) SKIP_TOOLCHAINS=1 ;;
     --tools=*)         ONLY_TOOLS="${arg#*=}" ;;

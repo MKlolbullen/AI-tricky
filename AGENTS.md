@@ -292,7 +292,9 @@ docs/CLI-SCOPE.md.
 Application and test requirements have no known advisories. The remaining
 ones cannot be upgraded away: picomatch (UI build only) has no patched
 release, and the optional CAI SDK lock is held by CAI 0.5.10's
-`openai==1.75.0` pin, which caps LiteLLM and its proxy extra. Never start the
+`openai==1.75.0` and `rich>=13.9.4` requirements, which together leave
+LiteLLM 1.68.0 (and its proxy extra's pins) as the only release that
+resolves. Never start the
 LiteLLM proxy, an MCP server or CAI's own CLI tools from the SDK interpreter,
 and never register CAI's built-in function tools. Refresh the CAI lock with
 Python 3.12 and re-run the SDK tests. See docs/DEPENDENCY-AUDIT.md.

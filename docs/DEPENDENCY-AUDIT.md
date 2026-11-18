@@ -23,11 +23,16 @@ The CAI SDK runs in its own interpreter (`.venv-cai`), installed only when you c
 
 ### Why it cannot be upgraded
 
-`cai-framework` 0.5.10 is the newest release, and it pins `openai==1.75.0`. That caps LiteLLM at 1.68.0, and LiteLLM 1.68.0's proxy extra pins the rest:
+`cai-framework` 0.5.10 is the newest release. It requires `litellm[proxy]`, `openai==1.75.0` and `rich>=13.9.4`. Together those leave LiteLLM 1.68.0 as the only release that resolves:
+
+- LiteLLM 1.68.1 to 1.75.3 still accept that OpenAI client, but their proxy extra pins `rich==13.7.1`, which CAI's own `rich>=13.9.4` rules out.
+- LiteLLM 1.75.4 and later require `openai>=1.99.5`, which CAI's `openai==1.75.0` rules out.
+
+LiteLLM 1.68.0's proxy extra then pins the rest:
 
 | Package | Locked | Advisories | Held by |
 |---|---|---|---|
-| litellm | 1.68.0 | 23 | `openai==1.75.0` (CAI) allows nothing newer |
+| litellm | 1.68.0 | 23 | CAI's `openai==1.75.0` and `rich>=13.9.4`, as above |
 | starlette | 0.46.2 | 7 | fastapi `<0.116` (LiteLLM) → starlette `<0.47` |
 | cryptography | 43.0.3 | 6 | LiteLLM `<44` |
 | python-multipart | 0.0.18 | 6 | LiteLLM `<0.0.19` |
@@ -47,7 +52,7 @@ The lock was refreshed on this date. Of its 148 pins, 27 changed, which cleared 
 
 Not exposed is not the same as fixed. Do not run `litellm --proxy`, an MCP server, or the CAI command-line agent from `.venv-cai` on a machine you care about, and do not install this lockfile into the main application environment.
 
-The advisories clear only when CAI publishes a release that accepts a newer OpenAI client. Moving to a different CAI version is a compatibility change, not a lockfile refresh: the adapter and the SDK tests are written against 0.5.10.
+The advisories clear only when CAI publishes a release that accepts a newer OpenAI client (LiteLLM releases compatible with CAI's `rich` requirement need OpenAI client 2.8.0 or later). Moving to a different CAI version is a compatibility change, not a lockfile refresh: the adapter and the SDK tests are written against 0.5.10.
 
 ## Re-running the audit
 
@@ -59,10 +64,10 @@ python -m pip_audit -r requirements-cai.lock --no-deps --disable-pip
 npm audit
 ```
 
-To refresh the CAI lock, use the Python version CI uses for that job (3.12):
+To refresh the CAI lock, use the Python version CI uses for that job (3.12). `--clear` empties the environment first, so a second run cannot keep stale pins:
 
 ```
-python3.12 -m venv /tmp/cai-lock
+python3.12 -m venv --clear /tmp/cai-lock
 /tmp/cai-lock/bin/python -m pip install -r requirements-cai.txt pytest==9.2.0
 /tmp/cai-lock/bin/python -m pip freeze --exclude pip --exclude setuptools --exclude wheel > requirements-cai.lock
 CAI_TEST_PYTHON=/tmp/cai-lock/bin/python /tmp/cai-lock/bin/python -m pytest \

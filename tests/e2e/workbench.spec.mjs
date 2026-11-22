@@ -62,8 +62,8 @@ test('lifecycle keeps a missing verified finding linked to its observed and revi
   await workspace.getByLabel('Baseline run').selectOption('qa-current');
   await workspace.getByLabel('Current run').selectOption('qa-baseline');
   await workspace.locator('form').getByRole('button', {name: 'Compare runs'}).click();
-  await workspace.getByLabel('Compare', {exact: true}).selectOption('findings');
-  await workspace.getByLabel('Change', {exact: true}).selectOption('not_observed');
+  await workspace.getByRole('combobox', {name: /^Compare/}).selectOption('findings');
+  await workspace.getByRole('combobox', {name: /^Change/}).selectOption('not_observed');
   await workspace.getByLabel('Latest status').selectOption('verified');
   const row = workspace.locator('details.comparison-row').filter({hasText: 'Potential API issue'});
   await row.locator('summary').click();

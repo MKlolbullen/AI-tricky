@@ -5,6 +5,9 @@ export async function api(path,body){
  return data;
 }
 export function downloadJSON(name,value){
- const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));
+ downloadText(name,JSON.stringify(value,null,2),'application/json');
+}
+export function downloadText(name,value,type){
+ const url=URL.createObjectURL(new Blob([value],{type}));
  const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);
 }

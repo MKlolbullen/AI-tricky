@@ -35,6 +35,7 @@ from .http_journal import HTTPJournal, request_message
 from .burp_bridge import BurpBridge, read_batch, web_only
 from .catalog_planner import plan_catalog
 from .evidence import EvidenceIndex, ReviewConflict
+from .assessment_reports import report_inputs
 from .delta_recon import DeltaRecon, BaselineInput, DeltaPlanInput
 from .proposals import ProposalPlanner, ProposalError, StalePlan
 from .proposal_execution import ProposalExecutions, ExecutionOptions, SnapshotAction, DispatchAction, ExecutionError
@@ -838,6 +839,13 @@ def create_app(data_dir=None, assessor=None, passive_http=None):
             return delta_recon.save(body.run_id, body.expected_revision)
         except ReviewConflict as exc:
             raise HTTPException(409, str(exc)) from None
+
+    @app.get('/api/runs/{rid}/assessment-report')
+    def assessment_report(rid: str):
+        run = get_run(rid)
+        if run['status'] != 'completed':
+            raise HTTPException(409, 'Select a completed run to build a report.')
+        return report_inputs(evidence, run)
 
     @app.get('/api/runs/{rid}/delta')
     def recon_delta(rid: str, baseline_id: str):

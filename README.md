@@ -54,9 +54,16 @@ Design a typed workflow. Execute bounded checks. Preserve the request/response t
 | 🕸️ **Asset graph** | Explore typed hosts, services, technologies, files and other entities with provenance and run-to-run diffs. |
 | 🛡️ **AD & Entra review** | Scoped identity collection profiles, graph imports and bounded candidate-path analysis; not automated exploitation. |
 | 📋 **Findings workbench** | Durable observations, candidate findings, review decisions and comparisons between assessment runs. |
+| **Assessment reports** | In **Local workspace → Reports**, select a completed run, choose reviewed findings and inspect their saved captures. Download the preview as Markdown and a matching JSON manifest. |
 | ⏯️ **Run controls** | Separate native/CLI budgets, deadlines, pause/resume, cancellation and checkpoint-aware recovery. |
 
 **Catalog:** 151 tool contracts, 57 workflows and 141 CLI adapters in the migrated catalog. Ten entries remain context-restricted. Catalog presence **does not** mean an external binary is installed or tested against every upstream version.
+
+### Sharing a reviewed assessment
+
+Reports include entered domains, wildcard scopes, IPs and CIDRs. For URL scopes the report shows the origin and marks a withheld path. Write a publishable summary for each finding you want to describe. The original title, asset, review note and raw capture stay in the workspace. Inspect both previews before sharing, especially scope names and any text you entered.
+
+The manifest identifies the source run, finding, operator review revision and selected artifact IDs. A reviewer with the same local database can look up each finding via `/api/findings/{id}` and each capture via `/api/artifacts/{id}`. Decisions can span runs. The preview flags review evidence outside the selected run and occurrences recorded after the review. Switching runs clears the draft.
 
 ## 🖥️ Inside the workbench
 

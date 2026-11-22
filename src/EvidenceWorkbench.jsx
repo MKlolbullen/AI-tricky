@@ -22,7 +22,7 @@ function RunFilter({runs, value, onChange, label = 'Run', disabled = false, empt
   </select></label>;
 }
 
-export function EvidenceViewer({artifact, close}) {
+export function EvidenceViewer({artifact, close, readOnly = false}) {
   const [data, setData] = useState(null), [error, setError] = useState('');
   useEffect(() => {
     let alive = true;
@@ -35,7 +35,7 @@ export function EvidenceViewer({artifact, close}) {
       <div className="evidence-actions"><button className="secondary" disabled={data === null} onClick={() => downloadJSON(`evidence-${artifact.id}.json`, data)}>Download JSON</button>
         <button className="secondary" onClick={close}>Close capture</button></div></div>
     {error && <p className="local-error" role="alert">{error}</p>}
-    {data?.http_exchange_id && data?.http_exchange?.request?.representation !== 'authenticated_metadata_only' &&
+    {!readOnly && data?.http_exchange_id && data?.http_exchange?.request?.representation !== 'authenticated_metadata_only' &&
       <RepeaterButton key={data.http_exchange_id} exchangeId={data.http_exchange_id}/>}
     {!error && <pre>{data === null ? 'Loading capture…' : JSON.stringify(data, null, 2)}</pre>}
   </section>;

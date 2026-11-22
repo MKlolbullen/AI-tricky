@@ -166,6 +166,41 @@ def test_comparison_uses_observed_snapshots_not_current_review_severity(tmp_path
     assert changes[0]['after'][0]['evidence_ids']
 
 
+def test_lifecycle_tracks_observed_runs_and_keeps_latest_review_independent(tmp_path):
+    store = Store(tmp_path)
+    index = EvidenceIndex(store)
+    first = run(store)
+    aid = nuclei(store, first)
+    nuclei(store, first)
+    fid = index.findings()['items'][0]['id']
+    review = index.review(fid, expected_revision=1, status='resolved', severity='low',
+                          confidence='high', note='Operator decision', evidence_id=aid)['reviews'][0]
+    second = run(store)
+    capture(store, second, url='https://example.com/api')
+    nuclei(store, second, url='https://example.com/other')
+    comparison = index.compare(first, second)
+    missing = next(row for row in comparison['findings'] if row['id'] == fid)
+    assert comparison['finding_summary'] == {'new': 1, 'recurring': 0, 'changed': 0, 'not_observed': 1}
+    assert missing['current_evidence'] == {
+        'asset_observed': True, 'source_observed': True, 'source_on_asset_observed': False}
+    assert missing['decision'] == {'status': 'resolved', 'severity': 'low', 'confidence': 'high',
+                                   'review_id': review['id'], 'revision': 2, 'reviewed_at': review['created']}
+    third = run(store)
+    nuclei(store, third)
+    fourth = run(store)
+    nuclei(store, fourth, severity='critical')
+    assert index.compare(second, third)['finding_summary']['new'] == 1
+    assert index.compare(first, third)['findings'][0]['state'] == 'recurring'
+    changed = index.compare(third, fourth)['findings'][0]
+    assert changed['state'] == 'changed' and changed['decision'] == missing['decision']
+    assert changed['current_evidence']['source_on_asset_observed']
+    detail = index.finding(fid)
+    assert detail['reviews'] == [review]
+    assert [(r['run_id'], r['state'], r['occurrence_count']) for r in detail['observed_runs']] == [
+        (first, 'new', 2), (third, 'recurring', 1), (fourth, 'changed', 1)]
+    assert detail['observed_runs'][0]['first_seen'] == store.artifact_metadata(aid)['captured_at']
+
+
 def test_comparison_reports_scope_planning_and_partial_output_limits(tmp_path):
     store = Store(tmp_path); first = run(store)
     second = run(store, targets=['https://other.example/'], allow_http=False)
@@ -327,6 +362,7 @@ def test_parser_upgrade_retains_superseded_findings_without_comparing_them(tmp_p
     assert upgraded.observations()['total'] == 0
     detail = upgraded.finding(fid)
     assert detail['status'] == 'rejected' and len(detail['reviews']) == 1
+    assert detail['observed_runs'] == []
     assert all(not o['active'] and o['parser_versions'] == ['1'] for o in detail['occurrences'])
     assert upgraded.compare(first, second)['findings'] == []
 

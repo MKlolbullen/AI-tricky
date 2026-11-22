@@ -11,6 +11,28 @@ class ReviewConflict(ValueError):
     pass
 
 
+def observed_run_history(occurrences, versions):
+    """Summarize runs with active evidence, ordered by their first capture of this finding."""
+    runs = {}
+    for row in occurrences:
+        if PARSER_VERSION not in versions[row['observation_id']]:
+            continue
+        rid, seen = row['run_id'], row['observed_at']
+        item = runs.setdefault(rid, {'run_id': rid, 'first_seen': seen, 'last_seen': seen,
+                                     'occurrence_count': 0, 'snapshots': set()})
+        item['first_seen'] = min(item['first_seen'], seen)
+        item['last_seen'] = max(item['last_seen'], seen)
+        item['occurrence_count'] += 1
+        item['snapshots'].add(row['snapshot'])
+    history = sorted(runs.values(), key=lambda item: (item['first_seen'], item['run_id']))
+    previous = None
+    for item in history:
+        snapshots = item.pop('snapshots')
+        item['state'] = 'new' if previous is None else 'recurring' if snapshots == previous else 'changed'
+        previous = snapshots
+    return history
+
+
 class EvidenceIndex:
     def __init__(self, store):
         self.store = store
@@ -213,6 +235,7 @@ class EvidenceIndex:
     def finding(self, fid):
         self.index_pending()
         with self.store.connect() as c:
+            c.execute('BEGIN')
             row = c.execute('SELECT * FROM findings WHERE id=?', (fid,)).fetchone()
             if row is None:
                 raise KeyError(fid)
@@ -234,6 +257,7 @@ class EvidenceIndex:
         from .verification import attached_evidence
         verification_evidence += attached_evidence(self.store, fid)
         return {**dict(row), 'observed_after_review': bool(reviews and row['last_seen'] > reviews[-1]['created']),
+                'observed_runs': observed_run_history(occurrences, versions),
                 'verification_evidence': verification_evidence,
                 'occurrences': [{**dict(r), 'evidence_ids': json.loads(r['evidence_ids']),
                                             'parser_versions': versions[r['observation_id']],
@@ -286,16 +310,25 @@ class EvidenceIndex:
                 entry['values'].setdefault(row['value_hash'], {'data': json.loads(row['data']), 'evidence_ids': []})['evidence_ids'].append(row['artifact_id'])
             return result
         with self.store.connect() as c:
+            c.execute('BEGIN')  # Pair both evidence sets with one snapshot of the operator decisions.
             before, after = grouped(c, baseline_id), grouped(c, current_id)
             run_findings = {}
             for rid in (baseline_id, current_id):
-                rows = c.execute('''SELECT f.id,f.title,f.asset,f.source,x.snapshot,x.evidence_ids
+                rows = c.execute('''SELECT f.id,f.title,f.asset,f.source,f.status,f.severity,f.confidence,
+                                           r.id AS review_id,r.revision,r.created AS reviewed_at,x.snapshot,x.evidence_ids
                                     FROM finding_occurrences x JOIN findings f ON f.id=x.finding_id
                                     JOIN observation_versions v ON v.observation_id=x.observation_id
-                                    WHERE x.run_id=? AND v.parser_version=?''', (rid, PARSER_VERSION)).fetchall()
+                                    LEFT JOIN finding_reviews r ON r.finding_id=f.id AND r.revision=f.revision
+                                    WHERE x.run_id=? AND v.parser_version=? ORDER BY f.id,x.observation_id''', (rid, PARSER_VERSION)).fetchall()
                 values = {}
                 for row in rows:
-                    entry = values.setdefault(row['id'], {'id': row['id'], 'title': row['title'], 'asset': row['asset'], 'source': row['source'], 'snapshots': {}})
+                    fid = row['id']
+                    if fid not in values:
+                        values[fid] = {key: row[key] for key in ('id', 'title', 'asset', 'source')}
+                        values[fid]['decision'] = {key: row[key] for key in
+                                                   ('status', 'severity', 'confidence', 'review_id', 'revision', 'reviewed_at')}
+                        values[fid]['snapshots'] = {}
+                    entry = values[fid]
                     snapshot = entry['snapshots'].setdefault(row['snapshot'], {'data': json.loads(row['snapshot']), 'evidence_ids': []})
                     snapshot['evidence_ids'] = sorted(set(snapshot['evidence_ids']) | set(json.loads(row['evidence_ids'])))
                 run_findings[rid] = values
@@ -307,10 +340,20 @@ class EvidenceIndex:
                             'before': list(old['values'].values()) if old else [], 'after': list(new['values'].values()) if new else []})
         finding_changes = []
         previous, latest = run_findings[baseline_id], run_findings[current_id]
+        current_assets = {o['asset'] for o in after.values()}
+        current_sources = {o['source'] for o in after.values()}
+        current_source_assets = {(o['source'], o['asset']) for o in after.values()}
         for fid in sorted(previous.keys() | latest.keys()):
             old, new = previous.get(fid), latest.get(fid)
             state = 'new' if old is None else 'not_observed' if new is None else 'recurring' if old['snapshots'].keys() == new['snapshots'].keys() else 'changed'
-            finding_changes.append({**{k: (new or old)[k] for k in ('id', 'title', 'asset', 'source')}, 'state': state,
+            finding = new or old
+            coverage_context = {
+                'asset_observed': finding['asset'] in current_assets,
+                'source_observed': finding['source'] in current_sources,
+                'source_on_asset_observed': (finding['source'], finding['asset']) in current_source_assets,
+            }
+            finding_changes.append({**{k: finding[k] for k in ('id', 'title', 'asset', 'source', 'decision')},
+                                    'state': state, 'current_evidence': coverage_context,
                                     'before': list(old['snapshots'].values()) if old else [], 'after': list(new['snapshots'].values()) if new else []})
         warnings = []
         scope = lambda run: sorted(canonical_asset(t) or t for t in run['config'].get('targets', []))
@@ -321,7 +364,11 @@ class EvidenceIndex:
                 warnings.append(f'{label} run is {run["status"]}; its evidence may be partial.')
             if not run['config'].get('allow_http'):
                 warnings.append(f'{label} run had execution disabled.')
-            if any(node.get('result') and node['result'].get('errors') for node in self.store.nodes(run['id'])):
+            nodes = self.store.nodes(run['id'])
+            planned = {n['id'] for n in (run['config'].get('workflow') or {}).get('nodes', [])}
+            if planned.difference(n['node_id'] for n in nodes) or any(n['status'] not in ('completed', 'reused') for n in nodes):
+                warnings.append(f'{label} run has workflow nodes without a successful execution record.')
+            if any(node.get('result') and node['result'].get('errors') for node in nodes):
                 warnings.append(f'{label} run contains node errors or blocked operations; coverage is incomplete.')
         if any(baseline['config'].get(k) != current['config'].get(k) for k in
                ('engine', 'workflow', 'ports', 'max_hosts', 'max_requests', 'max_cli_invocations')):
@@ -330,9 +377,13 @@ class EvidenceIndex:
             reports = c.execute('''SELECT a.run_id,a.id,a.name,i.report FROM evidence_index i JOIN artifacts a ON a.id=i.artifact_id
                                    WHERE a.run_id IN (?,?) AND i.parser_version=?''', (baseline_id, current_id, PARSER_VERSION)).fetchall()
         coverage = [{**dict(r), 'report': json.loads(r['report'])} for r in reports]
+        if any(r['report'].get('unparsed_lines') for r in coverage):
+            warnings.append('Some capture records could not be parsed.')
         if any(r['report'].get('partial') for r in coverage):
             warnings.append('One or more captures are truncated, partial or failed.')
         return {'baseline_id': baseline_id, 'current_id': current_id, 'warnings': warnings,
                 'absence_means': 'Not observed in the selected run; this does not establish resolution or equivalent coverage.',
                 'summary': {s: sum(r['state'] == s for r in changes) for s in ('new', 'changed', 'unchanged', 'not_observed')},
+                'finding_summary': {s: sum(r['state'] == s for r in finding_changes)
+                                    for s in ('new', 'changed', 'recurring', 'not_observed')},
                 'observations': changes, 'findings': finding_changes, 'coverage': coverage}

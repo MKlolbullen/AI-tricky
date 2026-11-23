@@ -189,8 +189,13 @@ class RunControl:
         self.task = None
 
 
+def workspace_path():
+    return Path(os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or
+                os.environ.get('RECONFORGE_DATA_DIR', './local-data'))
+
+
 def create_app(data_dir=None, assessor=None, passive_http=None):
-    store = Store(Path(data_dir or os.environ.get('AI_TRICKY_DATA_DIR') or os.environ.get('OFFSECS_U_AI_DATA_DIR') or os.environ.get('RECONFORGE_DATA_DIR', './local-data')))
+    store = Store(Path(data_dir) if data_dir else workspace_path())
     support_data = SupportData(store)
     http_journal = HTTPJournal(store)
     burp_bridge = BurpBridge(store, http_journal)

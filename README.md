@@ -160,6 +160,12 @@ Download the standalone app and pinned scanner installer from the
 **linux-scanner-beta** CI artifact. Use **Local workspace → Scanner profiles**
 to inspect tool versions, capture coverage and input readiness. [Linux beta setup](docs/SCANNER-PROFILES.md)
 
+### Upgrading an existing workspace
+
+Stop the running app and copy the entire workspace directory before replacing the executable. Start the new binary with `AI_TRICKY_DATA_DIR` pointing to the same directory. The default is `./local-data` relative to the launch directory. An absolute path avoids opening an empty workspace when launching from a newly extracted folder.
+
+The Linux beta CI checks the extracted app against an empty workspace and a synthetic v0.5.0 SQLite workspace under both supported database names. After upgrade and restart it checks the original finding and observation IDs, review revision, evidence contents, and report citations.
+
 ### Your first assessment
 
 1. Add your **authorized targets** under **Local workspace → Targets**.
@@ -209,7 +215,7 @@ The classic five-role CAI analyst team and the staged specialist profile are dis
 | `10.10.0.0/24` | CIDR range, within configured limits |
 | `https://app.example.com/api` | Scoped URL origin and path subtree |
 
-Passive discoveries do not automatically authorize active probing. Native HTTP uses destination checks and does not automatically follow redirects. **External CLI processes have different network behavior and are not OS-sandboxed.**
+Passive discoveries do not automatically authorize active probing. Native HTTP uses destination checks and does not automatically follow redirects. Standard CLI mode runs external processes with the host account’s network access. The enforced Linux profile isolates supported adapters in a network namespace and sends their HTTP requests through the scope gateway.
 
 **Docs:** [Web recon](docs/WEB-RECON.md) · [HTTP traffic](docs/HTTP-TRAFFIC.md) · [Identity assessment](docs/IDENTITY-ASSESSMENT.md)
 

@@ -150,12 +150,16 @@ jobs:
       - run: npm ci
       - run: scripts/build-binary.sh
       - run: scripts/package-linux-beta.sh
-      - name: Smoke-test the extracted beta
+      - name: Extract and check the Linux beta
         run: |
           archive=ai-tricky-linux-amd64-beta.tar.gz
           (cd dist-bin && sha256sum -c "$archive.sha256")
           mkdir -p "$RUNNER_TEMP/scanner-beta" "$RUNNER_TEMP/scanner-beta-home"
           tar -xf "dist-bin/$archive" -C "$RUNNER_TEMP/scanner-beta"
+      - name: Verify fresh and upgraded evidence workspaces
+        run: python scripts/check-workspace-upgrade.py "$RUNNER_TEMP/scanner-beta/ai-tricky-linux-amd64-beta/ai-tricky"
+      - name: Smoke-test the extracted scanner profile
+        run: |
           cd "$RUNNER_TEMP/scanner-beta/ai-tricky-linux-amd64-beta"
           export HOME="$RUNNER_TEMP/scanner-beta-home" AI_TRICKY_DATA_DIR="$RUNNER_TEMP/scanner-beta-data"
           export AI_TRICKY_PORT=8794

@@ -50,6 +50,33 @@ test('comparison locks its run pair, exports matching IDs and shows unsupported 
   expect(download.suggestedFilename()).toBe('comparison-qa-basel-qa-curre.json');
 });
 
+test('lifecycle keeps a missing verified finding linked to its observed and review history', async ({page, request}) => {
+  const listing = await (await request.get('/api/findings?q=Potential%20API%20issue')).json();
+  const finding = await (await request.get('/api/findings/' + listing.items[0].id)).json();
+  const reviewed = await request.post('/api/findings/' + finding.id + '/reviews', {data: {
+    expected_revision: finding.revision, status: 'verified', severity: 'medium', confidence: 'high',
+    evidence_id: finding.verification_evidence[0].id, note: 'Operator reviewed the saved response.',
+  }});
+  expect(reviewed.ok()).toBe(true);
+  const workspace = await openWorkspace(page, 'Compare runs');
+  await workspace.getByLabel('Baseline run').selectOption('qa-current');
+  await workspace.getByLabel('Current run').selectOption('qa-baseline');
+  await workspace.locator('form').getByRole('button', {name: 'Compare runs'}).click();
+  await workspace.getByRole('combobox', {name: /^Compare/}).selectOption('findings');
+  await workspace.getByRole('combobox', {name: /^Change/}).selectOption('not_observed');
+  await workspace.getByLabel('Latest status').selectOption('verified');
+  const row = workspace.locator('details.comparison-row').filter({hasText: 'Potential API issue'});
+  await row.locator('summary').click();
+  await expect(row).toContainText('Coverage of the original check is unconfirmed');
+  await expect(row).toContainText('Revision 2');
+  await row.getByRole('button', {name: 'Open finding history'}).click();
+  const detail = workspace.locator('.evidence-detail');
+  await expect(detail.getByText('First observed', {exact: true})).toBeVisible();
+  await expect(detail.locator('ol')).toContainText('qa-current');
+  await expect(detail).toContainText('Operator reviewed the saved response.');
+  expect(await (await request.get('/api/_qa/target-calls')).json()).toEqual([]);
+});
+
 test('reviewing the last filtered finding returns pagination to a valid page', async ({page}) => {
   const workspace = await openWorkspace(page, 'Findings');
   await workspace.getByRole('textbox', {name: 'Search', exact: true}).fill('QA finding');

@@ -100,10 +100,36 @@ function FindingReview({finding, onSaved}) {
   </form>;
 }
 
-export function FindingsWorkbench({runs}) {
+const lifecycleLabels = {new: 'New to comparison', changed: 'Changed', recurring: 'Seen again', not_observed: 'Not observed'};
+
+function ObservedRunHistory({history, open}) {
+  if (!history.length) return <p>No occurrences under the current parser.</p>;
+  const days = Math.floor((Date.now() - Date.parse(history[0].first_seen)) / 86400000);
+  const age = days < 0 || !Number.isFinite(days) ? '' : days === 0 ? ' · First seen within 24 hours' : ` · First seen ${days} day${days === 1 ? '' : 's'} ago`;
+  return <details className="comparison-row" open={open}><summary>Observed run history · {history.length} run(s){age}</summary>
+    <p>Ordered by first capture in each run. Changes compare the saved values with the previous run that observed this finding.</p>
+    <ol>{history.map((entry, i) => <li key={entry.run_id}>
+      <strong>{i === 0 ? 'First observed' : lifecycleLabels[entry.state]}</strong> · <code>{entry.run_id}</code>
+      <p>{timestamp(entry.first_seen)} · {entry.occurrence_count} occurrence(s)</p>
+    </li>)}</ol>
+  </details>;
+}
+
+function MissingFindingCoverage({row}) {
+  const c = row.current_evidence;
+  let evidence;
+  if (c.source_on_asset_observed) evidence = 'The current run recorded other evidence from this source on this asset.';
+  else if (c.asset_observed && c.source_observed) evidence = 'The asset and the source both appear in current evidence, in separate records.';
+  else if (c.asset_observed) evidence = 'The asset appears in current evidence. This source has no normalized records in the run.';
+  else if (c.source_observed) evidence = 'The source produced records for other assets. This asset has no normalized records in the run.';
+  else evidence = 'Neither the asset nor the source appears in the current normalized evidence.';
+  return <p className="comparison-notice">{evidence} Coverage of the original check is unconfirmed.</p>;
+}
+
+export function FindingsWorkbench({runs, initialFindingId = null}) {
   const [runId, setRunId] = useState(''), [status, setStatus] = useState(''), [severity, setSeverity] = useState(''), [q, setQ] = useState('');
   const [page, setPage] = useState({items: [], total: 0}), [offset, setOffset] = useState(0), [refresh, setRefresh] = useState(0);
-  const [selectedId, setSelectedId] = useState(null), [finding, setFinding] = useState(null), [capture, setCapture] = useState(null);
+  const [selectedId, setSelectedId] = useState(initialFindingId), [finding, setFinding] = useState(null), [capture, setCapture] = useState(null);
   const [error, setError] = useState(''), [loading, setLoading] = useState(false);
   useEffect(() => {
     let alive = true; setLoading(true); setError('');
@@ -137,6 +163,7 @@ export function FindingsWorkbench({runs}) {
         {finding.observed_after_review && <div className="comparison-notice"><p>Additional evidence was captured after the latest review. The recorded decision is preserved; review the new occurrence before relying on it.</p></div>}
         {!finding.occurrences.some(o => o.active) && <div className="comparison-notice"><p>This finding is retained from historical parser output. Its superseded occurrences are excluded from current run comparisons.</p></div>}
         <dl><dt>Finding ID</dt><dd>{finding.id}</dd><dt>Source</dt><dd>{finding.source}</dd><dt>First seen</dt><dd>{timestamp(finding.first_seen)}</dd><dt>Last seen</dt><dd>{timestamp(finding.last_seen)}</dd></dl>
+        <ObservedRunHistory key={finding.id} history={finding.observed_runs} open={finding.id === initialFindingId}/>
         <FindingReview key={finding.id + ':' + finding.revision} finding={finding} onSaved={() => setRefresh(v => v + 1)}/>
         <FindingVerifications findingId={finding.id} onCapture={id => setCapture({id})}/><h4>Evidence occurrences</h4>{finding.occurrences.map(o => <article className="evidence-occurrence" key={o.observation_id}><strong>Run {o.run_id.slice(0, 8)}</strong><small>{timestamp(o.observed_at)} · {o.node_id || 'Assessment'} · Parser {(o.parser_versions || []).join(', ')}{o.active ? '' : ' · superseded'}</small><p>Observed severity: {o.snapshot.severity}</p>
           {o.snapshot.next_test && <p>Suggested test: {o.snapshot.next_test}</p>}
@@ -146,7 +173,7 @@ export function FindingsWorkbench({runs}) {
   </section>;
 }
 
-export function RunComparison({runs}) {
+export function RunComparison({runs, onFinding}) {
   const [baseline, setBaseline] = useState(runs[1]?.id || ''), [current, setCurrent] = useState(runs[0]?.id || '');
   const [comparison, setComparison] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const [state, setState] = useState('all'), [view, setView] = useState('observations'), [capture, setCapture] = useState(null);
@@ -159,17 +186,26 @@ export function RunComparison({runs}) {
     try {setComparison(await api(`/runs/${current}/compare?baseline=${encodeURIComponent(baseline)}`));} catch (e) {setError(e.message);} finally {setBusy(false);}
   };
   const select = setter => value => {setter(value); setComparison(null); setCapture(null);};
-  const rows = comparison ? comparison[view].filter(r => state === 'all' || r.state === state) : [];
+  const [reviewFilter, setReviewFilter] = useState('');
+  const isLifecycle = view === 'findings';
+  const label = key => isLifecycle && lifecycleLabels[key] ? lifecycleLabels[key] : key.replaceAll('_', ' ');
+  const rows = comparison ? comparison[view].filter(row =>
+    (state === 'all' || row.state === state) && (!isLifecycle || !reviewFilter || row.decision.status === reviewFilter)) : [];
   return <section className="evidence-workbench"><div className="section-intro"><div><h3>Compare recorded runs</h3><p>Compare normalized observations and finding occurrences. Missing evidence never automatically resolves a finding.</p></div></div>
     <form className="comparison-controls" onSubmit={compare}><RunFilter runs={runs} label="Baseline run" value={baseline} disabled={busy} emptyLabel="Select a run" onChange={select(setBaseline)}/><RunFilter runs={runs} label="Current run" value={current} disabled={busy} emptyLabel="Select a run" onChange={select(setCurrent)}/>
       <button className="primary" disabled={busy || !baseline || !current || baseline === current}>{busy ? 'Comparing…' : 'Compare runs'}</button></form>
     {runs.length < 2 && <p>Record at least two runs to compare results.</p>}{error && <p className="local-error" role="alert">{error}</p>}
-    {comparison && <><div className="comparison-summary">{Object.entries(comparison.summary).map(([key, count]) => <div key={key}><strong>{count}</strong><span>{key.replaceAll('_', ' ')}</span></div>)}</div>
+    {comparison && <><div className="comparison-summary">{Object.entries(isLifecycle ? comparison.finding_summary : comparison.summary).map(([key, count]) => <div key={key}><strong>{count}</strong><span>{label(key)}</span></div>)}</div>
       <div className="comparison-notice"><p>{comparison.absence_means}</p>{comparison.warnings.map(w => <p key={w}>{w}</p>)}</div>
-      <div className="evidence-filters"><label className="field-label">Compare<select value={view} onChange={e => {setView(e.target.value); setState('all');}}><option value="observations">Observations</option><option value="findings">Finding occurrences</option></select></label>
-        <label className="field-label">Change<select value={state} onChange={e => setState(e.target.value)}>{['all', 'new', 'changed', view === 'findings' ? 'recurring' : 'unchanged', 'not_observed'].map(s => <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>)}</select></label>
+      <div className="evidence-filters"><label className="field-label">Compare<select value={view} onChange={e => {setView(e.target.value); setState('all');}}><option value="observations">Observations</option><option value="findings">Finding lifecycle</option></select></label>
+        <label className="field-label">Change<select value={state} onChange={e => setState(e.target.value)}>{['all', 'new', 'changed', view === 'findings' ? 'recurring' : 'unchanged', 'not_observed'].map(s => <option key={s} value={s}>{label(s)}</option>)}</select></label>
+        {isLifecycle && <label className="field-label">Latest status<select value={reviewFilter} onChange={e => setReviewFilter(e.target.value)}><option value="">All statuses</option>{statuses.map(s => <option key={s}>{s}</option>)}</select></label>}
         <button className="secondary" onClick={() => downloadJSON(`comparison-${comparison.baseline_id.slice(0, 8)}-${comparison.current_id.slice(0, 8)}.json`, comparison)}>Export comparison</button></div>
-      {!rows.length && <p>No results match this change filter.</p>}{rows.map(row => <details className="comparison-row" key={row.fingerprint || row.id}><summary><span className={'tag change-' + row.state}>{row.state.replaceAll('_', ' ')}</span><strong>{row.title || row.asset}</strong><span>{row.source}{row.kind ? ' · ' + row.kind : ''}</span></summary>
+      {!rows.length && <p>No results match this change filter.</p>}{rows.map(row => <details className="comparison-row" key={row.fingerprint || row.id}><summary><span className={'tag change-' + row.state}>{label(row.state)}</span><strong>{row.title || row.asset}</strong><span>{row.source}{row.kind ? ' · ' + row.kind : ''}</span>{isLifecycle && <span>{row.decision.status} · {row.decision.severity}</span>}</summary>
+        {isLifecycle && <><p><code>{row.asset}</code></p>
+          <p>{row.decision.review_id ? 'Latest operator review · Revision ' + row.decision.revision + ' · ' + timestamp(row.decision.reviewed_at) : 'Awaiting first operator review'} · Confidence {row.decision.confidence}</p>
+          {row.state === 'not_observed' && <MissingFindingCoverage row={row}/>}
+          <button className="secondary" onClick={() => onFinding(row.id)}>Open finding history</button></>}
         <div className="comparison-values">{['before', 'after'].map(side => <section key={side}><h4>{side === 'before' ? 'Baseline evidence' : 'Current evidence'}</h4>{!row[side].length && <p>Not observed</p>}{row[side].map((value, i) => <div key={i}><pre>{JSON.stringify(value.data || value, null, 2)}</pre>{value.evidence_ids?.map(id => <button className="secondary" key={id} onClick={() => setCapture({id})}>Capture {id.slice(0, 8)}</button>)}</div>)}</section>)}</div></details>)}
       <details className="comparison-row"><summary>Parser coverage and capture limits</summary>{comparison.coverage.map(c => <p key={c.id}><code>{c.name}</code> · {c.report.supported ? 'supported parser' : 'raw evidence only'}{c.report.partial ? ' · partial capture' : ''}{c.report.unparsed_lines ? ` · ${c.report.unparsed_lines} unparsed lines` : ''}</p>)}</details>
     </>}{capture && <EvidenceViewer artifact={capture} close={() => setCapture(null)}/>}</section>;

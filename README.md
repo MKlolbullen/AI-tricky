@@ -59,6 +59,12 @@ Design a typed workflow. Execute bounded checks. Preserve the request/response t
 
 **Catalog:** 151 tool contracts, 57 workflows and 141 CLI adapters in the migrated catalog. Ten entries remain context-restricted. Catalog presence **does not** mean an external binary is installed or tested against every upstream version.
 
+### Tracking a finding across runs
+
+In **Local workspace → Compare runs**, choose a baseline and current run, then switch **Compare** to **Finding lifecycle**. The counts summarize findings by change. Filter by change and latest operator status. **New to comparison** means the finding appears only in the current half of this pair. **Changed** means the captured values differ. **Seen again** means both runs recorded the same set of values, even if the number of captures differs.
+
+For **Not observed**, expand the finding to see whether the current evidence includes its asset or source. A missing match cannot establish remediation. **Open finding history** shows the finding’s age, its observed runs under the current parser, the original captures and the operator’s review history. Comparing runs leaves the review decision intact.
+
 ### Sharing a reviewed assessment
 
 Reports include entered domains, wildcard scopes, IPs and CIDRs. For URL scopes the report shows the origin and marks a withheld path. Write a publishable summary for each finding you want to describe. The original title, asset, review note and raw capture stay in the workspace. Inspect both previews before sharing, especially scope names and any text you entered.

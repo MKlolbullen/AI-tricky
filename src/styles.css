@@ -290,3 +290,13 @@
 @media (prefers-reduced-motion: reduce) {
   .tool-node[data-state="running"] { animation: none; }
 }
+
+.tool-directory{margin:0 0 18px}
+.tool-directory h3{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin:0 0 8px}
+.tool-directory h3 span,.directory-list small,.directory-facts dt{color:#9bafc8;font-size:11px}
+.tool-directory select{width:100%;background:#101e32;color:#d6e7f8;border:1px solid #334761;border-radius:5px;padding:6px;font:inherit;font-size:12px}
+.directory-list{max-height:clamp(150px,25vh,270px);overflow:auto;margin-top:6px}
+.directory-list button{display:block;width:100%;padding:7px 8px;text-align:left;color:inherit;border:0;border-radius:4px;background:transparent;cursor:pointer}
+.directory-list button:hover,.directory-list button[aria-pressed=true]{background:#192f48}
+.directory-list span,.directory-list small{display:block;overflow-wrap:anywhere}
+.directory-facts dd{margin:3px 0 14px;overflow-wrap:anywhere}

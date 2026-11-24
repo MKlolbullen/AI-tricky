@@ -71,6 +71,12 @@ Reports include entered domains, wildcard scopes, IPs and CIDRs. For URL scopes 
 
 The manifest identifies the source run, finding, operator review revision and selected artifact IDs. A reviewer with the same local database can look up each finding via `/api/findings/{id}` and each capture via `/api/artifacts/{id}`. Decisions can span runs. The preview flags review evidence outside the selected run and occurrences recorded after the review. Switching runs clears the draft.
 
+### Browsing the tool catalog
+
+The left sidebar lists tool records from mini-tricky, Trickest open source, legacy designs and the identity registry. Search by name, tool ID, category or socket type. Select a record to inspect its source, declared sockets and argument coverage. Source labels distinguish records with the same name.
+
+**Pinned help checked** means CI checks the catalogued flags against a specific binary version. **Imported arguments** come from the upstream descriptor. **No declared overrides** means the adapter exposes no configurable flags. Select a tool node on the canvas to edit its supported arguments in the right inspector.
+
 ## 🖥️ Inside the workbench
 
 <div align="center">

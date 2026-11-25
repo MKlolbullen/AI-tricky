@@ -1,4 +1,5 @@
 import React, {useId, useState} from 'react';
+import overlay from './tool-argument-overlay.json';
 
 const bindingLabels = {
   file: 'Input file', folder: 'Input folder', sbom: 'SBOM file', wordlist: 'Wordlist',
@@ -56,13 +57,16 @@ export default function ToolArguments({tool, detail, params, change, inputs, bin
   return <>
     <section className="tool-arguments" aria-label="Tool arguments">
       <div className="tool-arg-heading"><h3>Arguments</h3><span>{setCount} configured</span></div>
+      {detail && <small>{args.length} declared · {args.filter(arg => arg.blocked_reason).length} restricted · {overlay.tools[tool.id]
+        ? 'Catalog checked against ' + overlay.tools[tool.id].version + ' help'
+        : 'No pinned help check for this catalog entry'}</small>}
       {loading && <p role="status">Loading argument controls…</p>}
       {detail && args.length > 0 && <div className="tool-arg-filters">
         <input aria-label="Filter arguments" type="search" placeholder="Find a flag or setting" value={query} onChange={e => setQuery(e.target.value)}/>
         <button type="button" className="secondary" aria-pressed={configured} onClick={() => setConfigured(!configured)}>Configured only</button>
       </div>}
       {editable.map(arg => <ArgumentRow key={arg.flag} arg={arg} params={params} change={change}/>)}
-      {detail && !editable.length && <p className="compact-help">{args.length ? 'No editable arguments match.' : 'This adapter uses fixed arguments.'}</p>}
+      {detail && !editable.length && <p className="compact-help">{args.length ? 'No editable arguments match.' : 'This catalog record declares no configurable arguments.'}</p>}
       {tool.command.some(token => token.includes('{pattern}')) && <label>Named GF pattern<input value={params.pattern ?? ''} placeholder="xss" onChange={e => change('pattern', e.target.value)}/></label>}
       {tool.command.some(token => token.includes('{exploit_type}')) && <label>Named exploit type<input value={params.exploit_type ?? ''} onChange={e => change('exploit_type', e.target.value)}/></label>}
       {restricted.length > 0 && !configured && <details className="tool-arg-details" open={query.trim() ? true : undefined}>

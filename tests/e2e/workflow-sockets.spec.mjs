@@ -1,5 +1,5 @@
 import {test, expect} from './fixtures.mjs';
-import {catalogNode, migrated} from '../../src/catalog-contracts.mjs';
+import {catalogNode, catalogSource, migrated} from '../../src/catalog-contracts.mjs';
 import {nativeNode} from '../../src/native-workflow.mjs';
 import {WORKFLOW_SCHEMA} from '../../src/workflow-validation.mjs';
 
@@ -43,4 +43,30 @@ test('named catalog and native sockets connect, save, and restore', async ({page
   await workspace.getByRole('button', {name: /Named socket fixture.*Load on canvas/}).click();
   await expect(workspace.getByRole('status')).toContainText('Loaded Named socket fixture');
   await expect(edges).toHaveCount(2);
+});
+
+
+test('file source connects to a distinct collector socket and changing type removes its old edge', async ({page}) => {
+  const source = catalogSource('file-source', 'catalog_source', {x: 0, y: 100});
+  Object.assign(source.data, {sourceType: 'file', output: 'file', outputs: ['file']});
+  const collector = catalogSource('collector', 'catalog_output', {x: 260, y: 100});
+  await page.goto('/');
+  await page.locator('input[type=file][accept="application/json,.json"]').setInputFiles({
+    name: 'collector.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({schema: WORKFLOW_SCHEMA, nodes: [source, collector], edges: []})),
+  });
+  const input = type => page.locator('[data-id="collector"] [data-handleid="in:' + type + '"]');
+  const output = page.locator('[data-id="file-source"] [data-handleid="out:file"]');
+  const file = await input('file').boundingBox();
+  const folder = await input('folder').boundingBox();
+  expect(folder.y).toBeGreaterThan(file.y + file.height);
+  await output.dragTo(input('folder'));
+  await expect(page.locator('.react-flow__edge')).toHaveCount(0);
+  await output.dragTo(input('file'));
+  await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+  await page.locator('[data-id="file-source"] strong').click();
+  await page.getByRole('combobox', {name: /^Source type/}).selectOption('folder');
+  await expect(page.locator('.react-flow__edge')).toHaveCount(0);
+  await page.locator('[data-id="file-source"] [data-handleid="out:folder"]').dragTo(input('folder'));
+  await expect(page.locator('.react-flow__edge')).toHaveCount(1);
 });

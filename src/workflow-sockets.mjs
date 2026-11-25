@@ -37,6 +37,7 @@ export function namedEdges(nodes, edges) {
   const ids = new Set(edges.map(edge => edge.id));
   let number = 1;
   return edges.flatMap(edge => {
+    if (!byId.has(edge.source) || !byId.has(edge.target)) throw Error('Connection refers to a missing node');
     const handles = resolveConnection(edge, byId.get(edge.source), byId.get(edge.target));
     const route = JSON.stringify([edge.source, edge.target, handles.sourceHandle, handles.targetHandle]);
     if (routes.has(route)) return [];
